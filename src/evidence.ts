@@ -76,7 +76,7 @@ export function kindsHeld(e: Evidence): string[] {
   const s = e.signals;
   return [
     ...(e.surveys.length ? ["survey"] : []),
-    ...(e.streets?.length ? ["street survey"] : []),
+    ...(e.streets?.some((x) => x.current) ? ["street survey"] : []),
     ...(s.fixMyStreet.ok && s.fixMyStreet.data?.reports ? ["actions"] : []),
     ...((s.petitions.ok && s.petitions.data?.some((p) => p.localShare > p.fairShare)) || (s.questions.ok && s.questions.data?.length) ? ["representatives"] : []),
   ];

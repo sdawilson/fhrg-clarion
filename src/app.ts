@@ -24,16 +24,16 @@
 //   POST /api/survey/list          {code}
 //   POST /api/survey/get           {code, id}: the survey, results, checks and comments with names removed
 //   POST /api/survey/new           {code, title, purpose}
-//   POST /api/survey/save          {code, id, title, purpose, locals, plan, collector}
+//   POST /api/survey/save          {code, id, title, purpose, locals, plan, collector, printedTo}
 //   POST /api/survey/status        {code, id, status}: open, closed or draft
 //   POST /api/survey/suggest       {code, id}: Claude suggests local questions (runs in the background)
 //   POST /api/survey/wording       {code, id}: Claude checks their wording (runs in the background)
-//   POST /api/survey/scan          {code, id, media, data}: Claude reads scanned forms (runs in the background)
+//   POST /api/survey/scan          {code, id, files}: Claude reads scanned forms (runs in the background)
 //   POST /api/survey/sort          {code, id}: Claude takes names out of comments and sorts them (background)
 //   POST /api/survey/help          {code, id, job}: how a background job is getting on
-//   POST /api/survey/answers       {code, id, via, forms, help}: forms from quick entry or a checked scan
+//   POST /api/survey/answers       {code, id, via, forms}: forms from quick entry or a checked scan
 //   POST /api/survey/csv           {code, id, csv}: forms from a file
-//   POST /api/survey/form          {code, id, n, excluded}: leave a form out, or put it back
+//   POST /api/survey/form          {code, id, n or form, excluded}: leave a form out, or put it back
 //   POST /api/survey/comment       {code, id, n, q, text, topic}: an officer checks a comment
 //   POST /api/survey/export        {code, id}: the answers as CSV
 // Public, for tablets. The access code is the only key, it only works while a survey is open, and it opens
@@ -50,9 +50,9 @@ import { getNote, listNotes, readInput, startNote } from "./notes";
 import { canEdit, canSee, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
 import { announcements, fixMyStreetUrl } from "./signals";
-import { MAX_SCAN_CHARS, forgetHelp, getHelp, sortJob, startScan, startSorting, startSuggest, startWording } from "./surveyai";
+import { MAX_SCAN_CHARS, getHelp, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
-  ACCESS_CHECKS, CORE, ABOUT, MAX_LOCAL, addAnswers, ageSexTargets, allQuestions, answersCsv, backToDraft, changeAnswer, cleanComments, closeSurvey, commentSample, createSurvey, findProblems, listSurveys, loadAnswers,
+  ACCESS_CHECKS, CORE, ABOUT, MAX_LOCAL, addAnswers, ageSexTargets, allQuestions, answersCsv, backToDraft, changeAnswer, changeAnswers, cleanComments, closeSurvey, commentSample, createSurvey, findProblems, formNumber, listSurveys, loadAnswers,
   loadCensus, loadSurvey, openSurvey, publicSurvey, readCsv, saveSurvey, surveyByAccess, surveyResults, templateCsv, textQuestionIds, topicCounts, validAccess, waitingComments, type Survey,
 } from "./surveys";
 import { FriendlyError, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
@@ -238,6 +238,7 @@ async function handleSurveyGet(c: Config, request: Request): Promise<Response> {
     results: surveyResults(s, rows, census), topics: topicCounts(comments), comments, waiting: waitingComments(s, used),
     problems: edit ? findProblems(s, rows) : [], excluded: edit ? rows.filter((r) => r.excluded).map((r) => ({ n: r.n, form: r.form })) : [],
     sample: edit ? commentSample(comments) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1, sorting: sorting?.status === "working" ? sorting : null,
+    dropped: edit && sorting?.status === "ready" ? sorting.result?.dropped ?? 0 : 0,
   });
 }
 
@@ -267,14 +268,9 @@ async function handleSurveyHelpGet(c: Config, request: Request): Promise<Respons
 }
 
 async function handleSurveyAnswers(c: Config, request: Request): Promise<Response> {
-  const { p, b, s } = await surveyEditor(c, request, 400_000);
+  const { b, s } = await surveyEditor(c, request, 400_000);
   if (s.status === "draft") throw new FriendlyError("Open the survey before adding answers.");
-  const via = b.via === "scan" ? "scan" : "paper";
-  const forms = Array.isArray(b.forms) ? b.forms.slice(0, 200) : [];
-  const done = await addAnswers(c, s, forms, via);
-  // what was read from a scan goes once it's saved, and a form that couldn't be saved stays to be put right
-  if (via === "scan" && !done.problems.length && validId(b.help)) await forgetHelp(c, p.code, b.help).catch(() => {});
-  return json(done);
+  return json(await addAnswers(c, s, Array.isArray(b.forms) ? b.forms.slice(0, 200) : [], b.via === "scan" ? "scan" : "paper"));
 }
 
 async function handleSurveyCsv(c: Config, request: Request): Promise<Response> {
@@ -287,7 +283,13 @@ async function handleSurveyCsv(c: Config, request: Request): Promise<Response> {
 
 async function handleSurveyForm(c: Config, request: Request): Promise<Response> {
   const { b, s } = await surveyEditor(c, request);
-  await changeAnswer(c, s, Number(b.n), (a) => { a.excluded = b.excluded === true; });
+  const excluded = b.excluded === true;
+  await changeAnswers(c, s, (all) => {
+    const a = b.n !== undefined ? all.find((x) => x.n === Number(b.n)) : all.find((x) => x.form === formNumber(b.form) && !x.excluded);
+    if (!a) throw new FriendlyError("That form wasn't found.", 404);
+    if (!excluded && all.some((x) => x !== a && !x.excluded && x.form === a.form)) throw new FriendlyError(`Form ${a.form} has been entered again since, so this copy can't be put back.`);
+    a.excluded = excluded;
+  });
   return json({ ok: true });
 }
 
@@ -312,7 +314,7 @@ async function handleSurveyExport(c: Config, request: Request): Promise<Response
 
 // Public routes: a wrong code costs a storage read, so wrong guesses are limited
 const WINDOW_MS = 10 * 60 * 1000;
-const MAX_WRONG = 30, MAX_SENDS = 900;
+const MAX_WRONG = 30, MAX_FORMS = 1500;
 const tallies = new Map<string, { from: number; n: number }>();
 function countOf(key: string): { from: number; n: number } {
   const now = Date.now();
@@ -324,13 +326,16 @@ function countOf(key: string): { from: number; n: number } {
   return fresh;
 }
 
-async function surveyFromCode(c: Config, request: Request, value: unknown): Promise<Survey> {
+async function surveyFromCode(c: Config, request: Request, value: unknown, forms = 1): Promise<Survey> {
   const wrong = countOf(`wrong|${clientIp(request)}`);
   if (wrong.n >= MAX_WRONG) throw new FriendlyError("Too many tries. Please wait a few minutes.", 429);
   const access = String(value ?? "").toUpperCase().replace(/[\s-]/g, "");
   const s = validAccess(access) ? await surveyByAccess(c, access) : null;
   if (!s) { wrong.n++; throw new FriendlyError("That code wasn't recognised. Check it with your officer.", 404); }
-  if (++countOf(`sends|${access}`).n > MAX_SENDS) throw new FriendlyError("Too many requests. Please wait a few minutes.", 429);
+  // counted in forms, so a stolen code can't fill a survey in a few requests
+  const sent = countOf(`sends|${access}`);
+  if (sent.n + forms > MAX_FORMS) throw new FriendlyError("Too many forms at once. Please wait a few minutes.", 429);
+  sent.n += forms;
   if (s.status !== "open") throw new FriendlyError("This survey isn't open.", 409);
   return s;
 }
@@ -342,9 +347,13 @@ async function handlePublicGet(c: Config, request: Request): Promise<Response> {
 
 async function handlePublicSubmit(c: Config, request: Request): Promise<Response> {
   const b = await readJsonBody(request, 200_000);
-  const s = await surveyFromCode(c, request, b.access);
-  return json(await addAnswers(c, s, Array.isArray(b.forms) ? b.forms.slice(0, 50) : [], "tablet"));
+  const forms = Array.isArray(b.forms) ? b.forms.slice(0, 50) : [];
+  const s = await surveyFromCode(c, request, b.access, Math.max(1, forms.length));
+  return json(await addAnswers(c, s, forms, "tablet"));
 }
+
+// What Claude read from a scan shouldn't wait for someone to come back for it
+export const sweep = () => sweepHelp(getConfig());
 
 function serveSurveyPage(): Response {
   if (!surveyPage) return new Response("<p>This page wasn't found.</p>", { status: 500, headers: PAGE_HEADERS });
@@ -387,7 +396,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/survey/status": return await handleSurveyStatus(c, request);
         case "/api/survey/suggest": { const { me, p, s } = await surveyEditor(c, request); return json({ job: await startSuggest(c, me, p, s) }); }
         case "/api/survey/wording": { const { me, p, s } = await surveyEditor(c, request); return json({ job: await startWording(c, me, p, s) }); }
-        case "/api/survey/scan": { const { me, p, b, s } = await surveyEditor(c, request, MAX_SCAN_CHARS + 1000); return json({ job: await startScan(c, me, p, s, b.media, b.data) }); }
+        case "/api/survey/scan": { const { me, p, b, s } = await surveyEditor(c, request, MAX_SCAN_CHARS + 1000); return json({ job: await startScan(c, me, p, s, b.files) }); }
         case "/api/survey/sort": { const { me, p, s } = await surveyEditor(c, request); return json({ job: await startSorting(c, me, p, s) }); }
         case "/api/survey/help": return await handleSurveyHelpGet(c, request);
         case "/api/survey/answers": return await handleSurveyAnswers(c, request);

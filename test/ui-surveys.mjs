@@ -110,6 +110,7 @@ ok(w.printed === true, "and they can be printed");
 // typing one in
 w.location.hash = `#survey/${WSX}/${id}/collect`;
 await see(d, /Type in paper forms/);
+ok(d.querySelector('.form-grid input').value === "8" && /Forms up to 7 have been prepared/.test(text(d.querySelector(".main"))), "the next batch of forms carries on from the last, even if none have been entered yet");
 const row = [...d.querySelectorAll(".entry-row")];
 const type = (i, v) => { const el = row[i].querySelector("input, textarea"); el.value = v; el.dispatchEvent(new w.Event("input")); };
 ok(d.querySelector('input[aria-label="Form number"]').value === "1", "typing in starts at form 1");
@@ -199,6 +200,15 @@ await until(() => button(again.window.document, "Start"), "the kept survey");
 ok(/Ready for the next person/.test(text(again.window.document.getElementById("app"))), "a tablet that has opened it before carries on without a signal");
 net.down = false;
 
+// a full survey: the form stays on the tablet
+const realFetch = tb.w.fetch;
+tb.w.fetch = async () => ({ ok: true, status: 200, json: async () => ({ added: 0, skipped: 0, problems: ["Full"], done: [] }) });
+tb.w.localStorage.setItem(`clarion_queue_${access}`, JSON.stringify([{ client: "refused", site: "x", secs: 100, answers: { c1: "Very satisfied" } }]));
+await until(() => /1 form still on this tablet/.test(text(tb.d.querySelector("header"))), "the form to stay");
+ok(JSON.parse(tb.w.localStorage.getItem(`clarion_queue_${access}`)).length === 1, "a form Clarion turns down stays on the tablet, and it says so");
+tb.w.fetch = realFetch;
+await until(() => /All sent/.test(text(tb.d.querySelector("header"))), "the refused form to go");
+
 // closing with forms still on the tablet
 await api("/api/survey/status", { code: WSX, id, status: "closed" }, lead);
 tb.w.localStorage.setItem(`clarion_queue_${access}`, JSON.stringify([{ client: "stuck", site: "x", secs: 100, answers: { c1: "Very satisfied" } }]));
@@ -227,6 +237,12 @@ await see(d, /Check a sample/);
 ok(/No comments waiting/.test(text(d.querySelector(".main"))), "sorting clears the queue");
 button(d, "Looks right").click();
 await see(d, /Saved\./);
+d.querySelector('input[aria-label="Form number to leave out"]').value = "900";
+button(d, "Leave out this form").click();
+await see(d, /Put back form 900/);
+ok(/Put a mistake right/.test(text(d.querySelector(".main"))), "any form can be left out by its number, to put a mistake right");
+button(d, "Put back form 900").click();
+await until(() => !button(d, "Put back form 900") && button(d, "Leave out this form"), "the form to come back");
 
 // ---- results, for someone who isn't a lead
 await api("/api/s/submit", { access, forms: Array.from({ length: 40 }, (_, i) => ({ client: `n${i}`, site: "Market Square", secs: 200, answers: { c1: "Fairly dissatisfied", a1: "45 to 54", a2: "Female" } })) });

@@ -754,13 +754,14 @@ function setupPart(top, a, d) {
 function collectPart(top, a, d) {
   const s = d.survey;
   const setStatus = async (status, msg) => { try { await API.call("/api/survey/status", { code: a.code, id: s.id, status }); route(); } catch (e) { said(msg, e.message, "err"); } };
-  const first = h("input", { type: "number", min: 1, value: String(d.nextForm) }), last = h("input", { type: "number", min: 1, value: String(d.nextForm + Math.min(s.plan.target, 500) - 1) }), m = saveNote();
-  top.append(h("section", { class: "card" }, h("h2", {}, "Paper forms"), h("p", {}, "Each form gets its own number, so forms can't be entered twice."),
+  const printed = s.printedTo || 0;
+  const first = h("input", { type: "number", min: 1, value: String(printed + 1) }), last = h("input", { type: "number", min: 1, value: String(printed + Math.min(s.plan.target, 500)) }), m = saveNote();
+  top.append(h("section", { class: "card" }, h("h2", {}, "Paper forms"), h("p", {}, "Each form gets its own number, so forms can't be entered twice."), printed ? h("p", { class: "note" }, `Forms up to ${fmt(printed)} have been prepared so far. New ones carry on from there, so numbers aren't used twice.`) : null,
     h("div", { class: "form-grid" }, h("label", { class: "field" }, "First form number", first), h("label", { class: "field" }, "Last form number", last)), m,
-    h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => {
+    h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
       const from = Number(first.value), to = Number(last.value);
       if (!(from >= 1) || !(to >= from) || to - from >= 1000) return said(m, "Choose up to 1,000 forms at a time.", "err");
-      location.hash = `#print/${a.code}/${s.id}/${from}/${to}`;
+      try { await API.call("/api/survey/save", { code: a.code, id: s.id, printedTo: to }); location.hash = `#print/${a.code}/${s.id}/${from}/${to}`; } catch (e) { said(m, e.message, "err"); }
     } }, "Prepare forms to print"))));
   const url = `${location.origin}/s/${s.access}`, m2 = saveNote();
   const open = h("section", { class: "card" }, h("h2", {}, "Tablets"));
@@ -804,7 +805,7 @@ function entryCard(a, d) {
   return h("section", { class: "card" }, h("details", {}, h("summary", {}, "Type in paper forms"), h("p", { class: "note" }, "Type the number beside each ticked box, then press Enter. Leave a question empty if it wasn't answered."), f));
 }
 function scanCard(a, d) {
-  const s = d.survey, file = h("input", { type: "file", accept: "image/*,application/pdf", "aria-label": "Scanned forms" }), box = h("div", { class: "stack" });
+  const s = d.survey, file = h("input", { type: "file", multiple: true, accept: "image/*,application/pdf", "aria-label": "Scanned forms" }), box = h("div", { class: "stack" });
   const showForms = (j) => {
     const forms = j.result?.forms || [], msg = saveNote();
     if (!forms.length) return box.append(h("p", { class: "muted" }, "No forms could be read in that file."));
@@ -823,17 +824,17 @@ function scanCard(a, d) {
       h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: async (ev) => {
         const list = parts.map((x) => ({ form: x.number.value, site: x.site.value, answers: Object.fromEntries(x.fields.map((y) => [y.q.id, y.input.value]).filter(([, v]) => v)) }));
         try {
-          const r = await API.call("/api/survey/answers", { code: a.code, id: s.id, via: "scan", help: j.id, forms: list });
+          const r = await API.call("/api/survey/answers", { code: a.code, id: s.id, via: "scan", forms: list });
           said(msg, `${r.added} form${r.added === 1 ? "" : "s"} saved.${r.problems.length ? ` ${r.problems.join(" ")}` : ""}`, r.problems.length ? "err" : "ok");
           if (!r.problems.length) ev.target.disabled = true;
         } catch (e) { said(msg, e.message, "err"); }
       } }, "Save these forms")));
   };
   return h("section", { class: "card" }, h("details", {}, h("summary", {}, "Upload scanned forms"),
-    h("div", { class: "stack" }, h("p", { class: "note" }, "A photo or a PDF, with up to 20 forms in one file. Clarion reads them, you check every one, and the scan itself isn't kept."), h("label", { class: "field" }, "Choose a file", file),
+    h("div", { class: "stack" }, h("p", { class: "note" }, "Photos or a PDF, up to 20 forms at a time. Include both sides of each form together. Clarion reads them, you check every one, and the scans aren't kept. Keep this page open until you've saved them."), h("label", { class: "field" }, "Choose files", file),
       h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
-        if (!file.files[0]) return clear(box).append(failure({ message: "Choose a file first." }));
-        try { askHelp(a, s.id, "/api/survey/scan", await scanFile(file.files[0]), box, showForms); } catch (e) { clear(box).append(failure(e)); }
+        if (!file.files.length) return clear(box).append(failure({ message: "Choose a file first." }));
+        try { askHelp(a, s.id, "/api/survey/scan", { files: await Promise.all([...file.files].map(scanFile)) }, box, showForms); } catch (e) { clear(box).append(failure(e)); }
       } }, "Read the forms")), box)));
 }
 function csvCard(a, d) {
@@ -851,11 +852,13 @@ function csvCard(a, d) {
 
 // ----- check
 function checkPart(top, a, d) {
-  const s = d.survey, msg = saveNote();
+  const s = d.survey, msg = saveNote(), number = h("input", { maxlength: 20, "aria-label": "Form number to leave out" });
   const leave = async (n, excluded) => { try { await API.call("/api/survey/form", { code: a.code, id: s.id, n, excluded }); route(); } catch (e) { said(msg, e.message, "err"); } };
   add(top, h("section", { class: "card" }, h("h2", {}, "Forms to look at"),
     h("p", { class: "note" }, "Clarion flags these and removes nothing. Matching replies can be genuine, so check before leaving one out."), msg,
     d.problems.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Form"), h("th", {}, "Why"), h("th", {}))), h("tbody", {}, d.problems.map((x) => h("tr", {}, h("td", {}, x.form), h("td", {}, x.why), h("td", { class: "r" }, h("button", { class: "btn small", type: "button", onclick: () => leave(x.n, true) }, "Leave out"))))))) : h("p", { class: "muted" }, "Nothing to look at."),
+    h("h3", {}, "Put a mistake right"), h("p", { class: "note" }, "Leave out the form, then enter it again with the same number."),
+    h("div", { class: "row" }, h("label", { class: "field" }, "Form number", number), h("button", { class: "btn", type: "button", onclick: async () => { try { await API.call("/api/survey/form", { code: a.code, id: s.id, form: number.value, excluded: true }); route(); } catch (e) { said(msg, e.message, "err"); } } }, "Leave out this form")),
     d.excluded.length ? h("div", { class: "stack" }, h("h3", {}, "Left out"), h("div", { class: "row" }, d.excluded.map((x) => h("button", { class: "btn small", type: "button", onclick: () => leave(x.n, false) }, `Put back form ${x.form}`)))) : null));
 
   const progressBox = h("div", {});
@@ -863,6 +866,7 @@ function checkPart(top, a, d) {
     h("p", {}, "Before anyone can read them, Claude takes out names and anything else that identifies a person, and sorts each comment into a topic. Only people in your authority can see them."));
   if (d.waiting) c.append(h("p", {}, h("strong", {}, `${fmt(d.waiting)} comment${d.waiting === 1 ? "" : "s"} waiting.`)), h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => askHelp(a, s.id, "/api/survey/sort", {}, progressBox, () => route()) }, "Take out names and sort")));
   else c.append(h("p", { class: "muted" }, "No comments waiting."));
+  if (d.dropped) c.append(h("p", { class: "note" }, `${fmt(d.dropped)} comment${d.dropped === 1 ? " was" : "s were"} taken out, because Claude wouldn't process ${d.dropped === 1 ? "it" : "them"}. Nobody has seen ${d.dropped === 1 ? "it" : "them"}.`));
   c.append(progressBox);
   if (d.sorting) watchHelp(a, s.id, d.sorting, progressBox, () => route());
   if (d.sample.length) {
@@ -887,7 +891,7 @@ function resultsPart(top, a, d) {
   const pct = (labels) => (q1 && !q1.held ? q1.options.filter((o) => labels.includes(o.label)).reduce((n, o) => n + o.pct, 0) : null);
   const stat = (label, value, detail) => h("div", { class: "stat" }, h("span", { class: "label" }, label), h("span", { class: "value" }, value), detail ? h("span", { class: "detail" }, detail) : null);
   const good = pct(["Very satisfied", "Fairly satisfied"]), bad = pct(["Fairly dissatisfied", "Very dissatisfied"]);
-  top.append(h("div", { class: "callout" }, h("strong", {}, "Indicative only. "), `A street sample isn't random. ${r.weighted ? "Results are weighted to the local population's age and sex from Census 2021." : "Results aren't weighted yet, because there aren't enough replies giving age and sex."} Groups under 30 people aren't shown.`),
+  top.append(h("div", { class: "callout" }, h("strong", {}, "Indicative only. "), `A street sample isn't random. ${r.weighted ? "Results are weighted to the local population's age and sex from Census 2021." : d.census ? "Results aren't weighted yet, because there aren't enough replies giving age and sex." : "Results aren't weighted, because the Census figures couldn't be read just now."} Groups under 30 people aren't shown.`),
     h("div", { class: "stats" }, stat("Replies", fmt(r.used), `Aim: ${fmt(s.plan.target)}${r.excluded ? `. ${fmt(r.excluded)} left out` : ""}`), stat("Satisfied", good === null ? "–" : `${fmt(good)}%`, "Very or fairly"), stat("Dissatisfied", bad === null ? "–" : `${fmt(bad)}%`, "Very or fairly")));
   const wrap = h("section", { class: "card" }, h("h2", {}, "Answers"));
   for (const q of r.questions) {

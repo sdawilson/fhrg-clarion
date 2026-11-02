@@ -67,7 +67,7 @@ const store = {
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 const NOTICE = (who) => `Taking part is voluntary, you need to be 16 or over, and you can skip any question. We don't ask for your name, so please don't give anyone's name or address. An AI tool takes out any names and sorts comments into topics. Run by ${who}.`;
 
-const S = { survey: null, closed: false, sending: false, site: store.get("clarion_site", ""), form: null, i: 0 };
+const S = { survey: null, closed: false, stuck: false, sending: false, site: store.get("clarion_site", ""), form: null, i: 0 };
 const app = document.getElementById("app");
 const status = h("span", { role: "status" });
 
@@ -82,9 +82,9 @@ async function call(path, body) {
 function queue() { return store.get("clarion_queue", []); }
 function drawStatus() {
   const n = queue().length;
-  status.textContent = S.closed && n ? `${n} form${n === 1 ? "" : "s"} still on this tablet` : n ? `${n} form${n === 1 ? "" : "s"} waiting to send` : "All sent";
+  status.textContent = (S.closed || S.stuck) && n ? `${n} form${n === 1 ? "" : "s"} still on this tablet` : n ? `${n} form${n === 1 ? "" : "s"} waiting to send` : "All sent";
 }
-// Forms stay on the tablet until the server has them. Each has its own id, so sending one twice does no harm.
+// Forms stay on the tablet until Clarion says it has them. Each has its own id, so sending one twice does no harm.
 async function send() {
   if (S.sending || !CODE) return;
   S.sending = true;
@@ -93,14 +93,17 @@ async function send() {
       const waiting = queue();
       if (!waiting.length) break;
       const batch = waiting.slice(0, 20);
-      await call("/api/s/submit", { access: CODE, forms: batch });
-      const gone = new Set(batch.map((f) => f.client));
+      const r = await call("/api/s/submit", { access: CODE, forms: batch });
+      const gone = new Set(r.done || []);
       store.set("clarion_queue", queue().filter((f) => !gone.has(f.client)));
+      S.stuck = gone.size < batch.length; // refused, perhaps because the survey is full: keep them and say so
+      S.closed = false;
       drawStatus();
+      if (S.stuck) break;
     }
-    S.closed = false;
   } catch (e) {
     if (e.status === 409) { S.closed = true; drawStatus(); if (!S.form) closedScreen(); }
+    if (e.status === 404) S.stuck = true; // the survey has gone back to a draft, so its code no longer works
   } finally {
     S.sending = false;
     drawStatus();

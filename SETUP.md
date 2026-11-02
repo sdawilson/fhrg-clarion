@@ -104,7 +104,7 @@ From now on, every change Claude makes reaches the container by itself.
 - **Type setting names by hand** when you add one, then click **Update Container**.
 - **Spending:** site administrators see the month's Claude spend at the bottom of the side rail. Clarion stops starting new work at `MONTHLY_CAP_USD`. Each authority can also start up to `DAILY_JOBS_MAX` readings and notes a day (20 unless you set it); site administrators aren't limited.
 - **Signing in from the website:** members open Clarion from `https://fhrg.co.uk/clarion` and arrive signed in, using `CLARION_SSO_SECRET` on the website and `SSO_SECRET` here.
-- **Street surveys:** Clarion's Census figures come from the data library's `census_age_sex_la` table. Each authority can ask Claude for help with surveys up to 100 times a day, and a scan counts as one. Scans aren't kept. What Claude read from a scan goes when it's saved, or within about a week if nobody saves it.
+- **Street surveys:** Clarion's Census figures come from the data library's `census_age_sex_la` table. Each authority can ask Claude for help with surveys up to 100 times a day, and a scan counts as one. Scans aren't kept. What Claude read from a scan goes as soon as it reaches the person who asked, or within a day if nobody comes back for it.
 
 ## If something isn't right
 

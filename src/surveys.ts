@@ -12,7 +12,7 @@
 //   authorities/<code>/surveys/<id>.json             the survey: questions, plan and status
 //   authorities/<code>/survey-answers/<id>.json      its answers
 //   authorities/<code>/survey-sorts/<id>.json        the job that sorts its comments
-//   authorities/<code>/survey-help/<job>.json        Claude's help with wording and scans, kept for a week at most
+//   authorities/<code>/survey-help/<job>.json        Claude's help with wording and scans, kept for a day at most
 //   system/survey-codes/<ACCESS CODE>.json           which survey an access code opens
 //
 // A street sample isn't random, and groups under 30 people aren't reported. Written comments stay with the
@@ -23,7 +23,7 @@ import type { Config } from "./config";
 import { newJobId } from "./jobs";
 import { refQuery } from "./library";
 import type { Pilot } from "./pilots";
-import { storageJson, storageList, storagePut, savePretty } from "./storage";
+import { storageDelete, storageJson, storageList, storagePut, savePretty } from "./storage";
 import { FriendlyError, cached, cleanLong, cleanText, londonToday, pickEnum, round, withLock } from "./util";
 
 export const MAX_LOCAL = 5;
@@ -32,6 +32,7 @@ export const WEIGHT_CAP = 5;
 const MAX_ANSWERS = 5000;
 const DEFAULT_TARGET = 400;
 const QUICK_SECS = 30;
+const CURRENT_DAYS = 365; // an older survey is still evidence, but it no longer counts towards a change in mood
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type Question = { id: string; text: string; kind: "choice" | "text"; options: string[]; part: "core" | "local" | "about" };
@@ -66,7 +67,7 @@ export type Plan = { target: number; sites: Site[]; checks: string[] };
 export type Survey = {
   id: string; code: string; title: string; purpose: string; status: "draft" | "open" | "closed"; access: string; collector: string;
   locals: Question[]; plan: Plan;
-  created: string; by: string; updated: string; openedBy: string; openedOn: string; closedOn: string;
+  created: string; by: string; updated: string; openedBy: string; openedOn: string; closedOn: string; printedTo: number;
 };
 export type Answer = {
   n: number; form: string; via: "tablet" | "paper" | "scan" | "csv"; site: string; at: string; secs: number | null; client?: string;
@@ -99,7 +100,7 @@ export async function createSurvey(c: Config, me: Member, p: Pilot, b: Record<st
   const now = new Date().toISOString();
   const s: Survey = {
     id: newJobId(), code: p.code, title, purpose: cleanLong(b.purpose, 2000), status: "draft", access: "", collector: `${p.name} ${p.kind === "County council" ? "County Council" : "Council"}`,
-    locals: [], plan: { target: DEFAULT_TARGET, sites: [], checks: [] }, created: now, by: me.name, updated: now, openedBy: "", openedOn: "", closedOn: "",
+    locals: [], plan: { target: DEFAULT_TARGET, sites: [], checks: [] }, created: now, by: me.name, updated: now, openedBy: "", openedOn: "", closedOn: "", printedTo: 0,
   };
   await savePretty(c, surveyPath(c, p.code, s.id), s);
   return s;
@@ -134,6 +135,7 @@ export async function saveSurvey(c: Config, s: Survey, b: Record<string, any>): 
     const now = (await loadSurvey(c, s.code, s.id)) as Survey;
     if (b.plan) now.plan = readPlan(b.plan, now.plan);
     if (typeof b.collector === "string") now.collector = cleanText(b.collector, 160) || now.collector;
+    if (Number.isInteger(b.printedTo) && b.printedTo > 0 && b.printedTo < 1e7) now.printedTo = Math.max(now.printedTo || 0, b.printedTo);
     if (now.status === "draft") {
       if (typeof b.title === "string") now.title = cleanText(b.title, 120) || now.title;
       if (typeof b.purpose === "string") now.purpose = cleanLong(b.purpose, 2000);
@@ -178,12 +180,14 @@ export async function closeSurvey(c: Config, s: Survey): Promise<Survey> {
   });
 }
 
-// Before anyone has answered, questions can still be changed. Afterwards they can't, so answers keep their meaning.
+// Before anyone has answered, questions can still be changed. Afterwards they can't, so answers keep their
+// meaning. The code goes too, because a tablet with no signal could still hold forms for the old questions.
 export async function backToDraft(c: Config, s: Survey): Promise<Survey> {
-  if ((await loadAnswers(c, s.code, s.id)).length) throw new FriendlyError("This survey has answers, so it can't go back to a draft.");
   return await withLock(surveyPath(c, s.code, s.id), async () => {
+    if ((await loadAnswers(c, s.code, s.id)).length) throw new FriendlyError("This survey has answers, so it can't go back to a draft.");
     const now = (await loadSurvey(c, s.code, s.id)) as Survey;
-    now.status = "draft"; now.updated = new Date().toISOString();
+    if (now.access) await storageDelete(c, accessPath(c, now.access));
+    now.status = "draft"; now.access = ""; now.updated = new Date().toISOString();
     await savePretty(c, surveyPath(c, s.code, s.id), now);
     return now;
   });
@@ -216,39 +220,41 @@ export function readAnswers(s: Pick<Survey, "locals">, raw: unknown): { answers:
   return { answers, problems };
 }
 
-// Form 0012 and form 12 are the same form
-export const formNumber = (v: unknown) => cleanText(v, 20).replace(/^0+(?=\d)/, "").toUpperCase();
+// Form 0012, form 12 and "Form 12" are the same form
+export const formNumber = (v: unknown) => cleanText(v, 30).replace(/^(?:form|no\.?|number)\s*/i, "").replace(/^0+(?=\d)/, "").slice(0, 20).toUpperCase();
 
 export type Incoming = { form?: unknown; site?: unknown; answers?: unknown; secs?: unknown; client?: unknown };
 
 // One writer at a time, so forms arriving together all count. A tablet can safely send the same form twice:
-// each carries its own id, and one that has already arrived is skipped.
-export async function addAnswers(c: Config, s: Survey, items: Incoming[], via: Answer["via"]): Promise<{ added: number; skipped: number; problems: string[] }> {
+// each carries its own id, and one that has already arrived is skipped. `done` lists the ids Clarion has dealt
+// with, so a tablet only ever forgets a form that really arrived.
+export async function addAnswers(c: Config, s: Survey, items: Incoming[], via: Answer["via"]): Promise<{ added: number; skipped: number; problems: string[]; done: string[] }> {
   const path = answersPath(c, s.code, s.id);
   return await withLock(path, async () => {
     const all = await loadAnswers(c, s.code, s.id);
     // a form left out can be entered again, which is how a mistake on one gets put right
     const forms = new Set(all.filter((a) => !a.excluded).map((a) => a.form)), clients = new Set(all.map((a) => a.client).filter(Boolean));
     let next = all.reduce((most, a) => Math.max(most, a.n), 0) + 1, added = 0, skipped = 0;
-    const problems: string[] = [];
+    const problems: string[] = [], done: string[] = [];
     for (const item of items) {
       const client = cleanText(item?.client, 60);
-      if (client && clients.has(client)) { skipped++; continue; }
+      if (client && clients.has(client)) { skipped++; done.push(client); continue; }
       if (all.length >= MAX_ANSWERS) { problems.push(`This survey has reached its limit of ${MAX_ANSWERS} answers.`); break; }
+      while (via === "tablet" && forms.has(`T${next}`)) next++;
       const form = via === "tablet" ? `T${next}` : formNumber(item?.form); // a tablet can't take a paper form's number
       if (!form) { problems.push("A form has no number."); continue; }
       if (forms.has(form)) { problems.push(`Form ${form} has already been entered.`); continue; }
       const read = readAnswers(s, item?.answers);
       problems.push(...read.problems.map((x) => `Form ${form}: ${x}`));
-      if (!Object.keys(read.answers).length) { problems.push(`Form ${form} has no answers.`); continue; }
+      if (!Object.keys(read.answers).length) { problems.push(`Form ${form} has no answers.`); if (client) done.push(client); continue; }
       const secs = Number(item?.secs);
-      all.push({ n: next++, form, via, site: cleanText(item?.site, 80), at: new Date().toISOString(), secs: Number.isFinite(secs) && secs >= 0 ? Math.round(secs) : null, ...(client ? { client } : {}), answers: read.answers, topics: {}, clean: {}, checked: {} });
+      all.push({ n: next++, form, via, site: cleanText(item?.site, 80), at: new Date().toISOString(), secs: item?.secs !== undefined && item.secs !== null && Number.isFinite(secs) && secs >= 0 ? Math.round(secs) : null, ...(client ? { client } : {}), answers: read.answers, topics: {}, clean: {}, checked: {} });
       forms.add(form);
-      if (client) clients.add(client);
+      if (client) { clients.add(client); done.push(client); }
       added++;
     }
     if (added) await storagePut(c, path, JSON.stringify(all));
-    return { added, skipped, problems };
+    return { added, skipped, problems, done };
   });
 }
 
@@ -272,7 +278,8 @@ export async function changeAnswers(c: Config, s: Survey, change: (all: Answer[]
   });
 }
 
-// A small CSV reader: quoted fields, doubled quotes, and line breaks inside quotes
+// A small CSV reader: quoted fields, doubled quotes, and line breaks inside quotes. A quote mark only opens a
+// quoted field at the start of one, so a stray one can't swallow the rows after it.
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [], field = "", quoted = false;
@@ -281,7 +288,7 @@ export function parseCsv(text: string): string[][] {
     const ch = s[i];
     if (quoted) {
       if (ch === '"' && s[i + 1] === '"') { field += '"'; i++; } else if (ch === '"') quoted = false; else field += ch;
-    } else if (ch === '"') quoted = true;
+    } else if (ch === '"' && !field) quoted = true;
     else if (ch === ",") { row.push(field); field = ""; }
     else if (ch === "\n" || ch === "\r") {
       if (ch === "\r" && s[i + 1] === "\n") i++;
@@ -290,6 +297,7 @@ export function parseCsv(text: string): string[][] {
       row = [];
     } else field += ch;
   }
+  if (quoted) throw new FriendlyError("The file has a quote mark that's never closed, so it can't be read safely. Check it and try again.");
   row.push(field);
   if (row.some((x) => x.trim())) rows.push(row);
   return rows;
@@ -337,7 +345,8 @@ export function ageSexTargets(census: Census | null, target: number): { age: str
 }
 
 // Each age and sex group counts for its share of local adults. People who didn't say keep a weight of 1, and no
-// one counts for more than WEIGHT_CAP people, so a few replies in a rare group can't swing a result.
+// one counts for more than WEIGHT_CAP people, so a few replies in a rare group can't swing a result. What the
+// cap takes off is spread over everyone else in those groups, so they keep their fair share of the total.
 export function weightsFor(rows: Answer[], census: Census | null): { weights: Map<number, number>; weighted: boolean } {
   const weights = new Map<number, number>(rows.map((r) => [r.n, 1]));
   const key = (r: Answer) => cellKey(r.answers.a1 ?? "", r.answers.a2 ?? "");
@@ -346,7 +355,13 @@ export function weightsFor(rows: Answer[], census: Census | null): { weights: Ma
   const seen = new Map<string, number>();
   for (const r of known) seen.set(key(r), (seen.get(key(r)) || 0) + 1);
   const coveredPeople = [...seen.keys()].reduce((sum, k) => sum + (census.cells[k] || 0), 0);
-  for (const r of known) weights.set(r.n, Math.min(WEIGHT_CAP, ((census.cells[key(r)] / coveredPeople) * known.length) / (seen.get(key(r)) as number)));
+  let w = known.map((r) => ((census.cells[key(r)] / coveredPeople) * known.length) / (seen.get(key(r)) as number));
+  for (let round = 0; round < 20 && w.some((x) => x > WEIGHT_CAP + 1e-9); round++) {
+    const atCap = w.filter((x) => x >= WEIGHT_CAP).length;
+    const room = known.length - atCap * WEIGHT_CAP, rest = w.filter((x) => x < WEIGHT_CAP).reduce((sum, x) => sum + x, 0);
+    w = w.map((x) => (x >= WEIGHT_CAP ? WEIGHT_CAP : room > 0 && rest > 0 ? (x * room) / rest : x));
+  }
+  known.forEach((r, i) => weights.set(r.n, Math.min(WEIGHT_CAP, w[i])));
   return { weights, weighted: true };
 }
 
@@ -384,8 +399,9 @@ export function surveyResults(s: Pick<Survey, "locals" | "plan">, rows: Answer[]
   const groups: GroupResult[] = [];
   const breakdown = (group: string, of: (r: Answer) => string, labels: string[]) => {
     for (const label of labels) {
-      const those = used.filter((r) => of(r) === label && r.answers.c1 && r.answers.c1 !== "Don't know");
+      const those = used.filter((r) => of(r) === label && r.answers.c1); // Don't know counts, as it does in the headline
       const enough = those.length >= MIN_GROUP;
+      if (!enough && group === "Site") continue; // a site's name is only worth showing once it has a result
       const pct = (set: Set<string>) => (enough ? round((those.filter((r) => set.has(r.answers.c1)).reduce((sum, r) => sum + weightOf(r), 0) / (those.reduce((sum, r) => sum + weightOf(r), 0) || 1)) * 100) : null);
       groups.push({ group, label, answered: those.length, satisfied: pct(SATISFIED), dissatisfied: pct(DISSATISFIED) });
     }
@@ -480,7 +496,7 @@ export function topicCounts(all: Comment[]): { topic: string; count: number }[] 
 // ----- for readings and the page
 
 export type StreetSummary = {
-  title: string; id: string; status: string; ran: string; responses: number; weighted: boolean; satisfied: number | null; dissatisfied: number | null; better: number | null; worse: number | null;
+  title: string; id: string; status: string; ran: string; current: boolean; responses: number; weighted: boolean; satisfied: number | null; dissatisfied: number | null; better: number | null; worse: number | null;
   blameCouncil: number | null; topics: { topic: string; count: number }[]; note: string;
 };
 
@@ -499,10 +515,11 @@ export async function streetSummaries(c: Config, code: string): Promise<StreetSu
   for (const s of surveys) {
     const rows = (await loadAnswers(c, code, s.id)).filter((r) => !r.excluded);
     const results = surveyResults(s, rows, census);
-    if (results.used < MIN_GROUP) continue;
+    const satisfied = pctOf(results, "c1", [...SATISFIED]);
+    if (satisfied === null) continue; // too few answers to the main question to say anything
     out.push({
-      title: s.title, id: s.id, status: s.status, ran: s.openedOn, responses: results.used, weighted: results.weighted,
-      satisfied: pctOf(results, "c1", [...SATISFIED]), dissatisfied: pctOf(results, "c1", [...DISSATISFIED]), better: pctOf(results, "c2", ["Better"]), worse: pctOf(results, "c2", ["Worse"]), blameCouncil: pctOf(results, "c4", ["The local council"]),
+      title: s.title, id: s.id, status: s.status, ran: s.openedOn, current: Date.now() - Date.parse(s.updated) < CURRENT_DAYS * DAY_MS, responses: results.used, weighted: results.weighted,
+      satisfied, dissatisfied: pctOf(results, "c1", [...DISSATISFIED]), better: pctOf(results, "c2", ["Better"]), worse: pctOf(results, "c2", ["Worse"]), blameCouncil: pctOf(results, "c4", ["The local council"]),
       topics: topicCounts(cleanComments(s, rows)).slice(0, 6),
       note: "A street sample, not a random one, so this is indicative only.",
     });

@@ -8,12 +8,13 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { Readable, pipeline } from "node:stream";
-import { handleRequest, setPage, setSurveyPage } from "./app";
-import { settingsReport } from "./config";
+import { handleRequest, setPage, setSurveyPage, sweep } from "./app";
+import { getConfig, missingSettings, settingsReport } from "./config";
 
 // Nothing the app accepts is bigger than this, apart from a scanned form
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
 const MAX_SCAN_BYTES = 11 * 1024 * 1024;
+const SWEEP_MS = 60 * 60 * 1000;
 
 export function startServer(port: number, pageFile = path.resolve(process.cwd(), "public/index.html")): http.Server {
   if (fs.existsSync(pageFile)) setPage(fs.readFileSync(pageFile, "utf8"));
@@ -28,6 +29,9 @@ export function startServer(port: number, pageFile = path.resolve(process.cwd(),
   server.headersTimeout = 60_000;
   server.keepAliveTimeout = 65_000;
   server.listen(port, () => console.log(`[info] listening on ${port}`));
+  const tidy = () => { if (!missingSettings(getConfig()).length) sweep().catch((e) => console.log(`[warn] sweep: ${(e as Error).message}`)); };
+  tidy();
+  setInterval(tidy, SWEEP_MS).unref();
   return server;
 }
 
