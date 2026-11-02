@@ -58,15 +58,15 @@ export const reading = (over = {}) => ({
 export const change = (over = {}) => ({
   title: "£220m of incentive funding released", summary: "DfT released £220m of the £525m incentive pot.", instrument: "Funding", announced_by: "Department for Transport", announced: "2026-10-21", amount: "£220m",
   public_message: "Record funding is bringing record results.", primary_found: true, deadlines: [{ date: "2026-11-30", what: "Learning evidence due at DfT" }], conditions: ["Publish a transparency report"],
-  disagreements: [{ point: "Share of funding at risk", positions: "DfT says at least 25%; trade press lists 75%." }],
+  disagreements: [{ point: "Share of funding at risk", positions: "DfT says at least 25%; trade press lists 75%." }], named: ["A27 Worthing scheme, West Sussex County Council: withdrawn", "A16 scheme, Lincolnshire County Council: continuing"],
   sources: [{ url: "https://www.gov.uk/government/news/record", title: "Record funding", kind: "Primary" }, { url: "https://invented.example/made-up", title: "Invented", kind: "Other" }], ...over,
 });
-const impact = (statement, over = {}) => ({ route: "Money", statement, direction: "Worse", size: "Moderate", likelihood: "Almost certain", confidence: "Moderate", confidence_reason: "One trade source.", when: "Now", basis: "Data", working: "7583000 * 0.125 = 947875", action: "Confirm the email has gone.", owner: "Asset manager", check_date: "2026-12-01", ...over });
+const impact = (statement, over = {}) => ({ route: "Money", statement, direction: "Worse", size: "Moderate", likelihood: "Almost certain", confidence: "Moderate", confidence_reason: "One trade source.", when: "Now", basis: "Data", working: "7583000 * 0.125 = 947875 [Data 1], from the survey [Data 9]", action: "Confirm the email has gone.", owner: "Asset manager", check_date: "2026-12-01", ...over });
 export const assessment = (over = {}) => ({
   headline: "£0.95m rests on evidence due by 30 November.", why_here: "West Sussex is funded directly.",
   impacts: [impact("£0.95m rests on learning evidence."), impact("A second claim that doesn't stand up."), impact("A third claim that is overconfident.", { confidence: "High", check_date: "not a date" }), { statement: "" }],
   mood: { promise: "Record results", local_experience: "Condition scored 24", gap: "Large", likely_reaction: "Not on my road", confidence: "Low", survey_question: "Have you seen this on your own road?" },
-  questions: ["Are we at risk?"], unknowns: ["Check DfT's letter"], ...over,
+  questions: ["Are we at risk?"], unknowns: ["Check DfT's letter", "The date"], ...over,
 });
 export const review = () => ({ reviews: [{ index: 1, verdict: "keep", reason: "Stands up." }, { index: 2, verdict: "cut", reason: "Unsupported." }, { index: 3, verdict: "reduce", reason: "Too sure." }], also_confirm: ["The date"] });
 

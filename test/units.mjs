@@ -55,6 +55,11 @@ ok(t.readImpact({ statement: " " }, "2026-11-02") === null, "an empty impact is 
 i = t.readImpact({ statement: "x", route: "Duties And Liability", likelihood: "Highly Likely", when: "Within 3 Months" }, "2026-11-02");
 ok(i.route === "Duties and liability" && i.likelihood === "Highly likely" && i.when === "Within 3 months", "ratings count whatever their capitals");
 
+ok(t.readChange({ named: ["A27 scheme: withdrawn", "", 7, "A16 scheme"] }, [], "").named.join("|") === "A27 scheme: withdrawn|A16 scheme", "names in the sources are kept, and only real ones");
+ok(t.realCitations("A sum [Data 1], and a survey [Data 2].", 1) === "A sum [Data 1], and a survey.", "a citation with no library result behind it is removed");
+ok(t.realCitations("A survey [Data 1].", 0) === "A survey.", "and when no queries ran, none survive");
+ok(t.realCitations("Sums [Data 1] and [Data 2].", 2) === "Sums [Data 1] and [Data 2].", "real ones stay");
+
 // ---- what officers can give
 ok(t.readInput({ url: "https://www.gov.uk/government/news/x" }).url.includes("gov.uk"), "a GOV.UK link is accepted");
 ok(t.readInput({ text: "Some announcement" }).text === "Some announcement", "pasted text is accepted");

@@ -332,6 +332,7 @@ function readingCard(a, d) {
   const head = () => h("div", { class: "card-head" }, h("div", {}, h("h2", {}, "Mood reading")), start);
   const showReading = (r) => {
     clear(box).append(head());
+    if (r && r.status === "ready") start.textContent = "Write a new reading";
     if (r && r.status === "ready") box.append(readingBody(r));
     else if (r && r.status === "failed") box.append(failure({ message: r.error || "That reading didn't finish." }));
     else box.append(h("p", {}, "No reading yet. Clarion will write one from the evidence below, and say what's missing."));
@@ -519,12 +520,13 @@ function noteBody(a, n) {
       c.amount ? h("p", {}, h("strong", {}, "Amount. "), c.amount) : null,
       c.deadlines.length ? h("div", { class: "prose" }, h("h3", {}, "Dates"), h("ul", {}, c.deadlines.map((d) => h("li", {}, `${d.date ? `${d.date}: ` : ""}${d.what}`)))) : null,
       c.conditions.length ? h("div", { class: "prose" }, h("h3", {}, "Conditions"), h("ul", {}, c.conditions.map((x) => h("li", {}, x)))) : null,
+      c.named && c.named.length ? h("details", {}, h("summary", {}, `Authorities and schemes named in the sources (${c.named.length})`), h("ul", { class: "small" }, c.named.map((x) => h("li", {}, x)))) : null,
       c.primaryFound ? null : h("div", { class: "callout warn" }, n.input.hasText ? "This rests only on the text supplied. It hasn't been checked against the original source." : "The original source wasn't found, so this rests on reports of it.")),
     c.disagreements.length ? h("div", { class: "callout warn" }, h("strong", {}, "Sources disagree. "), c.disagreements.map((d) => `${d.point}: ${d.positions} `), "Check the original before relying on these.") : null,
     n.impacts.length ? h("section", { class: "card" }, h("h2", {}, "Likely impacts here"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
       h("thead", {}, h("tr", {}, h("th", {}, "Impact"), h("th", {}, "Size"), h("th", {}, "Likelihood"), h("th", {}, "Confidence"), h("th", {}, "When"), h("th", {}, "Action"))),
       h("tbody", {}, n.impacts.map((x) => h("tr", {},
-        h("td", {}, h("strong", {}, x.route), h("div", {}, x.statement), x.working ? h("div", { class: "note" }, x.working) : null, h("div", { class: "note" }, `Basis: ${x.basis}. Check by ${fmtDate(x.checkDate)}.`), x.challenge ? h("div", { class: "note" }, `Marked down on challenge: ${x.challenge}`) : null, x.unchecked ? h("div", { class: "note" }, "The challenge step gave no verdict on this.") : null),
+        h("td", {}, h("strong", {}, x.route), h("div", {}, x.statement), x.working ? h("div", { class: "note" }, x.working) : null, h("div", { class: "note" }, `Basis: ${x.basis}. Check by ${fmtDate(x.checkDate)}.`), x.challenge ? h("div", { class: "note" }, `On challenge: ${x.challenge}`) : null, x.unchecked ? h("div", { class: "note" }, "The challenge step gave no verdict on this.") : null),
         h("td", {}, x.size), h("td", {}, x.likelihood), h("td", {}, x.confidence, x.confidenceReason ? h("div", { class: "note" }, x.confidenceReason) : null), h("td", {}, x.when), h("td", {}, x.action, x.owner ? h("div", { class: "note" }, x.owner) : null))))))) : null,
     m ? h("section", { class: "card" }, h("h2", {}, "Likely effect on public mood"),
       h("div", { class: "chips" }, h("span", { class: "pill" }, `Expectation gap: ${m.gap}`), h("span", { class: "pill" }, `Confidence: ${m.confidence}`)),

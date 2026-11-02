@@ -197,9 +197,13 @@ ok(note.change.sources.length === 1 && note.change.sources[0].url === "https://w
 ok(note.change.disagreements.length === 1, "disagreements between sources are kept");
 ok(note.impacts.length === 2 && note.cut.length === 1 && /doesn't stand up/.test(note.cut[0].statement), "the challenge cut one claim");
 ok(note.impacts[1].confidence === "Moderate" && note.impacts[1].challenge === "Too sure.", "and marked another down");
+ok(/\[Data 1\]/.test(note.impacts[0].working) && !/\[Data 9\]/.test(note.impacts[0].working), "a citation with no library result behind it is taken out");
+ok(note.change.named.length === 2 && /A27 Worthing scheme/.test(step2[0].prompt), "names in the sources reach the assessment");
+ok(/<already_to_confirm>[\s\S]*Check DfT's letter/.test(step3[0].prompt), "the challenge sees what's already to be confirmed");
+ok(/two sentences/.test(step3[0].sys), "and keeps its reasons short");
 ok(note.impacts[1].checkDate > "2026-01-01", "a bad check date is replaced");
 ok(note.dataUsed.length === 1 && note.dataUsed[0].sources.length === 1 && /Open Government/.test(note.dataUsed[0].sources[0].attribution), "data used is listed with its attribution");
-ok(note.mood.gap === "Large" && note.mood.surveyQuestion.length > 0 && note.questions.length === 1 && note.unknowns.length === 2, "the mood forecast, questions and items to confirm are there");
+ok(note.mood.gap === "Large" && note.mood.surveyQuestion.length > 0 && note.questions.length === 1 && note.unknowns.length === 2 && note.unknowns.filter((x) => x === "The date").length === 1, "the mood forecast, questions and items to confirm are there");
 const calc = step2[2].body.messages.at(-1).content[0];
 ok(/947875/.test(calc.content), "the calculator's answer goes back to Claude");
 const fc = getJson(`${R}authorities/${WSX}/forecasts.json`);
