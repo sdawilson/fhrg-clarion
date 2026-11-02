@@ -8,15 +8,19 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { Readable, pipeline } from "node:stream";
-import { handleRequest, setPage } from "./app";
+import { handleRequest, setPage, setSurveyPage } from "./app";
 import { settingsReport } from "./config";
 
-// Nothing the app accepts is bigger than this
+// Nothing the app accepts is bigger than this, apart from a scanned form
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
+const MAX_SCAN_BYTES = 11 * 1024 * 1024;
 
 export function startServer(port: number, pageFile = path.resolve(process.cwd(), "public/index.html")): http.Server {
   if (fs.existsSync(pageFile)) setPage(fs.readFileSync(pageFile, "utf8"));
   else console.log(`[warn] ${pageFile} wasn't found`);
+  const surveyFile = path.join(path.dirname(pageFile), "survey.html");
+  if (fs.existsSync(surveyFile)) setSurveyPage(fs.readFileSync(surveyFile, "utf8"));
+  else console.log(`[warn] ${surveyFile} wasn't found`);
   for (const line of settingsReport()) console.log(line);
 
   const server = http.createServer((req, res) => { handle(req, res).catch((e) => fail(res, e)); });
@@ -33,7 +37,8 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
     res.end('{"ok":true}');
     return;
   }
-  if (Number(req.headers["content-length"] || 0) > MAX_REQUEST_BYTES) {
+  const scan = req.url === "/api/survey/scan" || req.url?.startsWith("/api/survey/scan?");
+  if (Number(req.headers["content-length"] || 0) > (scan ? MAX_SCAN_BYTES : MAX_REQUEST_BYTES)) {
     res.writeHead(413, { "content-type": "application/json", connection: "close" });
     res.end('{"error":"Request too large."}');
     req.resume();

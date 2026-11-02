@@ -33,7 +33,7 @@ function hranaValue(v: any): any {
   }
 }
 
-async function websiteQ(c: Config, sql: string, ...args: Val[]): Promise<Row[]> {
+export async function websiteQ(c: Config, sql: string, ...args: Val[]): Promise<Row[]> {
   if (!/^\s*SELECT\b/i.test(sql)) throw new Error("Clarion only reads the website's database.");
   const body = { requests: [{ type: "execute", stmt: { sql, args: args.map(hranaArg) } }, { type: "close" }] };
   let res: Response;
@@ -115,7 +115,7 @@ function cookieValue(request: Request, name: string): string {
   }
   return "";
 }
-function clientIp(request: Request): string {
+export function clientIp(request: Request): string {
   const h = request.headers;
   // bunny.net's CDN replaces X-Real-IP and X-Forwarded-For with the visitor's address, so a visitor can't set them
   return (h.get("x-real-ip") || (h.get("x-forwarded-for") || "").split(",")[0] || "").trim();

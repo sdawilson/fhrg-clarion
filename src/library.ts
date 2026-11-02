@@ -139,6 +139,7 @@ export const LIBRARY_GUIDE = `The FHRG reference library holds published data. I
 - road_length_la: la_code, la_name, region, year, road_type (DfT's own headings, which can carry notes, so use LIKE 'Minor roads%'; the largest km for an authority and year is its total), km
 - traffic_la: la_code, la_name, year, link_length_km, cars_and_taxis, all_motor_vehicles. Compare traffic with 2019, not with 2020 or 2021, which were pandemic years.
 - maintenance_allocations: authority, authority_type, la_code, funding_pot ('Baseline', 'Incentive', 'Total'), fye, years, amount_gbp, note, source. Authorities inside mayoral strategic authorities may have no row of their own: look under the strategic authority's name.
+- census_age_sex_la: la_code, la_name, region, age_band ('16 to 19', '85 and over'), age_from, age_to, sex ('Female', 'Male'), people. Census 2021, usual residents, England and Wales.
 - collisions: la_code, collision_year, collision_severity (1 fatal, 2 serious, 3 slight), and others. Totals only: use COUNT or SUM with GROUP BY.`;
 
 export const QUERY_TOOL = {
