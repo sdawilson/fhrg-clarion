@@ -56,8 +56,8 @@ ok(r.status === 200 && f.authority.region === "South East", "evidence loads from
 const a = f.condition.find((x) => x.roadClass === "A");
 ok(a && a.value === 3 && a.region === 4 && a.england === 6 && a.fye === 2026 && a.earlier.value === 2, "condition is compared with the region and England medians, using red roads only");
 ok(f.condition.length === 3 && f.treatment.length === 2, "covers each road class");
-ok(f.roadLength.km === 4000 && f.roadLength.year === 2024, "road length uses All roads for the latest year");
-ok(f.traffic.changePct === 5 && f.traffic.sinceYear === 2019, "traffic change runs over five years");
+ok(f.roadLength.km === 4000 && f.roadLength.year === 2024, "road length is the total for the latest year, whatever DfT's heading says");
+ok(f.traffic.changePct === 6 && f.traffic.sinceYear === 2019 && f.traffic.year === 2025, "traffic change is measured from 2019, not from a pandemic year");
 ok(f.seriousCollisions.length === 1 && f.seriousCollisions[0].count === 2, "collisions are totals of fatal and serious only");
 ok(f.allocations.length === 3 && f.allocations.find((x) => x.pot === "Total").amount === 28303000, "allocations are for the first year only");
 ok(f.unavailable.length === 0 && f.sources.some((s) => /Open Government Licence/.test(s.attribution)), "every figure was read, with its attribution");

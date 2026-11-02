@@ -157,10 +157,13 @@ AUTH.forEach(([code, name, region, kind, ownRegion], i) => {
   for (const fye of [2022, 2026]) for (const [cls, base] of [["A", 2], ["B and C", 4], ["Unclassified", 15]]) ins("road_condition_la", 8).run(code, name, region, cls, fye, "red", base + i + (fye === 2026 ? 1 : 0), "");
   ins("road_condition_la", 8).run(code, name, region, "A", 2026, "green", 80, "");
   for (const cls of ["A", "B, C and unclassified"]) ins("road_treatment_la", 10).run(code, name, region, cls, 2026, 500, 1, 2, 3, 3 + i);
-  ins("road_length_la", 6).run(code, name, region, 2024, "All roads", 4000 + i); ins("road_length_la", 6).run(code, name, region, 2023, "All roads", 3999 + i); ins("road_length_la", 6).run(code, name, region, 2024, "Minor roads", 3000);
-  for (let k = 0; k < 6; k++) ins("traffic_la", 6).run(code, name, 2019 + k, 4000, 1, 1000 + k * 10);
+  ins("road_length_la", 6).run(code, name, region, 2024, "All roads [note 4]", 4000 + i); ins("road_length_la", 6).run(code, name, region, 2023, "All roads [note 4]", 3999 + i); ins("road_length_la", 6).run(code, name, region, 2024, "Minor roads", 3000);
+  // the lockdown year is far lower, as it is in the real data. Nottinghamshire has nothing for 2019.
+  for (let k = -1; k < 7; k++) if (!(name === "Nottinghamshire" && k < 1)) ins("traffic_la", 6).run(code, name, 2019 + k, 4000, 1, k === 1 ? 700 : 1000 + k * 10);
   for (let k = 0; k < 3; k++) { ins("collisions", 5).run(`C${i}-${k}`, 2024, "2024-01-01", code, k + 1); ins("collision_casualties", 2).run(`C${i}-${k}`, k + 1); }
 });
+ins("road_condition_la", 8).run("E10000004", "Bedfordshire", "East of England", "A", 2026, "red", 40, ""); // abolished, and not in authorities
+ins("road_treatment_la", 10).run("E10000004", "Bedfordshire", "East of England", "A", 2026, 500, 1, 2, 3, 40);
 for (const [pot, amount] of [["Baseline", 20720000], ["Incentive", 7583000], ["Total", 28303000]]) ins("maintenance_allocations", 9).run("West Sussex", "local highway authority", "E10000032", pot, 2027, "2026 to 2027", amount, "", "DfT");
 ins("maintenance_allocations", 9).run("West Sussex", "local highway authority", "E10000032", "Total", 2028, "2027 to 2028", 32904000, "", "DfT");
 
