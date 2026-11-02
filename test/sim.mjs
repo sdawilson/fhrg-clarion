@@ -68,7 +68,7 @@ export const assessment = (over = {}) => ({
   mood: { promise: "Record results", local_experience: "Condition scored 24", gap: "Large", likely_reaction: "Not on my road", confidence: "Low", survey_question: "Have you seen this on your own road?" },
   questions: ["Are we at risk?"], unknowns: ["Check DfT's letter", "The date"], ...over,
 });
-export const review = () => ({ reviews: [{ index: 1, verdict: "keep", reason: "Stands up." }, { index: 2, verdict: "cut", reason: "Unsupported." }, { index: 3, verdict: "reduce", reason: "Too sure." }], also_confirm: ["The date"] });
+export const review = () => ({ reviews: [{ index: 1, verdict: "keep", reason: "Stands up." }, { index: 2, verdict: "cut", reason: "Unsupported." }, { index: 3, verdict: "reduce", reason: "Too sure." }], also_confirm: ["The date"], headline: "£0.95m may rest on evidence due by 30 November.", why_here: "West Sussex appears to be funded directly." });
 
 // What the real service turns down with a 400 on Sonnet 5.5 and Opus 5.5.
 function badSchema(s, where = "input_schema") {
