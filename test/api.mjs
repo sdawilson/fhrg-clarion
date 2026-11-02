@@ -201,6 +201,8 @@ ok(/\[Data 1\]/.test(note.impacts[0].working) && !/\[Data 9\]/.test(note.impacts
 ok(note.change.named.length === 2 && /A27 Worthing scheme/.test(step2[0].prompt), "names in the sources reach the assessment");
 ok(/<already_to_confirm>[\s\S]*Check DfT's letter/.test(step3[0].prompt), "the challenge sees what's already to be confirmed");
 ok(/two sentences/.test(step3[0].sys), "and keeps its reasons short");
+ok(/<headline>[\s\S]*rests on evidence[\s\S]*<\/headline>/.test(step3[0].prompt) && /<why_here>/.test(step3[0].prompt), "the challenge sees the headline and the paragraph on the authority");
+ok(note.headline === "£0.95m may rest on evidence due by 30 November." && note.whyHere === "West Sussex appears to be funded directly.", "and its version of them is what the note shows");
 ok(note.impacts[1].checkDate > "2026-01-01", "a bad check date is replaced");
 ok(note.dataUsed.length === 1 && note.dataUsed[0].sources.length === 1 && /Open Government/.test(note.dataUsed[0].sources[0].attribution), "data used is listed with its attribution");
 ok(note.mood.gap === "Large" && note.mood.surveyQuestion.length > 0 && note.questions.length === 1 && note.unknowns.length === 2 && note.unknowns.filter((x) => x === "The date").length === 1, "the mood forecast, questions and items to confirm are there");

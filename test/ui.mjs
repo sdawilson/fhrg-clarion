@@ -88,7 +88,7 @@ d.querySelector("select").value = "https://www.gov.uk/government/news/record";
 d.querySelector(".card form").dispatchEvent(new w.Event("submit", { cancelable: true, bubbles: true }));
 await until(() => [...d.querySelectorAll("h2")].some((x) => x.textContent === "Likely impacts here"), "the finished note");
 const nt = text(d.querySelector(".main"));
-ok(/£0\.95m rests on evidence/.test(nt) && /Sources disagree/.test(nt), "the note shows its headline and where sources disagree");
+ok(/£0\.95m may rest on evidence/.test(nt) && /Sources disagree/.test(nt), "the note shows its headline and where sources disagree");
 ok(/Likely effect on public mood/.test(nt) && /Expectation gap: Large/.test(nt) && /a theory being tested/.test(nt), "the mood forecast is shown, and labelled as a theory");
 ok(/Removed on challenge \(1\)/.test(nt) && /On challenge:/.test(nt), "what the challenge changed is shown");
 ok(/An officer should check this/.test(nt), "the note says it needs checking");
