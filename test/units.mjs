@@ -125,6 +125,9 @@ const bypass = [
   ["SELECT r, COUNT(*) AS n FROM (SELECT 1 AS r UNION ALL SELECT collision_index FROM collisions) GROUP BY r", "and inside a sub-query"],
   ["SELECT la_code, COUNT(*) OVER w AS n FROM collisions WINDOW w AS (PARTITION BY la_code)", "a named window"],
   ["SELECT la_code, COUNT(*) AS n FROM collisions GROUP BY rowid", "grouping by the row itself"],
+  ["SELECT (SELECT collision_index FROM collisions LIMIT 1 OFFSET 2) AS r, COUNT(*) AS n FROM collisions", "one reference picked out by a sub-query"],
+  ["SELECT r.x AS day, COUNT(*) AS n FROM collisions JOIN (SELECT '2024-01-01' 'date_iso', '2024-01-01' x) r USING ('date_iso') GROUP BY day", "a guessed date tested with USING"],
+  ["SELECT r.x AS day, COUNT(*) AS n FROM collisions NATURAL JOIN (SELECT '2024-01-01' AS 'date_iso', '2024-01-01' x) r GROUP BY day", "and with a natural join"],
 ];
 for (const [sql, what] of bypass) ok((await refusedSql(sql)) !== "", `refused: ${what}`);
 ok(await refusedSql("SELECT COUNT(*) AS n FROM (SELECT DISTINCT collision_index FROM collision_casualties)") === "", "collisions with a casualty can be counted");

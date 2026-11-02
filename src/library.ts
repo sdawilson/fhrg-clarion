@@ -87,15 +87,16 @@ function queryWords(sql: string): string {
 }
 
 // Totals only: a count or sum; no every-column selects; no window functions, which give a row for each
-// collision; and no renaming of a sub-query's columns, which would hide what they hold.
-const notTotals = (words: string) => !/(^| )(count|sum) \(/.test(words) || /(^| )(select|distinct|all|,|\.) \*/.test(words) || /(^| )(over|window) /.test(words) || /\) as (not )?(materialized )?\(/.test(words);
+// collision; no renaming of a sub-query's columns, which would hide what they hold; and no joins that match
+// a column without naming it, which could test guessed dates or places.
+const notTotals = (words: string) => !/(^| )(count|sum) \(/.test(words) || /(^| )(select|distinct|all|,|\.) \*/.test(words) || /(^| )(over|window) /.test(words) || /\) as (not )?(materialized )?\(/.test(words) || /(^| )natural /.test(words) || /(^| )using \( [^)]*''/.test(words);
 
 // The record columns a query uses, so that renaming one can't get it past the check on results. The checks
 // are a guard against slips and planted instructions, as STATS19 is published anyway. Linking the collision
 // tables and counting collisions are fine: collision_index can't come out of those.
 function recordColumnsIn(words: string): string[] {
   const key = "(?<![^ ])(?:[^ ]+ \\. )?collision_index(?![^ ])";
-  const links = [`${key} (?:=(?: =)?|is) ${key}`, `${key} (?:not )?in \\( select (?:distinct )?${key}`, "using \\( collision_index(?: , vehicle_reference)? \\)", `count \\( distinct ${key} \\)`, `\\( select (?:distinct )?${key} from(?![^ ])`];
+  const links = [`${key} (?:=(?: =)?|is) ${key}`, `${key} (?:not )?in \\( select (?:distinct )?${key}`, "using \\( collision_index(?: , vehicle_reference)? \\)", `count \\( distinct ${key} \\)`, `(?<![^ ])(?:from|join|as) \\( select (?:distinct )?${key} from(?![^ ])`];
   const rest = links.reduce((text, link) => text.replace(new RegExp(link, "g"), " "), words);
   return [...new Set(rest.split(" ").filter((x) => RECORD_COLUMN.test(x)))];
 }
