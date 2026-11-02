@@ -390,7 +390,7 @@ r = await api("/api/s/submit", { access: six.code, forms: [form("f1", { c1: "Ver
 ok(r.done.join() === "f1" && /limit of 5000/.test(r.problems[0]), "a full survey tells the tablet which forms it really has");
 const seven = await fresh("Clashing numbers");
 await api("/api/s/submit", { access: seven.code, forms: [form("k1", { c1: "Very satisfied" })] });
-await api("/api/survey/answers", { code: WSX, id: seven.sid, via: "paper", forms: [{ form: "T2", answers: { c1: "1" } }, { form: "T3", answers: { c1: "1" } }] }, lead);
+await api("/api/survey/answers", { code: WSX, id: seven.sid, via: "paper", forms: [{ form: "T4", answers: { c1: "1" } }, { form: "T5", answers: { c1: "1" } }] }, lead);
 r = await api("/api/s/submit", { access: seven.code, forms: [form("k2", { c1: "Very satisfied" }), form("k3", { c1: "Very satisfied" })] });
 ok(r.added === 2 && r.done.length === 2 && new Set(getJson(`${R}authorities/${WSX}/survey-answers/${seven.sid}.json`).map((x) => x.form)).size === 5, "a paper form numbered like a tablet's can't block one");
 
