@@ -9,7 +9,7 @@ import { briefing, kindsHeld, loadEvidence, loadFacts } from "./evidence";
 import { checkDailyLimit, listJobs, loadJob, newJobId, startJob, type JobBase } from "./jobs";
 import type { Pilot } from "./pilots";
 import { HOUSE_STYLE, MOOD_METHOD, SIGNAL_KINDS } from "./style";
-import { cleanText } from "./util";
+import { cleanText, pickEnum } from "./util";
 
 const DIRECTIONS = ["Improving", "Steady", "Worsening", "Not yet known"] as const;
 const CONFIDENCE = ["High", "Moderate", "Low"] as const;
@@ -48,9 +48,9 @@ const FINISH = strictTool({
 // A first reading has nothing to compare with, and one kind of signal isn't enough to report a change. Only
 // kinds Clarion really held for this reading count, whatever Claude says it saw.
 export function settleDirection(direction: string, kinds: unknown, hasEarlier: boolean, held: readonly string[]): { direction: string; note: string } {
-  const d = (DIRECTIONS as readonly string[]).includes(direction) ? direction : "Not yet known";
+  const d = pickEnum(DIRECTIONS, direction) ?? "Not yet known";
   if (!hasEarlier) return { direction: "Not yet known", note: "This is the first reading, so there is nothing to compare it with yet." };
-  const distinct = new Set(Array.isArray(kinds) ? kinds.filter((k) => held.includes(k)) : []);
+  const distinct = new Set(Array.isArray(kinds) ? kinds.map((k) => pickEnum(SIGNAL_KINDS, k)).filter((k) => k && held.includes(k)) : []);
   if (d !== "Not yet known" && d !== "Steady" && distinct.size < 2) return { direction: "Not yet known", note: "Only one kind of signal shows a change, so Clarion isn't reporting one." };
   return { direction: d, note: "" };
 }
@@ -88,8 +88,8 @@ export async function startReading(c: Config, me: Member, p: Pilot): Promise<Rea
       await save({
         status: "ready", stage: "Ready", headline: text(result.headline), level: text(result.level), levelBasis: text(result.level_basis),
         direction: settled.direction, directionNote: settled.note,
-        confidence: (CONFIDENCE as readonly string[]).includes(result.confidence) ? result.confidence : "Low", confidenceReason: text(result.confidence_reason),
-        drivers: (Array.isArray(result.drivers) ? result.drivers : []).map((d: any) => ({ theme: text(d?.theme, 120), evidence: text(d?.evidence), kind: text(d?.kind, 30) })).filter((d: Driver) => d.theme).slice(0, 5),
+        confidence: pickEnum(CONFIDENCE, result.confidence) ?? "Low", confidenceReason: text(result.confidence_reason),
+        drivers: (Array.isArray(result.drivers) ? result.drivers : []).map((d: any) => ({ theme: text(d?.theme, 120), evidence: text(d?.evidence), kind: pickEnum(SIGNAL_KINDS, d?.kind) ?? "" })).filter((d: Driver) => d.theme && held.includes(d.kind)).slice(0, 5),
         gaps: list(result.gaps, 8), nextSteps: list(result.next_steps, 4), cost: usage.usd,
       });
     } finally {

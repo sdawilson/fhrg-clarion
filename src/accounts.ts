@@ -5,7 +5,7 @@
 import type { Config } from "./config";
 import { missingSettings } from "./config";
 import { storageDelete, storageJson, storagePut } from "./storage";
-import { FriendlyError, cached, cleanText, delay, fetchWithTimeout, forget, json, readJsonBody, sameText } from "./util";
+import { FriendlyError, cached, cleanText, delay, fetchWithTimeout, forget, json, readJsonBody, sameText, withLock } from "./util";
 
 const SESSION_DAYS = 30;
 const SESSION_HOURS = 12;
@@ -167,10 +167,11 @@ function countAttempt(keys: [string, number][]): boolean {
   for (const [k] of keys) attempts.set(k, [...(attempts.get(k) ?? []), now]);
   return true;
 }
-function clearAttempt(ipKey: string, emailKey: string): void {
-  attempts.delete(emailKey);
-  const times = attempts.get(ipKey);
-  if (times) { times.pop(); if (!times.length) attempts.delete(ipKey); }
+function giveBack(keys: string[]): void {
+  for (const k of keys) {
+    const times = attempts.get(k);
+    if (times) { times.pop(); if (!times.length) attempts.delete(k); }
+  }
 }
 
 async function emailFails(c: Config, email: string): Promise<{ path: string; fails: string[] }> {
@@ -189,21 +190,33 @@ export async function handleLogin(c: Config, request: Request): Promise<Response
   const tooMany = () => new FriendlyError("Too many unsuccessful sign-ins. Wait 15 minutes and try again, or reset your password on the FHRG website.", 429);
   const ipKey = `ip|${clientIp(request) || "-"}`, emailKey = `email|${email}`;
   if (!countAttempt([[ipKey, SIGNIN_MAX_PER_IP], [emailKey, SIGNIN_MAX_PER_EMAIL]])) throw tooMany();
-  const record = await emailFails(c, email);
-  if (record.fails.length >= SIGNIN_MAX_PER_EMAIL) throw tooMany();
-  const u = (await websiteQ(c, `${ME_SQL} WHERE u.email = ?`, email))[0];
-  const ok = await checkSecret(password, u ? String(u.password_hash || "") : DUMMY_HASH);
-  if (!u || !ok) {
-    try { await storagePut(c, record.path, JSON.stringify({ fails: [...record.fails, new Date().toISOString()] })); } catch (e) { console.log(`[warn] Sign-in count not saved: ${(e as Error).message}`); }
-    await delay(400);
-    throw new FriendlyError("That email and password don't match an account on the FHRG website.", 401);
+  let wrongPassword = false;
+  try {
+    const record = await emailFails(c, email);
+    if (record.fails.length >= SIGNIN_MAX_PER_EMAIL) throw tooMany();
+    const u = (await websiteQ(c, `${ME_SQL} WHERE u.email = ?`, email))[0];
+    const ok = await checkSecret(password, u ? String(u.password_hash || "") : DUMMY_HASH);
+    if (!u || !ok) {
+      wrongPassword = true;
+      try {
+        await withLock(record.path, async () => {
+          const latest = await emailFails(c, email);
+          await storagePut(c, record.path, JSON.stringify({ fails: [...latest.fails, new Date().toISOString()] }));
+        });
+      } catch (e) { console.log(`[warn] Sign-in count not saved: ${(e as Error).message}`); }
+      await delay(400);
+      throw new FriendlyError("That email and password don't match an account on the FHRG website.", 401);
+    }
+    attempts.delete(emailKey);
+    if (record.fails.length) await storageDelete(c, record.path).catch(() => {});
+    checkAccount(c, u);
+    forget(`member|${u.id}`);
+    const token = await makeSession(c, Number(u.id), String(u.password_hash), remember);
+    return json({ ok: true, token }, 200, { "set-cookie": sessionCookie(token, remember) });
+  } finally {
+    // only a wrong password counts, not a success or the database being down
+    if (!wrongPassword) giveBack([ipKey, emailKey]);
   }
-  clearAttempt(ipKey, emailKey);
-  if (record.fails.length) await storageDelete(c, record.path).catch(() => {});
-  checkAccount(c, u);
-  forget(`member|${u.id}`);
-  const token = await makeSession(c, Number(u.id), String(u.password_hash), remember);
-  return json({ ok: true, token }, 200, { "set-cookie": sessionCookie(token, remember) });
 }
 
 // ----- arriving from the FHRG website, already signed in there

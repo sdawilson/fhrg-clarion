@@ -5,6 +5,7 @@
 // Spending: every call's tokens are priced and added to the month's total as the job runs, and new work is
 // refused once that reaches MONTHLY_CAP_USD. A job already running can finish a little over the cap.
 
+import Anthropic from "@anthropic-ai/sdk";
 import type { Config } from "./config";
 import { storageJson, savePretty } from "./storage";
 import { FriendlyError, delay, withLock } from "./util";
@@ -17,11 +18,10 @@ const PRICES: Record<string, [number, number, number]> = {
 };
 const SEARCH_USD = 0.01;
 
-// Room for an answer, which Claude's thinking also counts towards. Above the upper figure a request can run
-// past what a single call without streaming should wait for.
+// Room for an answer, which Claude's thinking also counts towards.
 const DEFAULT_TOKENS = 16_000;
 const MOST_TOKENS = 24_000;
-const CALL_TIMEOUT_MS = 420_000;
+const CALL_TIMEOUT_MS = 480_000;
 
 export type Usage = { input: number; output: number; cached: number; searches: number; fetches: number; usd: number; recorded: number };
 export const newUsage = (): Usage => ({ input: 0, output: 0, cached: 0, searches: 0, fetches: 0, usd: 0, recorded: 0 });
@@ -79,32 +79,29 @@ export function strictTool<T extends { input_schema: Record<string, unknown> }>(
   return { ...tool, strict: true, input_schema: close(tool.input_schema) };
 }
 
+// Calls are streamed, using Anthropic's own library to put the reply together. A long call that sits silent
+// gets cut off by Node after five minutes, and it may still be charged.
 async function callClaude(c: Config, body: Record<string, unknown>, usage: Usage): Promise<any> {
+  const client = new Anthropic({ apiKey: c.apiKey, authToken: null, baseURL: "https://api.anthropic.com", maxRetries: 0 });
+  const params = body as unknown as Anthropic.MessageStreamParams;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    let res: Response;
     try {
-      res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": c.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-      });
+      const data = await client.messages.stream(params, { signal: AbortSignal.timeout(CALL_TIMEOUT_MS) }).finalMessage();
+      addUsage(usage, c.model, data.usage);
+      return data;
     } catch (e) {
       // a call that ran out of time may still be charged, so don't pay for it twice
-      if ((e as Error)?.name === "TimeoutError") throw new FriendlyError("Claude took too long to answer. Please try again.", 504);
-      if (attempt < 3) { await delay(2000); continue; }
-      throw new FriendlyError(`Claude didn't respond: ${(e as Error).message}`, 502);
+      if (e instanceof Anthropic.APIUserAbortError) throw new FriendlyError("Claude took too long to answer. Please try again.", 504);
+      const status = e instanceof Anthropic.APIError ? e.status : undefined; // none: the connection dropped, or a problem part-way through
+      const detail = String((e as any)?.error?.error?.message ?? (e as Error)?.message ?? "");
+      console.log(`[error] Claude API ${status ?? "stream"}: ${detail}`);
+      if ((status === undefined || [429, 500, 502, 503, 504, 529].includes(status)) && attempt < 3) { await delay(2500 * attempt); continue; }
+      if (status === 401) throw new FriendlyError("Clarion's Claude API key isn't working. Check ANTHROPIC_API_KEY.", 502);
+      if (status === 400 && /web.?(search|fetch)/i.test(detail)) throw new FriendlyError("Web search or fetch isn't available on this Claude account. Turn them on in the Claude Console's organisation settings.", 502);
+      if (status === 404) throw new FriendlyError(`Claude doesn't recognise the model "${String(body.model)}". Check CLAUDE_MODEL.`, 502);
+      if (status === 429 || status === 529) throw new FriendlyError("Claude is busy. Please try again in a few minutes.", 503);
+      throw new FriendlyError("Claude couldn't do that just now. Please try again.", 502);
     }
-    const data: any = await res.json().catch(() => null);
-    if (res.ok) { addUsage(usage, c.model, data?.usage); return data; }
-    const detail = data?.error?.message ?? res.statusText;
-    console.log(`[error] Claude API ${res.status}: ${detail}`);
-    if ([429, 500, 502, 503, 504, 529].includes(res.status) && attempt < 3) { await delay(2500 * attempt); continue; }
-    if (res.status === 401) throw new FriendlyError("Clarion's Claude API key isn't working. Check ANTHROPIC_API_KEY.", 502);
-    if (res.status === 400 && /web.?(search|fetch)/i.test(String(detail))) throw new FriendlyError("Web search or fetch isn't available on this Claude account. Turn them on in the Claude Console's organisation settings.", 502);
-    if (res.status === 404) throw new FriendlyError(`Claude doesn't recognise the model "${String(body.model)}". Check CLAUDE_MODEL.`, 502);
-    if (res.status === 429 || res.status === 529) throw new FriendlyError("Claude is busy. Please try again in a few minutes.", 503);
-    throw new FriendlyError("Claude couldn't do that just now. Please try again.", 502);
   }
   throw new FriendlyError("Claude couldn't do that just now. Please try again.", 502);
 }
@@ -155,12 +152,16 @@ export async function runClaude(c: Config, o: RunOptions): Promise<{ result: Rec
       maxTokens = Math.min(maxTokens * 2, MOST_TOKENS);
       continue;
     }
+    if (resp?.stop_reason === "model_context_window_exceeded") throw new FriendlyError("This was too much for Claude to read at once. Try a shorter text.", 502);
     collectSources(content, seen);
     const done = content.find((b) => b?.type === "tool_use" && b.name === o.finish);
     if (done) return { result: done.input ?? {}, web: [...seen].map(([url, title]) => ({ url, title })) };
-    if (content.length) messages.push({ role: "assistant", content });
-    if (resp?.stop_reason === "pause_turn") continue; // a long run of searches: carry on from where it stopped
+    if (resp?.stop_reason === "pause_turn") { // a long run of searches: carry on from where it stopped
+      messages.push({ role: "assistant", content });
+      continue;
+    }
     if (resp?.stop_reason === "tool_use") {
+      messages.push({ role: "assistant", content });
       const results: any[] = [];
       for (const b of content) {
         if (b?.type !== "tool_use") continue;
@@ -176,7 +177,11 @@ export async function runClaude(c: Config, o: RunOptions): Promise<{ result: Rec
       messages.push({ role: "user", content: results });
       continue;
     }
-    messages.push({ role: "user", content: handIn }); // finished talking without handing in the work
+    // finished talking without handing in the work. A turn sent back can't end on thinking.
+    const said = [...content];
+    while (/thinking$/.test(String(said.at(-1)?.type))) said.pop();
+    if (said.length) messages.push({ role: "assistant", content: said });
+    messages.push({ role: "user", content: handIn });
   }
   throw new FriendlyError("Claude didn't finish this job. Please try again.", 502);
 }

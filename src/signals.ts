@@ -76,6 +76,8 @@ function fixMyStreet(p: Pilot): Promise<Signal<FixMyStreet>> {
 
 export type Petition = { title: string; url: string; signatures: number; local: number; localShare: number; fairShare: number };
 const PETITION_TERMS = ["pothole", "road", "highway", "speed limit", "roadworks"];
+const NOT_ROADS = /\b(air traffic|internet traffic|web traffic|road to|road map)\b/gi; // the same words used of something else
+const onRoads = (text: string) => ROAD_TOPIC.test(text.replace(NOT_ROADS, " "));
 const ROAD_TOPIC = /\b(pothole|potholes|road|roads|highway|highways|pavement|pavements|speed limit|speed limits|20 ?mph|roadworks|road works|traffic|motorist|motorists|cycle lane|cycle lanes)\b/i;
 const CONSTITUENCIES = 650;
 
@@ -87,7 +89,7 @@ async function roadPetitions(): Promise<{ id: number; title: string; signatures:
       for (const d of Array.isArray(j?.data) ? j.data : []) {
         const a = d?.attributes;
         if (!Number.isInteger(d?.id) || !a) continue;
-        if (ROAD_TOPIC.test(`${a.action ?? ""} ${a.background ?? ""}`)) found.set(d.id, { id: d.id, title: cleanText(a.action, 200), signatures: Number(a.signature_count) || 0 });
+        if (onRoads(`${a.action ?? ""} ${a.background ?? ""}`)) found.set(d.id, { id: d.id, title: cleanText(a.action, 200), signatures: Number(a.signature_count) || 0 });
       }
     }
     return [...found.values()].sort((a, b) => b.signatures - a.signatures).slice(0, 6);
@@ -116,6 +118,8 @@ function petitions(p: Pilot): Promise<Signal<Petition[]>> {
 // ----- MPs and their written questions
 
 export type Question = { date: string; heading: string; member: string; text: string; url: string };
+const QUESTIONS_PAGE = 100;
+const QUESTIONS_MOST_PAGES = 8; // one busy MP can ask over 500 questions in six months
 
 async function members(p: Pilot): Promise<Map<number, string>> {
   return await cached(`mps|${p.code}`, 24 * 60 * 60 * 1000, async () => {
@@ -138,15 +142,19 @@ function questions(p: Pilot): Promise<Signal<Question[]>> {
     const found = new Map<number, Question>();
     // Each MP in turn, then the road topics: searching by topic across all MPs would crowd these ones out.
     for (const [id, member] of mps) {
-      const j = await getJson(`https://questions-statements-api.parliament.uk/api/writtenquestions/questions?askingMemberId=${id}&tabledWhenFrom=${from}&take=100`);
-      for (const r of Array.isArray(j?.results) ? j.results : []) {
-        const v = r?.value;
-        if (!Number.isInteger(v?.id) || v.askingMemberId !== id || !ROAD_TOPIC.test(`${v.heading ?? ""} ${v.questionText ?? ""}`)) continue;
-        const date = String(v.dateTabled ?? "").slice(0, 10);
-        found.set(v.id, {
-          date, heading: cleanText(v.heading, 200), member, text: cleanText(v.questionText, 400),
-          url: `https://questions-statements.parliament.uk/written-questions/detail/${date}/${encodeURIComponent(String(v.uin ?? ""))}`,
-        });
+      for (let page = 0; page < QUESTIONS_MOST_PAGES; page++) {
+        const j = await getJson(`https://questions-statements-api.parliament.uk/api/writtenquestions/questions?askingMemberId=${id}&tabledWhenFrom=${from}&skip=${page * QUESTIONS_PAGE}&take=${QUESTIONS_PAGE}`);
+        const results: any[] = Array.isArray(j?.results) ? j.results : [];
+        for (const r of results) {
+          const v = r?.value;
+          if (!Number.isInteger(v?.id) || v.askingMemberId !== id || !onRoads(`${v.heading ?? ""} ${v.questionText ?? ""}`)) continue;
+          const date = String(v.dateTabled ?? "").slice(0, 10);
+          found.set(v.id, {
+            date, heading: cleanText(v.heading, 200), member, text: cleanText(v.questionText, 400),
+            url: `https://questions-statements.parliament.uk/written-questions/detail/${date}/${encodeURIComponent(String(v.uin ?? ""))}`,
+          });
+        }
+        if (results.length < QUESTIONS_PAGE) break;
       }
     }
     return [...found.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12);

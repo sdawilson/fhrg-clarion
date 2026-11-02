@@ -67,13 +67,14 @@ export async function loadEvidence(c: Config, p: Pilot, facts: Facts): Promise<E
 }
 
 // The kinds of signal Clarion really holds. Street surveys, pulse questions and press or social media come in
-// later stages of the build, so they can't count yet.
+// later stages of the build, so they can't count yet. A national petition only says something about this
+// authority if it draws more than a fair share of its signatures from here.
 export function kindsHeld(e: Evidence): string[] {
   const s = e.signals;
   return [
     ...(e.surveys.length ? ["survey"] : []),
     ...(s.fixMyStreet.ok && s.fixMyStreet.data?.reports ? ["actions"] : []),
-    ...((s.petitions.ok && s.petitions.data?.length) || (s.questions.ok && s.questions.data?.length) ? ["representatives"] : []),
+    ...((s.petitions.ok && s.petitions.data?.some((p) => p.localShare > p.fairShare)) || (s.questions.ok && s.questions.data?.length) ? ["representatives"] : []),
   ];
 }
 

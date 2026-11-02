@@ -22,9 +22,13 @@ ok(t.settleDirection("Worsening", ["actions", "representatives"], true, held).di
 ok(t.settleDirection("Worsening", ["actions", "open talk"], true, held).direction === "Not yet known", "a kind Clarion doesn't hold can't be the second signal");
 ok(t.settleDirection("Steady", [], true, held).direction === "Steady", "no change needs no second signal");
 ok(t.settleDirection("Rubbish", ["actions", "survey"], true, held).direction === "Not yet known", "an unknown direction isn't accepted");
+ok(t.settleDirection("worsening", ["Actions", "Representatives"], true, held).direction === "Worsening", "capitals don't matter");
 const sig = (ok, data) => ({ ok, data });
 ok(t.kindsHeld({ surveys: [{}], signals: { fixMyStreet: sig(true, { reports: 3 }), petitions: sig(true, []), questions: sig(true, [{}]) } }).join() === "survey,actions,representatives", "counts the kinds of signal really held");
 ok(t.kindsHeld({ surveys: [], signals: { fixMyStreet: sig(false, null), petitions: sig(true, []), questions: sig(false, null) } }).length === 0, "a source that's down or empty isn't a signal");
+const signals = (petitions) => ({ surveys: [], signals: { fixMyStreet: sig(true, { reports: 0 }), petitions: sig(true, petitions), questions: sig(true, []) } });
+ok(t.kindsHeld(signals([{ localShare: 0, fairShare: 1.4 }, { localShare: 1, fairShare: 1.4 }])).length === 0, "a national petition with an ordinary local share isn't a local signal");
+ok(t.kindsHeld(signals([{ localShare: 4, fairShare: 1.4 }])).join() === "representatives", "one with more than its fair share is");
 
 // ---- the challenge step
 const impact = (statement, confidence = "High") => ({ statement, confidence });
@@ -33,6 +37,8 @@ ok(r.kept.length === 2 && r.cut.length === 1 && r.cut[0].statement === "b", "cut
 ok(r.kept[1].confidence === "Low" && r.kept[1].challenge === "Too sure", "confidence can't go below low");
 r = t.applyReview([impact("a")], [{ index: 1, verdict: "reduce", reason: "x" }]);
 ok(r.kept[0].confidence === "Moderate", "reducing lowers confidence one step");
+r = t.applyReview([impact("a"), impact("b")], [{ index: 1, verdict: "Cut", reason: "No" }, { index: 2, verdict: "Keep", reason: "Fine" }]);
+ok(r.cut.length === 1 && r.kept.length === 1 && !r.kept[0].unchecked, "a verdict counts whatever its capitals");
 r = t.applyReview([impact("a"), impact("b")], [{ index: 1, verdict: "keep", reason: "Fine" }]);
 ok(r.kept.length === 2 && !r.kept[0].unchecked && r.kept[1].unchecked === true, "an impact with no verdict is kept, and flagged as not challenged");
 r = t.applyReview([impact("a")], "nonsense");
@@ -46,6 +52,8 @@ let i = t.readImpact({ statement: "x", route: "Made up", likelihood: "Maybe", wh
 ok(i.route === "Governance" && i.likelihood === "Realistic possibility" && i.confidence === "Low", "unknown ratings fall back to cautious ones");
 ok(i.checkDate === "2026-12-02", "a past check date is replaced");
 ok(t.readImpact({ statement: " " }, "2026-11-02") === null, "an empty impact is ignored");
+i = t.readImpact({ statement: "x", route: "Duties And Liability", likelihood: "Highly Likely", when: "Within 3 Months" }, "2026-11-02");
+ok(i.route === "Duties and liability" && i.likelihood === "Highly likely" && i.when === "Within 3 months", "ratings count whatever their capitals");
 
 // ---- what officers can give
 ok(t.readInput({ url: "https://www.gov.uk/government/news/x" }).url.includes("gov.uk"), "a GOV.UK link is accepted");
@@ -93,6 +101,17 @@ ok(await refusedSql("SELECT c.la_code, SUM(k.casualty_severity = 1) AS deaths FR
 ok(/individual collisions/.test(await refusedSql("SELECT substr(date_iso, 1, 10) AS d, COUNT(*) AS n FROM collisions GROUP BY d")), "a date under another name is refused");
 ok(/individual collisions/.test(await refusedSql("WITH x AS (SELECT latitude AS a, longitude AS b FROM collisions) SELECT a, b, COUNT(*) AS n FROM x GROUP BY a, b")), "and so are places inside a sub-query");
 ok(/totals/.test(await refusedSql("SELECT *, COUNT(*) AS n FROM collisions GROUP BY la_code")), "every column can't be asked for");
+ok(/individual collisions/.test(await refusedSql("SELECT /*'*/ date_iso /*'*/ AS d, COUNT(*) AS n FROM collisions GROUP BY d")), "a comment can't hide a date");
+ok(/individual collisions/.test(await refusedSql('SELECT "date_iso" AS d, COUNT(*) AS n FROM collisions GROUP BY d')), "nor can quoting it");
+ok(/totals/.test(await refusedSql('WITH t(a, b, c, d, e) AS (SELECT * /**/ FROM collisions) SELECT c, COUNT(*) AS n FROM t GROUP BY c')), "nor can renaming every column at once");
+ok(/totals/.test(await refusedSql('WITH t(a, b, c, d, e) AS (SELECT "x".* FROM collisions "x") SELECT c, COUNT(*) AS n FROM t GROUP BY c')), "however it's written");
+ok(/totals/.test(await refusedSql("SELECT la_code /* count( */ FROM collisions")), "a count in a comment isn't a count");
+ok(/totals/.test(await refusedSql("SELECT la_code, COUNT(*) OVER () AS n FROM collisions")), "a window function gives a row for each collision, so it's refused");
+ok(await refusedSql("SELECT COUNT(DISTINCT c.collision_index) AS n FROM collisions c JOIN collision_casualties k ON c.collision_index = k.collision_index WHERE k.casualty_severity = 1") === "", "counting collisions across a join is allowed");
+ok(await refusedSql("SELECT c.la_code, COUNT(*) AS n FROM collisions c WHERE EXISTS (SELECT 1 FROM collision_casualties k WHERE k.casualty_severity = 1 AND k.collision_index = c.collision_index) GROUP BY c.la_code") === "", "so is checking for a linked casualty");
+ok(await refusedSql("SELECT la_code, COUNT(*) AS n FROM collisions WHERE collision_index IN (SELECT collision_index FROM collision_casualties WHERE casualty_severity = 1) GROUP BY la_code") === "", "whichever way it's written");
+ok(await refusedSql("SELECT COUNT(*) AS n FROM collisions c JOIN collision_casualties k ON (k.casualty_severity = 1 AND k.collision_index = c.collision_index)") === "", "with the link in any position");
+ok(/individual collisions/.test(await refusedSql("SELECT collision_index AS x, COUNT(*) AS n FROM collisions GROUP BY x")), "but a collision's reference can't come out");
 ok(/totals/.test(await refusedSql("SELECT collision_year FROM collisions")), "and it has to be a count or a sum");
 ok(await refusedSql("SELECT collision_year, COUNT(*) AS n FROM collisions WHERE la_code = 'date_iso' GROUP BY collision_year") === "", "words inside quotes don't count as columns");
 ok(await refusedSql("SELECT la_name, kind FROM authorities") === "", "other tables aren't affected");

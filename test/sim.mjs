@@ -47,7 +47,8 @@ function query(sql, args) {
 }
 
 // ----- Claude: `claude.script` decides what each job's model says; every call is recorded
-export const claude = { calls: [], script: {}, fail: null, failMessage: "nope", refused: [] };
+export const claude = { calls: [], script: {}, fail: null, failMessage: "nope", refused: [], dropAfter: 0 };
+export const website = { down: false };
 const message = (content, stop = "tool_use", extra = {}) => ({ id: "msg", type: "message", role: "assistant", content, stop_reason: stop, usage: { input_tokens: 1000, output_tokens: 200, ...extra } });
 const use = (name, input) => ({ type: "tool_use", id: `tu_${name}_${Math.random().toString(36).slice(2, 8)}`, name, input });
 export const reading = (over = {}) => ({
@@ -81,8 +82,31 @@ function badSchema(s, where = "input_schema") {
 export function refused(body) {
   if (["any", "tool"].includes(body.tool_choice?.type)) return `tool_choice: type "tool" and "any" are not supported for this model.`;
   if (body.thinking?.type === "disabled") return "thinking: disabled is not supported for this model. Use between_tools.";
+  for (const m of body.messages || []) if (m.role === "assistant" && Array.isArray(m.content) && /thinking$/.test(m.content.at(-1)?.type || "")) return "The final block in an assistant message cannot be `thinking`.";
   for (const t of body.tools || []) if (t.strict) { const b = badSchema(t.input_schema); if (b) return `tools.${t.name}: ${b}`; }
   return "";
+}
+
+// The reply as the real service streams it, tool input in pieces. Anything cut off ends mid-way through its JSON.
+function sse(m) {
+  const ev = (type, data) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
+  const usage = m.usage || {};
+  let out = ev("message_start", { message: { id: m.id, type: "message", role: "assistant", model: "claude-sonnet-5-5", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: usage.input_tokens ?? 0, output_tokens: 1 } } });
+  out += ev("ping", {});
+  m.content.forEach((b, index) => {
+    if (b.type === "tool_use" || b.type === "server_tool_use") {
+      const json = JSON.stringify(b.input ?? {}).slice(0, m.stop_reason === "max_tokens" ? -4 : undefined);
+      out += ev("content_block_start", { index, content_block: { ...b, input: {} } });
+      for (let i = 0; i < json.length; i += 40) out += ev("content_block_delta", { index, delta: { type: "input_json_delta", partial_json: json.slice(i, i + 40) } });
+    } else if (b.type === "text") {
+      out += ev("content_block_start", { index, content_block: { type: "text", text: "" } }) + ev("content_block_delta", { index, delta: { type: "text_delta", text: b.text } });
+    } else if (b.type === "thinking") {
+      out += ev("content_block_start", { index, content_block: { type: "thinking", thinking: "", signature: "" } }) + ev("content_block_delta", { index, delta: { type: "thinking_delta", thinking: b.thinking } }) + ev("content_block_delta", { index, delta: { type: "signature_delta", signature: b.signature } });
+    } else out += ev("content_block_start", { index, content_block: b });
+    out += ev("content_block_stop", { index });
+  });
+  if (claude.dropAfter > 0) { claude.dropAfter--; return out + `event: error\ndata: ${JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "Overloaded" } })}\n\n`; }
+  return out + ev("message_delta", { delta: { stop_reason: m.stop_reason, stop_sequence: null }, usage: { output_tokens: usage.output_tokens ?? 0, ...(usage.server_tool_use ? { input_tokens: usage.input_tokens, server_tool_use: usage.server_tool_use } : {}) } }) + ev("message_stop", {});
 }
 
 function anthropic(body) {
@@ -174,10 +198,12 @@ const PETITIONS = { data: [
 ] };
 const PETITION = { data: { attributes: { signatures_by_constituency: [{ name: "Horsham", ons_code: "E1", mp: "An MP", signature_count: 300 }, { name: "Worthing West", ons_code: "E2", mp: "Another MP", signature_count: 100 }, { name: "Bath", ons_code: "E3", mp: "X", signature_count: 500 }] } } };
 const MEMBER_IDS = { horsham: 501 };
-const QUESTIONS = { results: [
+// A busy MP: a hundred and twenty newer questions on other things before the one on roads
+const SCHOOLS = Array.from({ length: 120 }, (_, i) => ({ value: { id: 1000 + i, askingMemberId: 501, dateTabled: "2026-10-20T00:00:00", uin: String(20000 + i), heading: "Schools: Funding", questionText: "To ask the Secretary of State about schools in Horsham." } }));
+const QUESTIONS = { results: [ ...SCHOOLS,
   { value: { id: 9, askingMemberId: 501, dateTabled: "2026-10-01T00:00:00", uin: "12345", heading: "Roads: Potholes", questionText: "To ask the Secretary of State about potholes in Horsham." } },
   { value: { id: 10, askingMemberId: 999, dateTabled: "2026-10-02T00:00:00", uin: "12346", heading: "Roads: Elsewhere", questionText: "Somewhere else." } },
-  { value: { id: 11, askingMemberId: 501, dateTabled: "2026-10-03T00:00:00", uin: "12347", heading: "Schools: Funding", questionText: "To ask the Secretary of State about schools in Horsham." } },
+  { value: { id: 11, askingMemberId: 501, dateTabled: "2026-10-03T00:00:00", uin: "12347", heading: "Air Traffic Control", questionText: "To ask the Secretary of State about air traffic over Horsham." } },
 ] };
 const GOVUK = { results: [
   { title: "Record funding, record results", link: "/government/news/record", public_timestamp: "2026-10-21T21:00:00Z", description: "Potholes and roads." },
@@ -196,8 +222,9 @@ function publicSource(url) {
     return reply(200, { items: [{ value: { id: 1, name, currentRepresentation: { member: { value: { id, nameDisplayAs: `MP for ${name}` } } } } }] });
   }
   if (host === "questions-statements-api.parliament.uk") {
-    const id = Number(new URL(url).searchParams.get("askingMemberId"));
-    return reply(200, { results: QUESTIONS.results.filter((r) => !id || r.value.askingMemberId === id) });
+    const q = new URL(url).searchParams, id = Number(q.get("askingMemberId")), skip = Number(q.get("skip") || 0), take = Number(q.get("take") || 20);
+    const all = QUESTIONS.results.filter((r) => !id || r.value.askingMemberId === id);
+    return reply(200, { results: all.slice(skip, skip + take), totalResults: all.length });
   }
   if (host === "www.gov.uk") return reply(200, GOVUK);
   return null;
@@ -217,6 +244,7 @@ globalThis.fetch = async (input, init = {}) => {
     return f ? new Response(f.body, { status: 200 }) : new Response("", { status: 404 });
   }
   if (url === "https://db.test/v2/pipeline") {
+    if (website.down) return new Response("", { status: 503 });
     const stmt = JSON.parse(init.body).requests[0].stmt;
     return new Response(JSON.stringify(hrana(query(stmt.sql, stmt.args.map((a) => a.value)))), { status: 200 });
   }
@@ -224,7 +252,7 @@ globalThis.fetch = async (input, init = {}) => {
     if (claude.fail) return new Response(JSON.stringify({ error: { message: claude.failMessage } }), { status: claude.fail });
     const body = JSON.parse(init.body), no = refused(body);
     if (no) { claude.refused.push(no); return new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: no } }), { status: 400 }); }
-    return new Response(JSON.stringify(anthropic(body)), { status: 200 });
+    return new Response(sse(anthropic(body)), { status: 200, headers: { "content-type": "text/event-stream" } });
   }
   if (url.startsWith("https://builder.test")) return library(url, init);
   if (/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(url)) return realFetch(input, init); // the server under test

@@ -1,5 +1,5 @@
 // The whole app through its API, against the simulators.
-import { addUser, assessment, change, claude, files, getJson, getText, lib, outside, putText, reading, until } from "./sim.mjs";
+import { addUser, assessment, change, claude, files, getJson, getText, lib, outside, putText, reading, until, website } from "./sim.mjs";
 const { handleRequest } = await import("./.build/app.mjs");
 
 let failures = 0;
@@ -24,6 +24,14 @@ ok(r.status === 401, "a wrong password is refused");
 let burst = await Promise.all(Array.from({ length: 20 }, () => api("/api/login", { email: "burst@westsussex.gov.uk", password: "guess" })));
 ok(burst.filter((x) => x.status === 401).length === 8 && burst.filter((x) => x.status === 429).length === 12, "of 20 tries sent at once, only 8 are let through");
 ok((await api("/api/login", { email: "burst@westsussex.gov.uk", password: "pw" })).status === 429, "and the right password then has to wait");
+ok(Math.max(...files(`${R}system/signin/`).map((f) => getJson(f).fails.length)) === 8, "all 8 are kept on file, so they outlast a restart");
+await addUser(8, "patient@westsussex.gov.uk", "Pat Patient", 30, "member");
+website.down = true;
+let down = [];
+for (let i = 0; i < 12; i++) down.push((await api("/api/login", { email: "patient@westsussex.gov.uk", password: "pw" })).status);
+website.down = false;
+ok(down.every((x) => x === 500), "while the website's database is down, sign-ins say so");
+ok((await api("/api/login", { email: "patient@westsussex.gov.uk", password: "pw" })).status === 200, "and those tries don't count against the member afterwards");
 await Promise.all(Array.from({ length: 7 }, () => api("/api/login", { email: "forgetful@westsussex.gov.uk", password: "guess" })));
 ok((await api("/api/login", { email: "forgetful@westsussex.gov.uk", password: "pw" })).status === 200, "a member who gets it right within the limit signs in");
 ok((await api("/api/login", { email: "forgetful@westsussex.gov.uk", password: "guess" })).status === 401, "and their count starts again");
@@ -59,7 +67,7 @@ const p = e.signals.petitions.data;
 ok(p.length === 1 && p[0].local === 400 && p[0].localShare === 4 && p[0].fairShare === 1.4, "a road petition is counted locally; an off-topic one isn't");
 const q = e.signals.questions.data;
 ok(q.length === 1 && /MP for Horsham \(Horsham\)/.test(q[0].member) && q[0].url.endsWith("/2026-10-01/12345"), "only this authority's MPs' questions on roads are kept");
-ok(outside.hits.some((u) => /askingMemberId=501\b/.test(u)), "each local MP's questions are asked for in turn");
+ok(outside.hits.some((u) => /askingMemberId=501\b.*skip=100\b/.test(u)), "each local MP's questions are read page by page, so a busy MP's older ones are found");
 ok(e.gaps.some((g) => /Fault report/.test(g)) && e.gaps.some((g) => /street survey/.test(g)), "gaps are listed");
 ok(r.canEdit === false, "a member can't edit");
 ok((await api("/api/authority", { code: WSX }, lead)).canEdit === true, "a lead can");
@@ -136,12 +144,31 @@ for (const [status, message, want] of [[400, "tool_choice is not supported for t
   ok(read.status === "failed" && want.test(read.error), `a ${status} from Claude is described correctly`);
 }
 claude.fail = null; claude.failMessage = "nope";
+claude.calls.length = 0;
+claude.dropAfter = 1;
+read = await lincsReading();
+ok(read.status === "ready" && claude.calls.length === 2, "a reply that breaks off part-way is asked for again");
+claude.script.submit_reading = () => reply([{ type: "tool_use", id: "t", name: "submit_reading", input: reading() }], "model_context_window_exceeded");
+read = await lincsReading();
+ok(read.status === "failed" && /too much/.test(read.error), "an answer stopped by the size of the conversation isn't used");
+calls = 0;
+claude.calls.length = 0;
+claude.script.submit_reading = () => (calls++ === 0 ? reply([{ type: "thinking", thinking: "Mulling it over", signature: "sig-1" }], "end_turn") : null);
+read = await lincsReading();
+ok(read.status === "ready" && claude.calls[1].body.messages.length === 2, "a reply of nothing but thinking is dropped, not sent back");
+delete claude.script.submit_reading;
+claude.calls.length = 0;
+claude.script.submit_reading = () => reply([{ type: "tool_use", id: "t", name: "submit_reading", input: reading({ drivers: [{ theme: "Held", evidence: "e", kind: "Actions" }, { theme: "Not held", evidence: "e", kind: "open talk" }] }) }], "tool_use");
+read = await lincsReading();
+ok(read.drivers.length === 1 && read.drivers[0].theme === "Held" && read.drivers[0].kind === "actions", "a driver from a kind of signal Clarion doesn't hold is dropped");
+delete claude.script.submit_reading;
 
 // ---- an impact note
 claude.calls.length = 0;
 const spentBefore = getJson(files(`${R}usage/`)[0]).usd;
 let spentDuring = 0;
 claude.script.submit_review = () => { spentDuring = getJson(files(`${R}usage/`)[0]).usd; return null; };
+claude.script.submit_assessment = (body) => (body.messages.length === 3 ? reply([{ type: "thinking", thinking: "Now the sum", signature: "sig-2" }, { type: "tool_use", id: "calc", name: "calculate", input: { expression: "7583000 * 0.125" } }], "tool_use") : null);
 r = await api("/api/note/start", { code: WSX, url: "https://www.gov.uk/government/news/record", title: "Record funding" }, lead);
 ok(r.note.status === "working", "a note starts in the background");
 const note = await waitFor("/api/note/get", WSX, r.note.id);
@@ -161,6 +188,9 @@ ok(step3[0].body.tools.length === 1, "the challenge has no tools at all");
 ok(/<library_results_used>[\s\S]*20720000[\s\S]*<\/library_results_used>/.test(step3[0].prompt), "the challenge can see the figures behind the sums");
 ok(!("sample" in note.dataUsed[0]) && !("sql" in note.dataUsed[0]), "those figures aren't kept in the note");
 ok(spentDuring > spentBefore, "spending counts as a job runs, not just at the end");
+const back = step2[2].body.messages[3].content;
+ok(back[0].type === "thinking" && back[0].thinking === "Now the sum" && back[0].signature === "sig-2" && back[1].input.expression === "7583000 * 0.125", "a streamed reply goes back to Claude exactly as it came, thinking and all");
+delete claude.script.submit_assessment;
 ok(claude.calls.every((x) => x.body.tools.every((t) => !/^submit_/.test(t.name) || t.strict === true)), "every finishing tool is strict");
 delete claude.script.submit_review;
 ok(note.change.sources.length === 1 && note.change.sources[0].url === "https://www.gov.uk/government/news/record", "a source Claude never read doesn't appear");

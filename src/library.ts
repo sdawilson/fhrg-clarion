@@ -69,14 +69,24 @@ function tablesIn(sql: string, datasets: RefDataset[]): { table: string; dataset
 // STATS19 may only be shown as published totals: queries must count or sum, and results can't carry the
 // dates, places or references of individual collisions.
 const COLLISION_TABLE = /^collision(s|_vehicles|_casualties)$/i;
-const RECORD_COLUMN = /(^|_)(date|time|datetime|lat|latitude|lon|lng|long|longitude|easting|northing|location|postcode|lsoa|reference|ref|index|id|road_number|junction|street|address)($|_)/i;
-const EVERY_COLUMN = /(^|[\s,(])(\w+\.)?\*\s*(,|from\b)/i;
+const RECORD_COLUMN = /(^|_)(date|time|datetime|lat|latitude|lon|lng|long|longitude|easting|northing|location|postcode|lsoa|reference|ref|index|id|road_number|street|address)($|_)/i;
 
-// The record columns a query's text uses, so that renaming one can't get it past the check on results.
-// Joining the collision tables to each other is fine: it's how totals of casualties are worked out.
+// A query as SQLite reads it: comments gone, strings emptied and identifiers unquoted. Comments and strings are
+// taken in one pass, so that neither can hide the other.
+const plainSql = (sql: string) => sql.replace(/--[^\n]*|\/\*[\s\S]*?(\*\/|$)|'(?:[^']|'')*'/g, (m) => (m[0] === "'" ? "''" : " ")).replace(/["`[\]]/g, "");
+
+// Totals only: no every-column selects, and no window functions, which give a row for each collision.
+const notTotals = (sql: string) => !/\b(count|sum)\s*\(/i.test(sql) || /\*\s*(,|from\b)/i.test(sql) || /\bover\s*\(/i.test(sql);
+
+// The record columns a query uses, so that renaming one can't get it past the check on results. Linking the
+// collision tables and counting collisions are fine: collision_index can't come out of those.
 function recordColumnsIn(sql: string): string[] {
-  const text = sql.replace(/'(?:[^']|'')*'/g, " ")
-    .replace(/\bon\s+[\w.]*collision_index\s*=\s*[\w.]*collision_index\b/gi, " ").replace(/\busing\s*\(\s*collision_index\s*\)/gi, " ");
+  const key = "[\\w.]*collision_index\\b";
+  const text = sql
+    .replace(new RegExp(`${key}\\s*=\\s*${key}`, "gi"), " ")
+    .replace(new RegExp(`${key}\\s+(not\\s+)?in\\s*\\(\\s*select\\s+(distinct\\s+)?${key}`, "gi"), " ")
+    .replace(/\busing\s*\(\s*collision_index\s*\)/gi, " ")
+    .replace(new RegExp(`\\bcount\\s*\\(\\s*distinct\\s+${key}\\s*\\)`, "gi"), " ");
   return [...new Set((text.match(/[a-z_][a-z0-9_]*/gi) ?? []).filter((x) => RECORD_COLUMN.test(x)))];
 }
 
@@ -89,9 +99,10 @@ export async function refQuery(c: Config, sql: string, args: Val[] = []): Promis
   const used = tablesIn(s, datasets);
   const collisions = used.some((u) => COLLISION_TABLE.test(u.table));
   if (collisions) {
-    if (!/\b(count|sum)\s*\(/i.test(s) || EVERY_COLUMN.test(s)) throw new FriendlyError("Collision data can only be used as totals: name the columns, and use COUNT or SUM with GROUP BY.", 400);
-    const named = recordColumnsIn(s);
-    if (named.length) throw new FriendlyError(`Collision results can't use the dates, places or references of individual collisions (${named.join(", ")}).`, 400);
+    const plain = plainSql(s);
+    if (notTotals(plain)) throw new FriendlyError("Collision data can only be used as totals: name the columns, and use COUNT or SUM with GROUP BY.", 400);
+    const named = recordColumnsIn(plain);
+    if (named.length) throw new FriendlyError(`Collision results can't use the dates, places or references of individual collisions (${named.join(", ")}). For years, use collision_year.`, 400);
   }
   const result = await cached(`refq|${s}|${JSON.stringify(args)}`, QUERY_MS, async () => {
     const out = await refFetch(c, "/api/reference/query", { sql: s, args });
@@ -183,7 +194,7 @@ export async function loadFigures(c: Config, code: string): Promise<Figures> {
 
   // Tables can name a region differently, so match on the region in this table's own row for the authority.
   const compare = (rows: Row[], field: string, mine: Row): Pick<Comparison, "region" | "england"> => ({
-    region: median(rows.filter((x) => x.region === mine.region).map((x) => Number(x[field]))),
+    region: median(rows.filter((x) => mine.region && x.region === mine.region).map((x) => Number(x[field]))),
     england: median(rows.map((x) => Number(x[field]))),
   });
 

@@ -6,7 +6,7 @@
 
 **Before opening a pull request:** `npm run typecheck` and `npm test` must pass. Add tests for new behaviour in `test/` (`test/sim.mjs` simulates bunny.net storage, the website's database, Claude, the reference library and the public sources). For page changes, add jsdom checks in `test/ui.mjs`. For bigger or security-sensitive changes, have a separate agent review the diff first.
 
-**Shape of the app:** `src/app.ts` holds the routes and works on standard web `Request`/`Response`; `src/server.ts` adapts Node's `http` to it. The container runs as exactly one instance, so in-memory caches, locks and the record of used sign-in passes are safe. Data lives in Clarion's storage zone, not in the container.
+**Shape of the app:** `src/app.ts` holds the routes and works on standard web `Request`/`Response`; `src/server.ts` adapts Node's `http` to it. The container runs as exactly one instance, so in-memory caches, locks and the record of used sign-in passes are safe. Data lives in Clarion's storage zone, not in the container. Calls to Claude are streamed through Anthropic's SDK, the one runtime dependency, which is bundled into `dist/server.js`.
 
 **Rules that must hold:**
 - Clarion watches topics and places, never members of the public. No names, handles or words from residents are stored or shown. The one exception is the title of a petition, which Parliament publishes; its creator's name is never kept.

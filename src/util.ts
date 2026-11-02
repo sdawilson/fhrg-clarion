@@ -50,6 +50,12 @@ export function addMonths(iso: string, months: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Strict tools don't guarantee the capitals in a listed value ("Highly Likely"), so match without them.
+export function pickEnum<T extends string>(options: readonly T[], v: unknown): T | undefined {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return options.find((o) => o.toLowerCase() === s);
+}
+
 export const isIsoDate = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(Date.parse(s));
 
 // A request's body, refused as soon as it passes the limit (so an outsized request can't fill memory)
