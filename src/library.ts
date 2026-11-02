@@ -19,6 +19,7 @@ const QUERY_MS = 6 * 60 * 60 * 1000;
 const ROWS_SHOWN = 200;
 const RESULT_CHARS = 30_000;
 const SAMPLE_ROWS = 20;
+const TRAFFIC_BASE_YEAR = 2019;
 const SAMPLE_CHARS = 4000;
 
 async function refFetch(c: Config, path: string, body?: unknown, ms = 15000): Promise<any> {
@@ -135,8 +136,8 @@ export const LIBRARY_GUIDE = `The FHRG reference library holds published data. I
 - authorities: la_code, la_name, region, country, kind, other_names
 - road_condition_la: la_code, la_name, region, road_class ('A', 'B and C', 'Unclassified'), fye (financial year ending), rating ('red', 'amber', 'green'), pct, flag. England.
 - road_treatment_la: la_code, la_name, region, road_class ('A', 'B, C and unclassified'), fye, network_km, strengthening_pct, resurfacing_pct, preservation_pct, total_pct. England.
-- road_length_la: la_code, la_name, region, year, road_type (for example 'All roads', 'Minor roads'), km
-- traffic_la: la_code, la_name, year, link_length_km, cars_and_taxis, all_motor_vehicles
+- road_length_la: la_code, la_name, region, year, road_type (DfT's own headings, which can carry notes, so use LIKE 'Minor roads%'; the largest km for an authority and year is its total), km
+- traffic_la: la_code, la_name, year, link_length_km, cars_and_taxis, all_motor_vehicles. Compare traffic with 2019, not with 2020 or 2021, which were pandemic years.
 - maintenance_allocations: authority, authority_type, la_code, funding_pot ('Baseline', 'Incentive', 'Total'), fye, years, amount_gbp, note, source. Authorities inside mayoral strategic authorities may have no row of their own: look under the strategic authority's name.
 - collisions: la_code, collision_year, collision_severity (1 fatal, 2 serious, 3 slight), and others. Totals only: use COUNT or SUM with GROUP BY.`;
 
@@ -209,7 +210,7 @@ export async function loadFigures(c: Config, code: string): Promise<Figures> {
   });
 
   await attempt("road condition", () => refQuery(c, `SELECT la_code, region, road_class, fye, pct FROM road_condition_la
-      WHERE rating = 'red' AND pct IS NOT NULL AND fye >= (SELECT MAX(fye) FROM road_condition_la WHERE rating = 'red' AND pct IS NOT NULL) - 4`), (r) => {
+      WHERE rating = 'red' AND pct IS NOT NULL AND la_code IN (SELECT la_code FROM authorities) AND fye >= (SELECT MAX(fye) FROM road_condition_la WHERE rating = 'red' AND pct IS NOT NULL) - 4`), (r) => {
     const latest = Math.max(...r.rows.map((x) => Number(x.fye)));
     for (const roadClass of ["A", "B and C", "Unclassified"]) {
       const rows = r.rows.filter((x) => x.road_class === roadClass);
@@ -225,7 +226,7 @@ export async function loadFigures(c: Config, code: string): Promise<Figures> {
   });
 
   await attempt("road treatment", () => refQuery(c, `SELECT la_code, region, road_class, fye, total_pct FROM road_treatment_la
-      WHERE total_pct IS NOT NULL AND fye = (SELECT MAX(fye) FROM road_treatment_la WHERE total_pct IS NOT NULL)`), (r) => {
+      WHERE total_pct IS NOT NULL AND la_code IN (SELECT la_code FROM authorities) AND fye = (SELECT MAX(fye) FROM road_treatment_la WHERE total_pct IS NOT NULL)`), (r) => {
     for (const roadClass of [...new Set(r.rows.map((x) => String(x.road_class)))]) {
       const same = r.rows.filter((x) => x.road_class === roadClass);
       const mine = same.find((x) => x.la_code === code);
@@ -233,13 +234,15 @@ export async function loadFigures(c: Config, code: string): Promise<Figures> {
     }
   });
 
-  await attempt("road length", () => refQuery(c, "SELECT year, km FROM road_length_la WHERE la_code = ? AND road_type = 'All roads' ORDER BY year DESC LIMIT 1", [code]), (r) => {
+  // road_type holds DfT's own column headings, which can carry notes. The total is the largest figure for a year.
+  await attempt("road length", () => refQuery(c, "SELECT year, MAX(km) AS km FROM road_length_la WHERE la_code = ? GROUP BY year ORDER BY year DESC LIMIT 1", [code]), (r) => {
     if (r.rows[0]) f.roadLength = { year: Number(r.rows[0].year), km: round(Number(r.rows[0].km), 0) };
   });
 
-  await attempt("traffic", () => refQuery(c, "SELECT year, all_motor_vehicles FROM traffic_la WHERE la_code = ? ORDER BY year DESC LIMIT 6", [code]), (r) => {
+  // Against 2019, the last full year before the pandemic: from a lockdown year, growth looks far bigger than it is.
+  await attempt("traffic", () => refQuery(c, `SELECT year, all_motor_vehicles FROM traffic_la WHERE la_code = ? AND year >= ${TRAFFIC_BASE_YEAR} ORDER BY year DESC`, [code]), (r) => {
     const a = r.rows[0], b = r.rows.at(-1);
-    if (a && b && a !== b && Number(b.all_motor_vehicles) > 0) f.traffic = { year: Number(a.year), sinceYear: Number(b.year), changePct: round((Number(a.all_motor_vehicles) / Number(b.all_motor_vehicles) - 1) * 100) };
+    if (a && b && a !== b && Number(b.year) === TRAFFIC_BASE_YEAR && Number(b.all_motor_vehicles) > 0) f.traffic = { year: Number(a.year), sinceYear: Number(b.year), changePct: round((Number(a.all_motor_vehicles) / Number(b.all_motor_vehicles) - 1) * 100) };
   });
 
   await attempt("serious collisions", () => refQuery(c, "SELECT collision_year AS year, COUNT(*) AS collisions FROM collisions WHERE la_code = ? AND collision_severity <= 2 GROUP BY collision_year ORDER BY collision_year", [code]), (r) => {

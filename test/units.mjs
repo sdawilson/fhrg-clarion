@@ -138,6 +138,8 @@ ok(/totals/.test(await refusedSql("SELECT collision_year FROM collisions")), "an
 ok(await refusedSql("SELECT collision_year, COUNT(*) AS n FROM collisions WHERE la_code = 'date_iso' GROUP BY collision_year") === "", "words inside quotes don't count as columns");
 ok(await refusedSql("SELECT la_name, kind FROM authorities") === "", "other tables aren't affected");
 
+ok((await t.loadFigures(cfg, "E10000024")).traffic === null, "with no 2019 figure, no traffic change is given rather than one from a lockdown year");
+
 // ---- small helpers
 let order = [];
 await Promise.all([t.withLock("k", async () => { await new Promise((r) => setTimeout(r, 20)); order.push(1); }), t.withLock("k", async () => { order.push(2); })]);
