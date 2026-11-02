@@ -112,6 +112,25 @@ ok(await refusedSql("SELECT c.la_code, COUNT(*) AS n FROM collisions c WHERE EXI
 ok(await refusedSql("SELECT la_code, COUNT(*) AS n FROM collisions WHERE collision_index IN (SELECT collision_index FROM collision_casualties WHERE casualty_severity = 1) GROUP BY la_code") === "", "whichever way it's written");
 ok(await refusedSql("SELECT COUNT(*) AS n FROM collisions c JOIN collision_casualties k ON (k.casualty_severity = 1 AND k.collision_index = c.collision_index)") === "", "with the link in any position");
 ok(/individual collisions/.test(await refusedSql("SELECT collision_index AS x, COUNT(*) AS n FROM collisions GROUP BY x")), "but a collision's reference can't come out");
+const bypass = [
+  ['SELECT COUNT(*) AS n, "date_iso"AS d FROM collisions GROUP BY d', "a quoted name run up against the next word"],
+  ["SELECT COUNT(*) AS n, [date_iso]AS d FROM collisions GROUP BY d", "a bracketed one"],
+  ['SELECT COUNT(*) AS n, 1 AS "--", collision_index AS r, date_iso AS d FROM collisions GROUP BY r, d', "a comment mark inside a quoted name"],
+  ["SELECT 1 AS \"/*\", date_iso AS d, COUNT(*) AS n, 2 AS \"*/\" FROM collisions GROUP BY d", "comment marks in two quoted names"],
+  ["SELECT 1 AS [']', date_iso AS d, COUNT(*) AS n, 2 AS [']' FROM collisions GROUP BY d", "a quote mark inside brackets"],
+  ["SELECT c.'date_iso' AS d, COUNT(*) AS n FROM collisions c GROUP BY 1", "a column named as a string after a dot"],
+  ['WITH t(c1, c2, c3, c4, c5) AS (SELECT * FROM"collisions") SELECT c3, COUNT(*) AS n FROM t GROUP BY c3', "every column, renamed, with the words run together"],
+  ["WITH t(r) AS (SELECT DISTINCT collision_index FROM collisions) SELECT r, COUNT(*) AS n FROM t GROUP BY r", "a reference renamed by a sub-query"],
+  ["SELECT COUNT(*) AS n FROM authorities UNION ALL SELECT collision_index FROM collisions", "references added under another column's name"],
+  ["SELECT r, COUNT(*) AS n FROM (SELECT 1 AS r UNION ALL SELECT collision_index FROM collisions) GROUP BY r", "and inside a sub-query"],
+  ["SELECT la_code, COUNT(*) OVER w AS n FROM collisions WINDOW w AS (PARTITION BY la_code)", "a named window"],
+  ["SELECT la_code, COUNT(*) AS n FROM collisions GROUP BY rowid", "grouping by the row itself"],
+];
+for (const [sql, what] of bypass) ok((await refusedSql(sql)) !== "", `refused: ${what}`);
+ok(await refusedSql("SELECT COUNT(*) AS n FROM (SELECT DISTINCT collision_index FROM collision_casualties)") === "", "collisions with a casualty can be counted");
+ok(await refusedSql("WITH k AS (SELECT DISTINCT collision_index FROM collision_casualties WHERE casualty_severity = 1) SELECT c.la_code, COUNT(*) AS n FROM collisions c JOIN k ON k.collision_index = c.collision_index GROUP BY c.la_code") === "", "through a named sub-query too");
+ok(await refusedSql("SELECT COUNT(*) AS n FROM collisions a JOIN collision_casualties b USING (collision_index)") === "", "or with USING");
+ok(await refusedSql("SELECT COUNT(*) AS n FROM collisions a JOIN collision_casualties b ON a.collision_index == b.collision_index") === "", "or with ==");
 ok(/totals/.test(await refusedSql("SELECT collision_year FROM collisions")), "and it has to be a count or a sum");
 ok(await refusedSql("SELECT collision_year, COUNT(*) AS n FROM collisions WHERE la_code = 'date_iso' GROUP BY collision_year") === "", "words inside quotes don't count as columns");
 ok(await refusedSql("SELECT la_name, kind FROM authorities") === "", "other tables aren't affected");

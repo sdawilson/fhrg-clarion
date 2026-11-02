@@ -115,5 +115,6 @@ From now on, every change Claude makes reaches the container by itself.
 | A source says "couldn't be read just now" | Try again later. If it stays that way, tell Claude which source |
 | "Clarion has reached this month's spending limit" | Raise `MONTHLY_CAP_USD`, or wait for the new month |
 | "has reached today's limit" | Try again tomorrow, or raise `DAILY_JOBS_MAX` |
+| "Something went wrong" | Open the app's **Logs** in Magic Containers; the last lines say why |
 | `/health` doesn't answer | Open the app's **Logs** in Magic Containers; the last lines say why it stopped |
 | The **Build and deploy** run fails | Open it in the **Actions** tab; the failing step is marked. Tell Claude what it says |

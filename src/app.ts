@@ -186,8 +186,7 @@ export async function handleRequest(request: Request): Promise<Response> {
   } catch (e) {
     if (e instanceof FriendlyError) return json({ error: e.message }, e.status);
     console.log(`[error] ${request.method} ${path}: ${(e as Error)?.stack ?? e}`);
-    const message = (e as Error)?.message ?? "";
-    return json({ error: /storage/i.test(message) ? message : "Something went wrong. Please try again." }, 500);
+    return json({ error: "Something went wrong. Please try again." }, 500);
   }
 }
 

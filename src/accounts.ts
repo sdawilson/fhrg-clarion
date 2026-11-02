@@ -187,7 +187,7 @@ export async function handleLogin(c: Config, request: Request): Promise<Response
   const password = typeof b.password === "string" ? b.password.slice(0, 500) : "";
   const remember = b.remember === true;
   if (!email || !password) throw new FriendlyError("Enter your email and password.");
-  const tooMany = () => new FriendlyError("Too many unsuccessful sign-ins. Wait 15 minutes and try again, or reset your password on the FHRG website.", 429);
+  const tooMany = () => new FriendlyError("Too many unsuccessful sign-ins. Wait 15 minutes and try again. If you've forgotten your password, you can reset it on the FHRG website in the meantime.", 429);
   const ipKey = `ip|${clientIp(request) || "-"}`, emailKey = `email|${email}`;
   if (!countAttempt([[ipKey, SIGNIN_MAX_PER_IP], [emailKey, SIGNIN_MAX_PER_EMAIL]])) throw tooMany();
   let wrongPassword = false;
