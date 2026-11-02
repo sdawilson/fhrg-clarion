@@ -55,4 +55,13 @@ export async function listJobs<T extends JobBase>(c: Config, folder: string, max
   return jobs.filter((j): j is NonNullable<typeof j> => !!j) as T[];
 }
 
+// Keeps one authority from using up the month's budget. Job ids start with the date, so names are enough.
+export async function checkDailyLimit(c: Config, siteAdmin: boolean, code: string, name: string): Promise<void> {
+  if (siteAdmin) return;
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const [readings, notes] = await Promise.all(["readings", "notes"].map((f) => storageList(c, `${c.root}authorities/${code}/${f}/`)));
+  const count = [...readings, ...notes].filter((n) => n.startsWith(today)).length;
+  if (count >= c.dailyJobsMax) throw new FriendlyError(`${name} has reached today's limit of ${c.dailyJobsMax} readings and notes. Try again tomorrow, or ask the FHRG team if you need more.`, 429);
+}
+
 export const validId = (id: unknown): id is string => typeof id === "string" && /^\d{17}-[0-9a-f]{8}$/.test(id);

@@ -426,6 +426,7 @@ function signalsCard(d) {
       h("p", {}, `${fms.data.reports} reports on FixMyStreet's public feed, ${fmtDate(fms.data.from)} to ${fmtDate(fms.data.to)}${fms.data.perDay ? `: about ${fmt(fms.data.perDay, 1)} a day` : ""}.`),
       fms.data.busiestSquare > 2 ? h("p", { class: "note" }, `${fms.data.busiestSquare} of these came from one small area, so they may be one issue rather than a wider mood.`) : null,
       h("div", { class: "chips" }, fms.data.categories.map((c) => h("span", { class: "pill" }, `${c.name}: ${c.count}`))),
+      h("p", { class: "note" }, "The feed shows only the latest reports, so this is a sample, not a total."),
     ] : missing(fms),
     h("p", { class: "note" }, d.authority.reportingRoute),
     h("h3", {}, "Parliament petitions on roads"),
@@ -442,7 +443,7 @@ function notesCard(a, d) {
   area.value = d.facts.notes || "";
   const msg = h("p", { role: "status", class: "note" }, d.facts.updated ? `Last changed ${fmtDate(d.facts.updated)} by ${d.facts.updatedBy}.` : "");
   return h("section", { class: "card no-print" }, h("h2", {}, "Officer notes"),
-    h("p", { class: "note" }, "Contract end dates, named schemes and known sensitivities. These stay with your authority, and are never sent to any step that reads the web."),
+    h("p", { class: "note" }, "Contract end dates, named schemes and known sensitivities. These stay with your authority, and are never sent to any step that reads the web. Please leave out residents' names and anything that could identify them."),
     h("div", { class: "field" }, area), msg,
     h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
       try { await API.call("/api/facts/notes", { code: a.code, notes: area.value }); msg.textContent = "Saved."; msg.className = "ok"; } catch (e) { msg.textContent = e.message; msg.className = "err"; }
@@ -461,7 +462,8 @@ async function notesView(page, a) {
   const f = h("form", { class: "stack" },
     h("label", { class: "field" }, "Choose a recent announcement", pick),
     h("label", { class: "field" }, "Or give its link", url),
-    h("label", { class: "field" }, "Or paste it", text), msg,
+    h("label", { class: "field" }, "Or paste it", text),
+    h("p", { class: "note" }, "Clarion doesn't use the web when you paste text, in case it holds anything private, so it works only from what you paste. For a check against the original source, give a link instead."), msg,
     h("div", { class: "row" }, go));
   f.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -517,12 +519,12 @@ function noteBody(a, n) {
       c.amount ? h("p", {}, h("strong", {}, "Amount. "), c.amount) : null,
       c.deadlines.length ? h("div", { class: "prose" }, h("h3", {}, "Dates"), h("ul", {}, c.deadlines.map((d) => h("li", {}, `${d.date ? `${d.date}: ` : ""}${d.what}`)))) : null,
       c.conditions.length ? h("div", { class: "prose" }, h("h3", {}, "Conditions"), h("ul", {}, c.conditions.map((x) => h("li", {}, x)))) : null,
-      c.primaryFound ? null : h("div", { class: "callout warn" }, "The original source wasn't found, so this rests on reports of it.")),
+      c.primaryFound ? null : h("div", { class: "callout warn" }, n.input.hasText ? "This rests only on the text supplied. It hasn't been checked against the original source." : "The original source wasn't found, so this rests on reports of it.")),
     c.disagreements.length ? h("div", { class: "callout warn" }, h("strong", {}, "Sources disagree. "), c.disagreements.map((d) => `${d.point}: ${d.positions} `), "Check the original before relying on these.") : null,
     n.impacts.length ? h("section", { class: "card" }, h("h2", {}, "Likely impacts here"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
       h("thead", {}, h("tr", {}, h("th", {}, "Impact"), h("th", {}, "Size"), h("th", {}, "Likelihood"), h("th", {}, "Confidence"), h("th", {}, "When"), h("th", {}, "Action"))),
       h("tbody", {}, n.impacts.map((x) => h("tr", {},
-        h("td", {}, h("strong", {}, x.route), h("div", {}, x.statement), x.working ? h("div", { class: "note" }, x.working) : null, h("div", { class: "note" }, `Basis: ${x.basis}. Check by ${fmtDate(x.checkDate)}.`), x.challenge ? h("div", { class: "note" }, `Marked down on challenge: ${x.challenge}`) : null),
+        h("td", {}, h("strong", {}, x.route), h("div", {}, x.statement), x.working ? h("div", { class: "note" }, x.working) : null, h("div", { class: "note" }, `Basis: ${x.basis}. Check by ${fmtDate(x.checkDate)}.`), x.challenge ? h("div", { class: "note" }, `Marked down on challenge: ${x.challenge}`) : null, x.unchecked ? h("div", { class: "note" }, "The challenge step gave no verdict on this.") : null),
         h("td", {}, x.size), h("td", {}, x.likelihood), h("td", {}, x.confidence, x.confidenceReason ? h("div", { class: "note" }, x.confidenceReason) : null), h("td", {}, x.when), h("td", {}, x.action, x.owner ? h("div", { class: "note" }, x.owner) : null))))))) : null,
     m ? h("section", { class: "card" }, h("h2", {}, "Likely effect on public mood"),
       h("div", { class: "chips" }, h("span", { class: "pill" }, `Expectation gap: ${m.gap}`), h("span", { class: "pill" }, `Confidence: ${m.confidence}`)),

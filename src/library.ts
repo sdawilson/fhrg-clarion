@@ -18,6 +18,8 @@ const DATASETS_MS = 3 * 60 * 60 * 1000;
 const QUERY_MS = 6 * 60 * 60 * 1000;
 const ROWS_SHOWN = 200;
 const RESULT_CHARS = 30_000;
+const SAMPLE_ROWS = 20;
+const SAMPLE_CHARS = 4000;
 
 async function refFetch(c: Config, path: string, body?: unknown, ms = 15000): Promise<any> {
   if (!c.refKey) throw new FriendlyError("The data library isn't set up: FHRG_REF_KEY is missing.", 503);
@@ -68,6 +70,15 @@ function tablesIn(sql: string, datasets: RefDataset[]): { table: string; dataset
 // dates, places or references of individual collisions.
 const COLLISION_TABLE = /^collision(s|_vehicles|_casualties)$/i;
 const RECORD_COLUMN = /(^|_)(date|time|datetime|lat|latitude|lon|lng|long|longitude|easting|northing|location|postcode|lsoa|reference|ref|index|id|road_number|junction|street|address)($|_)/i;
+const EVERY_COLUMN = /(^|[\s,(])(\w+\.)?\*\s*(,|from\b)/i;
+
+// The record columns a query's text uses, so that renaming one can't get it past the check on results.
+// Joining the collision tables to each other is fine: it's how totals of casualties are worked out.
+function recordColumnsIn(sql: string): string[] {
+  const text = sql.replace(/'(?:[^']|'')*'/g, " ")
+    .replace(/\bon\s+[\w.]*collision_index\s*=\s*[\w.]*collision_index\b/gi, " ").replace(/\busing\s*\(\s*collision_index\s*\)/gi, " ");
+  return [...new Set((text.match(/[a-z_][a-z0-9_]*/gi) ?? []).filter((x) => RECORD_COLUMN.test(x)))];
+}
 
 export type QueryResult = { columns: string[]; rows: Row[]; sources: DataRef[] };
 
@@ -77,7 +88,11 @@ export async function refQuery(c: Config, sql: string, args: Val[] = []): Promis
   const datasets = await loadDatasets(c);
   const used = tablesIn(s, datasets);
   const collisions = used.some((u) => COLLISION_TABLE.test(u.table));
-  if (collisions && !/\b(count|sum)\s*\(/i.test(s)) throw new FriendlyError("Collision data can only be used as totals: use COUNT or SUM with GROUP BY.", 400);
+  if (collisions) {
+    if (!/\b(count|sum)\s*\(/i.test(s) || EVERY_COLUMN.test(s)) throw new FriendlyError("Collision data can only be used as totals: name the columns, and use COUNT or SUM with GROUP BY.", 400);
+    const named = recordColumnsIn(s);
+    if (named.length) throw new FriendlyError(`Collision results can't use the dates, places or references of individual collisions (${named.join(", ")}).`, 400);
+  }
   const result = await cached(`refq|${s}|${JSON.stringify(args)}`, QUERY_MS, async () => {
     const out = await refFetch(c, "/api/reference/query", { sql: s, args });
     const columns: string[] = Array.isArray(out?.columns) ? out.columns.map((x: any) => (typeof x === "string" ? x : String(x?.name ?? ""))) : [];
@@ -114,14 +129,17 @@ export const QUERY_TOOL = {
   },
 };
 
-export type DataUse = { n: number; purpose: string; sql: string; rows: number; sources: DataRef[] };
+// sample: the first rows, so the challenge step can check sums. It isn't kept in the note.
+export type DataUse = { n: number; purpose: string; sql: string; rows: number; sample: Row[]; sources: DataRef[] };
 
 export function queryHandler(c: Config, uses: DataUse[], max: number) {
   return async (input: Record<string, any>) => {
     if (uses.length >= max) throw new Error(`The limit of ${max} queries has been reached. Work with what you have.`);
     const r = await refQuery(c, String(input.sql ?? ""));
     const n = uses.length + 1;
-    uses.push({ n, purpose: String(input.purpose ?? "").slice(0, 200), sql: String(input.sql ?? "").slice(0, 2000), rows: r.rows.length, sources: r.sources });
+    let sample = r.rows.slice(0, SAMPLE_ROWS);
+    while (JSON.stringify(sample).length > SAMPLE_CHARS && sample.length > 1) sample = sample.slice(0, Math.ceil(sample.length / 2));
+    uses.push({ n, purpose: String(input.purpose ?? "").slice(0, 200), sql: String(input.sql ?? "").slice(0, 2000), rows: r.rows.length, sample, sources: r.sources });
     let shown = r.rows.slice(0, ROWS_SHOWN);
     let text = JSON.stringify(shown);
     while (text.length > RESULT_CHARS && shown.length > 1) { shown = shown.slice(0, Math.ceil(shown.length / 2)); text = JSON.stringify(shown); }
@@ -158,14 +176,14 @@ export async function loadFigures(c: Config, code: string): Promise<Figures> {
     }
   };
 
-  let region = "";
   await attempt("the authority's details", () => refQuery(c, "SELECT la_name, region, kind FROM authorities WHERE la_code = ?", [code]), (r) => {
     const a = r.rows[0];
-    if (a) { region = String(a.region ?? ""); f.authority = { name: String(a.la_name ?? ""), region, kind: String(a.kind ?? "") }; }
+    if (a) f.authority = { name: String(a.la_name ?? ""), region: String(a.region ?? ""), kind: String(a.kind ?? "") };
   });
 
-  const compare = (rows: Row[], field: string, value: number): Pick<Comparison, "region" | "england"> => ({
-    region: median(rows.filter((x) => x.region === region).map((x) => Number(x[field]))),
+  // Tables can name a region differently, so match on the region in this table's own row for the authority.
+  const compare = (rows: Row[], field: string, mine: Row): Pick<Comparison, "region" | "england"> => ({
+    region: median(rows.filter((x) => x.region === mine.region).map((x) => Number(x[field]))),
     england: median(rows.map((x) => Number(x[field]))),
   });
 
@@ -181,7 +199,7 @@ export async function loadFigures(c: Config, code: string): Promise<Figures> {
       const mine = same.find((x) => x.la_code === code);
       if (!mine) continue;
       const first = fyes[0] !== last ? rows.find((x) => x.la_code === code && Number(x.fye) === fyes[0]) : undefined;
-      f.condition.push({ roadClass, fye: last, value: round(Number(mine.pct)), ...roundedCompare(compare(same, "pct", 0)), earlier: first ? { fye: fyes[0], value: round(Number(first.pct)) } : null });
+      f.condition.push({ roadClass, fye: last, value: round(Number(mine.pct)), ...roundedCompare(compare(same, "pct", mine)), earlier: first ? { fye: fyes[0], value: round(Number(first.pct)) } : null });
     }
   });
 
@@ -190,7 +208,7 @@ export async function loadFigures(c: Config, code: string): Promise<Figures> {
     for (const roadClass of [...new Set(r.rows.map((x) => String(x.road_class)))]) {
       const same = r.rows.filter((x) => x.road_class === roadClass);
       const mine = same.find((x) => x.la_code === code);
-      if (mine) f.treatment.push({ roadClass, fye: Number(mine.fye), value: round(Number(mine.total_pct)), ...roundedCompare(compare(same, "total_pct", 0)) });
+      if (mine) f.treatment.push({ roadClass, fye: Number(mine.fye), value: round(Number(mine.total_pct)), ...roundedCompare(compare(same, "total_pct", mine)) });
     }
   });
 

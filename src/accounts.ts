@@ -153,7 +153,26 @@ function checkAccount(c: Config, u: Row): Member {
   return m;
 }
 
-const ipFails = new Map<string, number[]>();
+// Attempts are counted in memory the moment a request arrives, before anything has to wait, so that many
+// tries sent at once all count. The container runs as one copy, so this is enough. The file for each email
+// below keeps the count across a restart.
+const attempts = new Map<string, number[]>();
+function countAttempt(keys: [string, number][]): boolean {
+  const now = Date.now();
+  for (const [k, times] of attempts) {
+    const live = times.filter((t) => now - t < SIGNIN_WINDOW_MS);
+    if (live.length) attempts.set(k, live); else attempts.delete(k);
+  }
+  if (keys.some(([k, max]) => (attempts.get(k)?.length ?? 0) >= max)) return false;
+  for (const [k] of keys) attempts.set(k, [...(attempts.get(k) ?? []), now]);
+  return true;
+}
+function clearAttempt(ipKey: string, emailKey: string): void {
+  attempts.delete(emailKey);
+  const times = attempts.get(ipKey);
+  if (times) { times.pop(); if (!times.length) attempts.delete(ipKey); }
+}
+
 async function emailFails(c: Config, email: string): Promise<{ path: string; fails: string[] }> {
   const path = `${c.root}system/signin/${(await sha256("signin|" + email)).slice(0, 24)}.json`;
   const o = await storageJson<{ fails?: string[] }>(c, path, {});
@@ -167,23 +186,19 @@ export async function handleLogin(c: Config, request: Request): Promise<Response
   const password = typeof b.password === "string" ? b.password.slice(0, 500) : "";
   const remember = b.remember === true;
   if (!email || !password) throw new FriendlyError("Enter your email and password.");
-  const ip = clientIp(request) || "-";
-  // forget addresses with no recent failures, so the record doesn't grow on a server that runs for months
-  for (const [k, times] of ipFails) if (!times.some((t) => Date.now() - t < SIGNIN_WINDOW_MS)) ipFails.delete(k);
-  const recent = (ipFails.get(ip) || []).filter((t) => Date.now() - t < SIGNIN_WINDOW_MS);
+  const tooMany = () => new FriendlyError("Too many unsuccessful sign-ins. Wait 15 minutes and try again, or reset your password on the FHRG website.", 429);
+  const ipKey = `ip|${clientIp(request) || "-"}`, emailKey = `email|${email}`;
+  if (!countAttempt([[ipKey, SIGNIN_MAX_PER_IP], [emailKey, SIGNIN_MAX_PER_EMAIL]])) throw tooMany();
   const record = await emailFails(c, email);
-  if (record.fails.length >= SIGNIN_MAX_PER_EMAIL || recent.length >= SIGNIN_MAX_PER_IP) {
-    throw new FriendlyError("Too many unsuccessful sign-ins. Wait 15 minutes and try again, or reset your password on the FHRG website.", 429);
-  }
+  if (record.fails.length >= SIGNIN_MAX_PER_EMAIL) throw tooMany();
   const u = (await websiteQ(c, `${ME_SQL} WHERE u.email = ?`, email))[0];
   const ok = await checkSecret(password, u ? String(u.password_hash || "") : DUMMY_HASH);
   if (!u || !ok) {
-    recent.push(Date.now());
-    ipFails.set(ip, recent);
     try { await storagePut(c, record.path, JSON.stringify({ fails: [...record.fails, new Date().toISOString()] })); } catch (e) { console.log(`[warn] Sign-in count not saved: ${(e as Error).message}`); }
     await delay(400);
     throw new FriendlyError("That email and password don't match an account on the FHRG website.", 401);
   }
+  clearAttempt(ipKey, emailKey);
   if (record.fails.length) await storageDelete(c, record.path).catch(() => {});
   checkAccount(c, u);
   forget(`member|${u.id}`);

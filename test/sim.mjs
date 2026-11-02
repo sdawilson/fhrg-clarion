@@ -47,7 +47,7 @@ function query(sql, args) {
 }
 
 // ----- Claude: `claude.script` decides what each job's model says; every call is recorded
-export const claude = { calls: [], script: {}, fail: null };
+export const claude = { calls: [], script: {}, fail: null, failMessage: "nope", refused: [] };
 const message = (content, stop = "tool_use", extra = {}) => ({ id: "msg", type: "message", role: "assistant", content, stop_reason: stop, usage: { input_tokens: 1000, output_tokens: 200, ...extra } });
 const use = (name, input) => ({ type: "tool_use", id: `tu_${name}_${Math.random().toString(36).slice(2, 8)}`, name, input });
 export const reading = (over = {}) => ({
@@ -69,6 +69,22 @@ export const assessment = (over = {}) => ({
 });
 export const review = () => ({ reviews: [{ index: 1, verdict: "keep", reason: "Stands up." }, { index: 2, verdict: "cut", reason: "Unsupported." }, { index: 3, verdict: "reduce", reason: "Too sure." }], also_confirm: ["The date"] });
 
+// What the real service turns down with a 400 on Sonnet 5.5 and Opus 5.5.
+function badSchema(s, where = "input_schema") {
+  if (!s || typeof s !== "object") return "";
+  if (s.type === "object" && s.additionalProperties !== false) return `${where}: additionalProperties must be false`;
+  for (const k of ["minimum", "maximum", "multipleOf", "minLength", "maxLength"]) if (k in s) return `${where}: ${k} is not supported`;
+  if (s.minItems !== undefined && s.minItems > 1) return `${where}: minItems above 1 is not supported`;
+  for (const [k, v] of Object.entries(s.properties || {})) { const b = badSchema(v, `${where}.${k}`); if (b) return b; }
+  return s.items ? badSchema(s.items, `${where}[]`) : "";
+}
+export function refused(body) {
+  if (["any", "tool"].includes(body.tool_choice?.type)) return `tool_choice: type "tool" and "any" are not supported for this model.`;
+  if (body.thinking?.type === "disabled") return "thinking: disabled is not supported for this model. Use between_tools.";
+  for (const t of body.tools || []) if (t.strict) { const b = badSchema(t.input_schema); if (b) return `tools.${t.name}: ${b}`; }
+  return "";
+}
+
 function anthropic(body) {
   const sys = String(body.system || "");
   claude.calls.push({ body, sys, prompt: typeof body.messages[0].content === "string" ? body.messages[0].content : "" });
@@ -79,7 +95,7 @@ function anthropic(body) {
   const turn = body.messages.length;
   if (finish === "submit_reading") return message([use(finish, reading())]);
   if (finish === "submit_change") {
-    if (turn === 1) return message([
+    if (turn === 1 && body.tools.some((t) => /^web_/.test(t.type || ""))) return message([
       { type: "server_tool_use", id: "s1", name: "web_search", input: { query: "incentive funding" } },
       { type: "web_search_tool_result", tool_use_id: "s1", content: [{ type: "web_search_result", url: "https://www.gov.uk/government/news/record", title: "Record funding", encrypted_content: "x", page_age: "" }] },
       { type: "text", text: "Found it." },
@@ -104,19 +120,22 @@ CREATE TABLE road_treatment_la (la_code TEXT, la_name TEXT, region TEXT, road_cl
 CREATE TABLE road_length_la (la_code TEXT, la_name TEXT, region TEXT, year INTEGER, road_type TEXT, km REAL);
 CREATE TABLE traffic_la (la_code TEXT, la_name TEXT, year INTEGER, link_length_km REAL, cars_and_taxis REAL, all_motor_vehicles REAL);
 CREATE TABLE collisions (collision_index TEXT, collision_year INTEGER, date_iso TEXT, la_code TEXT, collision_severity INTEGER);
+CREATE TABLE collision_casualties (collision_index TEXT, casualty_severity INTEGER);
 CREATE TABLE maintenance_allocations (authority TEXT, authority_type TEXT, la_code TEXT, funding_pot TEXT, fye INTEGER, years TEXT, amount_gbp REAL, note TEXT, source TEXT);
 `);
 const ins = (t, n) => db.prepare(`INSERT INTO ${t} VALUES (${Array(n).fill("?").join(",")})`);
 const AUTH = [["E10000032", "West Sussex", "South East", "County council"], ["E10000016", "Kent", "South East", "County council"], ["E10000030", "Surrey", "South East", "County council"],
-  ["E10000019", "Lincolnshire", "East Midlands", "County council"], ["E10000024", "Nottinghamshire", "East Midlands", "County council"], ["E08000034", "Kirklees", "Yorkshire and The Humber", "Metropolitan district"]];
-AUTH.forEach(([code, name, region, kind], i) => {
-  ins("authorities", 6).run(code, name, region, "England", kind, "");
+  ["E10000019", "Lincolnshire", "East Midlands", "County council"], ["E10000024", "Nottinghamshire", "East Midlands", "County council"],
+  // the authorities table names this region differently from DfT's tables, as the real one does
+  ["E08000034", "Kirklees", "Yorkshire and the Humber", "Metropolitan district", "The Humber"], ["E08000035", "Leeds", "Yorkshire and the Humber", "Metropolitan district", "The Humber"]];
+AUTH.forEach(([code, name, region, kind, ownRegion], i) => {
+  ins("authorities", 6).run(code, name, ownRegion ?? region, "England", kind, "");
   for (const fye of [2022, 2026]) for (const [cls, base] of [["A", 2], ["B and C", 4], ["Unclassified", 15]]) ins("road_condition_la", 8).run(code, name, region, cls, fye, "red", base + i + (fye === 2026 ? 1 : 0), "");
   ins("road_condition_la", 8).run(code, name, region, "A", 2026, "green", 80, "");
   for (const cls of ["A", "B, C and unclassified"]) ins("road_treatment_la", 10).run(code, name, region, cls, 2026, 500, 1, 2, 3, 3 + i);
   ins("road_length_la", 6).run(code, name, region, 2024, "All roads", 4000 + i); ins("road_length_la", 6).run(code, name, region, 2023, "All roads", 3999 + i); ins("road_length_la", 6).run(code, name, region, 2024, "Minor roads", 3000);
   for (let k = 0; k < 6; k++) ins("traffic_la", 6).run(code, name, 2019 + k, 4000, 1, 1000 + k * 10);
-  for (let k = 0; k < 3; k++) ins("collisions", 5).run(`C${i}-${k}`, 2024, "2024-01-01", code, k + 1);
+  for (let k = 0; k < 3; k++) { ins("collisions", 5).run(`C${i}-${k}`, 2024, "2024-01-01", code, k + 1); ins("collision_casualties", 2).run(`C${i}-${k}`, k + 1); }
 });
 for (const [pot, amount] of [["Baseline", 20720000], ["Incentive", 7583000], ["Total", 28303000]]) ins("maintenance_allocations", 9).run("West Sussex", "local highway authority", "E10000032", pot, 2027, "2026 to 2027", amount, "", "DfT");
 ins("maintenance_allocations", 9).run("West Sussex", "local highway authority", "E10000032", "Total", 2028, "2027 to 2028", 32904000, "", "DfT");
@@ -124,7 +143,7 @@ ins("maintenance_allocations", 9).run("West Sussex", "local highway authority", 
 export const lib = { queries: [], down: false };
 const OGL = "Contains public sector information licensed under the Open Government Licence v3.0.";
 const dataset = (title, tables) => ({ name: title, title, attribution: `${title}. ${OGL}`, sourceDate: "2026-10", loadedAt: "2026-10-20", tables: tables.map((name) => ({ name })) });
-const DATASETS = [dataset("Road traffic statistics", ["authorities", "traffic_la"]), dataset("Road condition statistics", ["road_condition_la"]), dataset("Road treatment", ["road_treatment_la"]), dataset("Road lengths", ["road_length_la"]), dataset("Road casualties", ["collisions"]), dataset("Highways maintenance funding", ["maintenance_allocations"])];
+const DATASETS = [dataset("Road traffic statistics", ["authorities", "traffic_la"]), dataset("Road condition statistics", ["road_condition_la"]), dataset("Road treatment", ["road_treatment_la"]), dataset("Road lengths", ["road_length_la"]), dataset("Road casualties", ["collisions", "collision_casualties"]), dataset("Highways maintenance funding", ["maintenance_allocations"])];
 const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 function library(url, init) {
   if (lib.down) return reply(500, { error: "Down" });
@@ -157,7 +176,8 @@ const PETITION = { data: { attributes: { signatures_by_constituency: [{ name: "H
 const MEMBER_IDS = { horsham: 501 };
 const QUESTIONS = { results: [
   { value: { id: 9, askingMemberId: 501, dateTabled: "2026-10-01T00:00:00", uin: "12345", heading: "Roads: Potholes", questionText: "To ask the Secretary of State about potholes in Horsham." } },
-  { value: { id: 10, askingMemberId: 999, dateTabled: "2026-10-02T00:00:00", uin: "12346", heading: "Elsewhere", questionText: "Somewhere else." } },
+  { value: { id: 10, askingMemberId: 999, dateTabled: "2026-10-02T00:00:00", uin: "12346", heading: "Roads: Elsewhere", questionText: "Somewhere else." } },
+  { value: { id: 11, askingMemberId: 501, dateTabled: "2026-10-03T00:00:00", uin: "12347", heading: "Schools: Funding", questionText: "To ask the Secretary of State about schools in Horsham." } },
 ] };
 const GOVUK = { results: [
   { title: "Record funding, record results", link: "/government/news/record", public_timestamp: "2026-10-21T21:00:00Z", description: "Potholes and roads." },
@@ -175,7 +195,10 @@ function publicSource(url) {
     const id = MEMBER_IDS[name.toLowerCase()] ?? (600 + name.length);
     return reply(200, { items: [{ value: { id: 1, name, currentRepresentation: { member: { value: { id, nameDisplayAs: `MP for ${name}` } } } } }] });
   }
-  if (host === "questions-statements-api.parliament.uk") return reply(200, QUESTIONS);
+  if (host === "questions-statements-api.parliament.uk") {
+    const id = Number(new URL(url).searchParams.get("askingMemberId"));
+    return reply(200, { results: QUESTIONS.results.filter((r) => !id || r.value.askingMemberId === id) });
+  }
   if (host === "www.gov.uk") return reply(200, GOVUK);
   return null;
 }
@@ -198,8 +221,10 @@ globalThis.fetch = async (input, init = {}) => {
     return new Response(JSON.stringify(hrana(query(stmt.sql, stmt.args.map((a) => a.value)))), { status: 200 });
   }
   if (url === "https://api.anthropic.com/v1/messages") {
-    if (claude.fail) return new Response(JSON.stringify({ error: { message: "nope" } }), { status: claude.fail });
-    return new Response(JSON.stringify(anthropic(JSON.parse(init.body))), { status: 200 });
+    if (claude.fail) return new Response(JSON.stringify({ error: { message: claude.failMessage } }), { status: claude.fail });
+    const body = JSON.parse(init.body), no = refused(body);
+    if (no) { claude.refused.push(no); return new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: no } }), { status: 400 }); }
+    return new Response(JSON.stringify(anthropic(body)), { status: 200 });
   }
   if (url.startsWith("https://builder.test")) return library(url, init);
   if (/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(url)) return realFetch(input, init); // the server under test

@@ -7,6 +7,9 @@
 //   authorities/<code>/forecasts.json          every forecast made, with its check date
 
 import type { Config } from "./config";
+import { fetchWithTimeout } from "./util";
+
+const STORAGE_MS = 30_000;
 
 function storageUrl(c: Config, path: string): string {
   const p = path.split("/").map((seg) => encodeURIComponent(seg)).join("/");
@@ -14,19 +17,19 @@ function storageUrl(c: Config, path: string): string {
 }
 
 export async function storageGet(c: Config, path: string): Promise<string | null> {
-  const res = await fetch(storageUrl(c, path), { headers: { AccessKey: c.storageKey } });
+  const res = await fetchWithTimeout(storageUrl(c, path), { headers: { AccessKey: c.storageKey } }, STORAGE_MS);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Storage returned ${res.status} for ${path}. Check STORAGE_ZONE, STORAGE_HOST and STORAGE_ACCESS_KEY.`);
   return await res.text();
 }
 
 export async function storagePut(c: Config, path: string, body: string, contentType = "application/json"): Promise<void> {
-  const res = await fetch(storageUrl(c, path), { method: "PUT", headers: { AccessKey: c.storageKey, "Content-Type": contentType }, body });
+  const res = await fetchWithTimeout(storageUrl(c, path), { method: "PUT", headers: { AccessKey: c.storageKey, "Content-Type": contentType }, body }, STORAGE_MS);
   if (!res.ok) throw new Error(`Storage refused to save ${path} (status ${res.status}). The storage password may be the read-only one.`);
 }
 
 export async function storageDelete(c: Config, path: string): Promise<void> {
-  const res = await fetch(storageUrl(c, path), { method: "DELETE", headers: { AccessKey: c.storageKey } });
+  const res = await fetchWithTimeout(storageUrl(c, path), { method: "DELETE", headers: { AccessKey: c.storageKey } }, STORAGE_MS);
   if (!res.ok && res.status !== 404) throw new Error(`Storage refused to delete ${path} (status ${res.status}).`);
 }
 
@@ -40,7 +43,7 @@ export const savePretty = (c: Config, path: string, value: unknown) => storagePu
 
 // The names of the files in a storage folder (not its sub-folders).
 export async function storageList(c: Config, folderPath: string): Promise<string[]> {
-  const res = await fetch(storageUrl(c, folderPath.replace(/\/?$/, "/")), { headers: { AccessKey: c.storageKey, Accept: "application/json" } });
+  const res = await fetchWithTimeout(storageUrl(c, folderPath.replace(/\/?$/, "/")), { headers: { AccessKey: c.storageKey, Accept: "application/json" } }, STORAGE_MS);
   if (res.status === 404) return [];
   if (!res.ok) throw new Error(`Storage returned ${res.status} listing ${folderPath}.`);
   const list: any = await res.json().catch(() => []);

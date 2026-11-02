@@ -66,6 +66,17 @@ export async function loadEvidence(c: Config, p: Pilot, facts: Facts): Promise<E
   return { figures, signals, surveys, gaps: findGaps(p, surveys, signals, figures), gathered: new Date().toISOString() };
 }
 
+// The kinds of signal Clarion really holds. Street surveys, pulse questions and press or social media come in
+// later stages of the build, so they can't count yet.
+export function kindsHeld(e: Evidence): string[] {
+  const s = e.signals;
+  return [
+    ...(e.surveys.length ? ["survey"] : []),
+    ...(s.fixMyStreet.ok && s.fixMyStreet.data?.reports ? ["actions"] : []),
+    ...((s.petitions.ok && s.petitions.data?.length) || (s.questions.ok && s.questions.data?.length) ? ["representatives"] : []),
+  ];
+}
+
 // The authority's position, as Claude sees it. Only the assessment and reading steps get this: they have no
 // web access, and facts (with the officers' notes) is passed only for the authority's own work.
 export function briefing(p: Pilot, e: Evidence, facts: Facts): Record<string, unknown> {

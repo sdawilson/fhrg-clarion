@@ -30,12 +30,14 @@ async function read<T>(source: string, url: string, fn: () => Promise<T>): Promi
 
 // ----- FixMyStreet
 
-export type FixMyStreet = { reports: number; from: string; to: string; perDay: number; categories: { name: string; count: number }[]; busiestSquare: number };
+export type FixMyStreet = { reports: number; from: string; to: string; perDay: number | null; categories: { name: string; count: number }[]; busiestSquare: number };
 
+const RATE_MIN_DAYS = 7;
 const decode = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").trim();
 const tag = (block: string, name: string) => { const m = block.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, "i")); return m ? decode(m[1]) : ""; };
 
-// Reads the feed's latest reports. The feed shows only the most recent few, so the rate is an estimate.
+// Reads the feed's latest reports. The feed shows only the most recent few, which is a sample, not a total,
+// and a rate worked out over a few days means little: it's given only for a week or more.
 export function readFixMyStreet(xml: string): FixMyStreet {
   const items = [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].map((m) => m[1]);
   if (!items.length && !/<rss[\s>]/i.test(xml)) throw new Error("not a feed");
@@ -57,7 +59,7 @@ export function readFixMyStreet(xml: string): FixMyStreet {
     reports: items.length,
     from: dates.length ? new Date(dates[0]).toISOString().slice(0, 10) : "",
     to: dates.length ? new Date(dates.at(-1)!).toISOString().slice(0, 10) : "",
-    perDay: span > 0 ? round(items.length / span, 1) : 0,
+    perDay: span >= RATE_MIN_DAYS ? round(items.length / span, 1) : null,
     categories: [...cats].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 8),
     busiestSquare: Math.max(0, ...squares.values()),
   };
@@ -74,7 +76,7 @@ function fixMyStreet(p: Pilot): Promise<Signal<FixMyStreet>> {
 
 export type Petition = { title: string; url: string; signatures: number; local: number; localShare: number; fairShare: number };
 const PETITION_TERMS = ["pothole", "road", "highway", "speed limit", "roadworks"];
-const PETITION_TOPIC = /\b(pothole|potholes|road|roads|highway|highways|pavement|pavements|speed limit|speed limits|20 ?mph|roadworks|traffic|motorist|motorists|cycle lane|cycle lanes)\b/i;
+const ROAD_TOPIC = /\b(pothole|potholes|road|roads|highway|highways|pavement|pavements|speed limit|speed limits|20 ?mph|roadworks|road works|traffic|motorist|motorists|cycle lane|cycle lanes)\b/i;
 const CONSTITUENCIES = 650;
 
 async function roadPetitions(): Promise<{ id: number; title: string; signatures: number }[]> {
@@ -85,7 +87,7 @@ async function roadPetitions(): Promise<{ id: number; title: string; signatures:
       for (const d of Array.isArray(j?.data) ? j.data : []) {
         const a = d?.attributes;
         if (!Number.isInteger(d?.id) || !a) continue;
-        if (PETITION_TOPIC.test(`${a.action ?? ""} ${a.background ?? ""}`)) found.set(d.id, { id: d.id, title: cleanText(a.action, 200), signatures: Number(a.signature_count) || 0 });
+        if (ROAD_TOPIC.test(`${a.action ?? ""} ${a.background ?? ""}`)) found.set(d.id, { id: d.id, title: cleanText(a.action, 200), signatures: Number(a.signature_count) || 0 });
       }
     }
     return [...found.values()].sort((a, b) => b.signatures - a.signatures).slice(0, 6);
@@ -114,7 +116,6 @@ function petitions(p: Pilot): Promise<Signal<Petition[]>> {
 // ----- MPs and their written questions
 
 export type Question = { date: string; heading: string; member: string; text: string; url: string };
-const QUESTION_TERMS = ["pothole", "road maintenance", "highways", "roadworks", "speed limit"];
 
 async function members(p: Pilot): Promise<Map<number, string>> {
   return await cached(`mps|${p.code}`, 24 * 60 * 60 * 1000, async () => {
@@ -135,14 +136,15 @@ function questions(p: Pilot): Promise<Signal<Question[]>> {
     if (!mps.size) throw new Error("no MPs found");
     const from = addMonths(londonToday(), -6);
     const found = new Map<number, Question>();
-    for (const term of QUESTION_TERMS) {
-      const j = await getJson(`https://questions-statements-api.parliament.uk/api/writtenquestions/questions?searchTerm=${encodeURIComponent(term)}&tabledWhenFrom=${from}&take=100`);
+    // Each MP in turn, then the road topics: searching by topic across all MPs would crowd these ones out.
+    for (const [id, member] of mps) {
+      const j = await getJson(`https://questions-statements-api.parliament.uk/api/writtenquestions/questions?askingMemberId=${id}&tabledWhenFrom=${from}&take=100`);
       for (const r of Array.isArray(j?.results) ? j.results : []) {
         const v = r?.value;
-        if (!Number.isInteger(v?.id) || !mps.has(v.askingMemberId)) continue;
+        if (!Number.isInteger(v?.id) || v.askingMemberId !== id || !ROAD_TOPIC.test(`${v.heading ?? ""} ${v.questionText ?? ""}`)) continue;
         const date = String(v.dateTabled ?? "").slice(0, 10);
         found.set(v.id, {
-          date, heading: cleanText(v.heading, 200), member: mps.get(v.askingMemberId) as string, text: cleanText(v.questionText, 400),
+          date, heading: cleanText(v.heading, 200), member, text: cleanText(v.questionText, 400),
           url: `https://questions-statements.parliament.uk/written-questions/detail/${date}/${encodeURIComponent(String(v.uin ?? ""))}`,
         });
       }

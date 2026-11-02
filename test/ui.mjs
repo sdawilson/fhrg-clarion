@@ -59,6 +59,8 @@ ok(/£28\.303m/.test(page) && /Overall: Amber/.test(page), "funding route and Df
 ok(/Condition of highways/.test(page) && /24 \/ 100/.test(page), "survey results are shown");
 ok(/Road length/.test(page) && /4,000 km/.test(page) && /Region \(median\)/.test(page), "published data is compared");
 ok(/4 reports on FixMyStreet/.test(page) && /one small area/.test(page) && !/Jane/.test(page), "public reports are summarised, with bunching flagged");
+ok(/sample, not a total/.test(page) && !/a day/.test(page.split("What's missing")[0].split("Public fault reports")[1]), "the feed is called a sample, with no rate for a few days' reports");
+ok(/leave out residents' names/.test(page), "officers are asked to keep residents' names out of their notes");
 ok(/Fix the nation's potholes/.test(page) && /MP for Horsham/.test(page), "petitions and MPs' questions are shown");
 ok(/What's missing/.test(page) && /Fault report counts/.test(page), "gaps are listed");
 ok([...d.querySelectorAll("summary")].some((x) => /Add a survey result/.test(x.textContent)) && [...d.querySelectorAll("h2")].some((x) => x.textContent === "Officer notes"), "a lead can add results and notes");
@@ -80,6 +82,7 @@ w.location.hash = "#notes/E10000032";
 await until(() => d.querySelector("textarea[placeholder]") && [...d.querySelectorAll("select option")].some((o) => /Record funding/.test(o.textContent)), "the notes page");
 ok(![...d.querySelectorAll("select option")].some((o) => /organisational charts/.test(o.textContent)), "the announcement list leaves out what isn't about roads");
 ok(/No notes yet/.test(text(d.querySelector(".main"))), "no notes so far");
+ok(/doesn't use the web when you paste text/.test(text(d.querySelector(".main"))), "the page explains that pasted text stays away from the web");
 d.querySelector("select").value = "https://www.gov.uk/government/news/record";
 d.querySelector(".card form").dispatchEvent(new w.Event("submit", { cancelable: true, bubbles: true }));
 await until(() => [...d.querySelectorAll("h2")].some((x) => x.textContent === "Likely impacts here"), "the finished note");

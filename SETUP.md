@@ -102,7 +102,7 @@ From now on, every change Claude makes reaches the container by itself.
 - **Updates:** Claude makes each change on GitHub as a pull request. You read the summary and click **Merge**; it's live about five minutes later.
 - **Keep it to exactly one instance** (Regions and Scaling: minimum 1, maximum 1).
 - **Type setting names by hand** when you add one, then click **Update Container**.
-- **Spending:** site administrators see the month's Claude spend at the bottom of the side rail. Clarion stops starting new work at `MONTHLY_CAP_USD`.
+- **Spending:** site administrators see the month's Claude spend at the bottom of the side rail. Clarion stops starting new work at `MONTHLY_CAP_USD`. Each authority can also start up to `DAILY_JOBS_MAX` readings and notes a day (20 unless you set it); site administrators aren't limited.
 - **Signing in from the website** comes in a separate small change, so members needn't type their password.
 
 ## If something isn't right
@@ -114,5 +114,6 @@ From now on, every change Claude makes reaches the container by itself.
 | "Web search or fetch isn't available" | Turn them on in the Anthropic Console, under the organisation's **Capabilities** |
 | A source says "couldn't be read just now" | Try again later. If it stays that way, tell Claude which source |
 | "Clarion has reached this month's spending limit" | Raise `MONTHLY_CAP_USD`, or wait for the new month |
+| "has reached today's limit" | Try again tomorrow, or raise `DAILY_JOBS_MAX` |
 | `/health` doesn't answer | Open the app's **Logs** in Magic Containers; the last lines say why it stopped |
 | The **Build and deploy** run fails | Open it in the **Actions** tab; the failing step is marked. Tell Claude what it says |
