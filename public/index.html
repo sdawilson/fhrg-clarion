@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Clarion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<meta name="theme-color" content="#264a6f">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap">
+<style>
+/* Look and feel follow the Highways Climate Impact Toolkit and the FHRG website: the FHRG navy,
+   paper and haze greys, Atkinson Hyperlegible Next, junction-plate badges, a left rail of sections
+   (a top bar on phones). Dark mode keeps the same tokens on a navy-black ground. */
+:root {
+  --navy: #264a6f; --navy-deep: #1a3452; --plate: #111820; --plate-ring: #ffffff;
+  --bg: #f4f6f9; --surface: #ffffff; --surface-2: #eef1f5; --ink: #17212c; --ink-2: #46566a; --ink-3: #5f7088; --heading: #1a3452;
+  --line: #e4e9ef; --line-2: #a9b6c7; --accent: #264a6f; --accent-2: #1a3452; --accent-ink: #ffffff; --accent-wash: #e6edf5;
+  --focus: #f2b705; --good: #2f7a4f; --warn: #c98f16; --crit: #a33a2e; --good-ink: #2f7a4f; --warn-ink: #8a5d0e; --crit-ink: #a33a2e; --data: #6a4c93;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --soft: 0.42; /* chart series: a validated categorical set */
+  --font: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius: 10px; --radius-sm: 8px; --shadow: 0 10px 30px rgba(26, 52, 82, 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --plate: #06090d; --plate-ring: #c9d4e0; --bg: #0f1620; --surface: #17212c; --surface-2: #1f2b39; --ink: #e8edf3; --ink-2: #b5c0cd; --ink-3: #8b98a8; --heading: #dbe5f0;
+    --line: #2a3646; --line-2: #42526a; --accent: #5f93d6; --accent-2: #8db5ea; --accent-ink: #0b1420; --accent-wash: #1c2f47; --focus: #f2c94c;
+    --good-ink: #6fcf8f; --warn-ink: #f2c94c; --crit-ink: #ff8f85; --data: #7b5cb0; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --soft: 0.62; --shadow: 0 10px 30px rgba(0, 0, 0, 0.5); color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15.5px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { font-weight: 700; line-height: 1.2; margin: 0; text-wrap: balance; letter-spacing: -0.01em; color: var(--heading); }
+h1 { font-size: 1.85rem; } h2 { font-size: 1.4rem; } h3 { font-size: 1.1rem; } h4 { font-size: 0.98rem; color: var(--ink); }
+p { margin: 0; max-width: 70ch; }
+a { color: var(--accent); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+a:hover { color: var(--accent-2); text-decoration-thickness: 2px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+.small { font-size: 0.86rem; } .muted { color: var(--ink-3); } .note { font-size: 0.88rem; color: var(--ink-3); }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.78rem; color: var(--ink-3); font-weight: 700; }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* brand: the FHRG logo on a white plate, or a wordmark with the five circles when the logo isn't set */
+
+/* shell */
+.app { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100%; }
+.rail { position: sticky; top: 0; align-self: start; height: 100vh; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px 14px; border-right: 1px solid var(--line); background: var(--surface); overflow-y: auto; }
+.brand { display: grid; gap: 8px; padding: 2px 6px 14px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.brand-mark { font-weight: 700; font-size: 1.02rem; line-height: 1.15; color: var(--heading); }
+.brand-sub { font-size: 0.84rem; color: var(--ink-3); }
+.nav { display: grid; gap: 2px; }
+.nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px; color: var(--ink); cursor: pointer; font-weight: 600; }
+.nav button svg { flex: none; color: var(--ink-3); }
+.nav button:hover { background: var(--bg); color: var(--accent-2); }
+.nav button[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+.nav button[aria-current="page"] svg { color: var(--accent-ink); }
+.rail-foot { margin-top: auto; display: grid; gap: 8px; padding: 12px 8px 0; border-top: 1px solid var(--line); font-size: 0.86rem; color: var(--ink-3); }
+.rail-foot strong { color: var(--ink); }
+.main { min-width: 0; padding-inline: clamp(16px, 3vw, 36px); padding-block: 22px 60px; }
+.page { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+.page-head > div:not(.row) { display: grid; gap: 6px; min-width: 0; }
+.page-head p { color: var(--ink-2); font-size: 1.02rem; }
+.topbar { display: none; }
+@media (max-width: 880px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .rail { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); z-index: 40; transform: translateX(-104%); transition: transform 0.2s ease; box-shadow: var(--shadow); }
+  .rail.open { transform: none; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; position: sticky; top: 0; z-index: 30; background: var(--surface); border-bottom: 1px solid var(--line); padding: 8px 16px; }
+  .main { padding-block: 16px 50px; }
+}
+.scrim { position: fixed; inset: 0; background: rgba(10, 20, 32, 0.45); z-index: 35; }
+
+/* blocks */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 6px 14px; }
+.card-head > div:not(.row) { display: grid; gap: 3px; min-width: 0; }
+.card-head p { color: var(--ink-3); font-size: 0.9rem; }
+.grid { display: grid; gap: 18px; } .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1080px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .g2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .g4 { grid-template-columns: minmax(0, 1fr); } }
+.row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.spacer { flex: 1; }
+.callout { border-left: 5px solid var(--accent); background: var(--bg); padding: 10px 14px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 0.94rem; }
+.callout.warn { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); }
+.callout.crit { border-color: var(--crit); background: color-mix(in srgb, var(--crit) 11%, var(--surface)); }
+.prose { display: grid; gap: 10px; }
+.prose ul, .prose ol { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; max-width: 72ch; }
+.stat { display: grid; gap: 2px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.stat .label { font-size: 0.88rem; color: var(--ink-2); font-weight: 600; }
+.stat .value { font-weight: 800; font-size: 1.8rem; line-height: 1.15; color: var(--heading); letter-spacing: -0.015em; }
+.stat .detail { font-size: 0.84rem; color: var(--ink-3); }
+.plate { display: inline-flex; align-items: center; justify-content: center; min-width: 2em; padding: 1px 6px; border-radius: 4px; background: var(--plate); color: #fff; box-shadow: 0 0 0 2px var(--plate-ring); font-weight: 800; font-size: 0.74rem; letter-spacing: 0.04em; line-height: 1.5; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; border: 1.5px solid var(--line-2); background: var(--surface); white-space: nowrap; }
+.pill.ok { color: var(--good-ink); border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.pill.warn { color: var(--warn-ink); border-color: color-mix(in srgb, var(--warn) 60%, var(--line)); background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
+.pill.bad { color: var(--crit-ink); border-color: color-mix(in srgb, var(--crit) 60%, var(--line)); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--line-2); background: var(--surface); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 0.88rem; font-weight: 600; color: var(--ink-2); text-align: left; }
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+
+/* buttons and forms */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: var(--radius-sm); border: 2px solid var(--accent); background: var(--surface); padding: 6px 14px; cursor: pointer; font-weight: 700; color: var(--accent); text-decoration: none; white-space: nowrap; line-height: 1.3; }
+.btn:hover { background: var(--bg); color: var(--accent-2); border-color: var(--accent-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); color: var(--accent-ink); }
+.btn.small { padding: 3px 10px; font-size: 0.86rem; border-width: 1.5px; border-radius: 6px; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--accent); }
+.btn.ghost:hover { background: var(--bg); border-color: transparent; }
+.btn.danger { border-color: var(--crit); color: var(--crit-ink); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+label.field, div.field { display: grid; gap: 4px; align-content: start; font-size: 0.9rem; color: var(--ink); font-weight: 600; min-width: 0; }
+.field input, .field select, .field textarea, select.input, input.input, textarea.input { border: 1.5px solid var(--line-2); background: var(--surface); border-radius: var(--radius-sm); padding: 7px 10px; color: var(--ink); width: 100%; min-width: 0; font-weight: 400; }
+.field input:focus, .field select:focus, .field textarea:focus, select.input:focus, input.input:focus, textarea.input:focus { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent); outline-offset: 0; }
+.field .hint { font-weight: 400; color: var(--ink-3); font-size: 0.82rem; }
+.check { display: inline-flex; gap: 8px; align-items: center; font-size: 0.92rem; }
+.check input { accent-color: var(--accent); width: 1.1rem; height: 1.1rem; }
+.err { color: var(--crit-ink); font-size: 0.92rem; font-weight: 600; } .ok { color: var(--good-ink); font-size: 0.92rem; font-weight: 600; }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+table.tbl { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.tbl th, .tbl td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tbl thead th { background: var(--bg); font-weight: 700; white-space: nowrap; font-size: 0.86rem; }
+.tbl tbody tr:last-child td { border-bottom: 0; }
+.tbl td.r, .tbl th.r { text-align: right; }
+.tab-row { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 2px solid var(--line); }
+.tab-row button { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: var(--ink-2); font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.tab-row button:hover { color: var(--accent); }
+.tab-row button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.empty { padding: 26px; text-align: center; color: var(--ink-3); border: 1px dashed var(--line-2); border-radius: var(--radius); }
+progress.bar { width: 100%; height: 6px; accent-color: var(--accent); }
+
+/* sign in: a navy sign holding a white card, like the website's hero */
+.auth { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); }
+.auth-sign { width: min(560px, 100%); background: var(--navy); border-radius: 18px; padding: clamp(10px, 2.5vw, 16px); box-shadow: inset 0 0 0 6px var(--navy), inset 0 0 0 10px #fff, 0 18px 40px rgba(26, 52, 82, 0.22); }
+.auth-card { display: grid; gap: 16px; background: var(--surface); border-radius: 10px; padding: 26px 24px; margin: 6px; }
+.auth-title { font-size: 1.45rem; }
+.auth-form { gap: 8px; border-top: 2px solid var(--line); padding-top: 14px; }
+.auth-sub { font-size: 1.15rem; margin: 0; }
+@media (max-width: 520px) { .auth-sign { border-radius: 14px; } .auth-card { padding: 20px 16px; } }
+
+/* Clarion */
+.gap { gap: 18px; }
+.lead { font-size: 1.12rem; font-weight: 600; color: var(--heading); max-width: 70ch; }
+.stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+.form-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); padding-top: 10px; }
+.card ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.card details summary, details.no-print summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+.note-row { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.note-row:last-child { border-bottom: 0; }
+.field textarea { width: 100%; }
+.busy { display: grid; gap: 10px; place-items: center; min-height: 100%; align-content: center; }
+.toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--navy-deep); color: #fff; padding: 8px 14px; border-radius: 8px; z-index: 60; }
+@media print {
+  .rail, .topbar, .no-print { display: none !important; }
+  .app { display: block; }
+  body { background: #fff; font-size: 11pt; }
+  .main { padding: 0; }
+  .card, .callout { break-inside: avoid; }
+  a { color: inherit; }
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+const $app = document.getElementById("app");
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "style") Object.assign(el.style, v);
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "value") el.value = v;
+    else if (v === true) el.setAttribute(k, "");
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return el;
+}
+const clear = (el) => { el.replaceChildren(); return el; };
+const fmt = (n, places = 0) => (Number.isFinite(n) ? n.toLocaleString("en-GB", { maximumFractionDigits: places }) : "–");
+const pounds = (n) => `£${(n / 1e6).toLocaleString("en-GB", { maximumFractionDigits: 3 })}m`;
+function fmtDate(iso) { if (!iso) return ""; const d = new Date(String(iso).slice(0, 10) + "T12:00:00Z"); return isNaN(d) ? String(iso) : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); }
+// Addresses come from outside sources, so only plain https links are ever made clickable
+const link = (url, text) => (/^https:\/\//i.test(url || "") ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, text || url) : (text || url || ""));
+function toast(msg) { const t = h("div", { class: "toast", role: "status" }, msg); document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
+
+const API = {
+  token: (() => { try { return localStorage.getItem("clarion_token") || ""; } catch (e) { return ""; } })(),
+  setToken(t) { this.token = t || ""; try { if (t) localStorage.setItem("clarion_token", t); else localStorage.removeItem("clarion_token"); } catch (e) { /* storage blocked */ } },
+  async call(path, body) {
+    const headers = { "content-type": "application/json" };
+    if (this.token) headers["x-session-token"] = this.token;
+    const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body || {}), credentials: "same-origin" });
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) { const err = new Error((data && data.error) || `The server returned ${res.status}.`); err.status = res.status; throw err; }
+    return data;
+  },
+};
+
+const App = { config: { websiteUrl: "https://fhrg.co.uk" }, status: null, route: [], viewId: 0 };
+const brand = () => h("div", { class: "brand-mark" }, "Clarion");
+const signFoot = () => h("p", { class: "note" }, "Part of the FHRG's toolkit, for member authorities.");
+
+// ---------------------------------------------------------------- start ------
+async function boot() {
+  API.call("/api/config").then((r) => { App.config = { ...App.config, ...(r || {}) }; }).catch(() => {});
+  // Arriving from the FHRG website: /sso#t=<pass>. Tidy the address first, so the pass isn't left in the
+  // browser's history. A pass that fails leaves a good session as it was.
+  if (location.pathname === "/sso") {
+    const pass = new URLSearchParams(location.hash.replace(/^#/, "")).get("t") || "";
+    history.replaceState(null, "", "/#");
+    if (pass) {
+      try { API.setToken((await API.call("/api/sso", { token: pass })).token); }
+      catch (e) { if (!API.token) { window.addEventListener("hashchange", route); return authScreen(e.message); } setTimeout(() => toast(e.message), 300); }
+    }
+  }
+  window.addEventListener("hashchange", route);
+  if (API.token) {
+    clear($app).append(h("div", { class: "busy" }, brand(), h("p", { role: "status" }, "Signing you in…")));
+    try { App.status = await API.call("/api/status"); return route(); }
+    catch (e) { if (e.status !== 401) console.warn(e); API.setToken(""); }
+  }
+  authScreen();
+}
+
+function authScreen(message) {
+  const msg = h("p", { class: message ? "err" : "muted", role: "alert" }, message || "");
+  const field = (label, input) => h("label", { class: "field" }, label, input);
+  const f = h("form", { class: "stack" },
+    field("Email", h("input", { id: "si-email", type: "email", autocomplete: "username", required: true })),
+    field("Password", h("input", { id: "si-pw", type: "password", autocomplete: "current-password", required: true })),
+    h("label", { class: "check" }, h("input", { id: "si-rem", type: "checkbox" }), "Keep me signed in on this device"),
+    msg,
+    h("div", { class: "row" }, h("button", { class: "btn primary", type: "submit" }, "Sign in")));
+  f.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const btn = f.querySelector("button[type=submit]");
+    btn.disabled = true; msg.className = "muted"; msg.textContent = "Signing in…";
+    try {
+      const r = await API.call("/api/login", { email: f.querySelector("#si-email").value.trim(), password: f.querySelector("#si-pw").value, remember: f.querySelector("#si-rem").checked });
+      API.setToken(r.token);
+      App.status = await API.call("/api/status");
+      route();
+    } catch (e) { msg.textContent = e.message; msg.className = "err"; btn.disabled = false; }
+  });
+  const site = App.config.websiteUrl;
+  clear($app).append(h("div", { class: "auth" }, h("div", { class: "auth-sign" }, h("div", { class: "auth-card" },
+    h("h1", { class: "auth-title" }, "Clarion"),
+    h("p", { class: "note" }, "How people in your area feel about their roads, and why."),
+    h("div", { class: "stack auth-form" }, h("h2", { class: "auth-sub" }, "Sign in"), h("p", { class: "note" }, "Use the same email and password as the FHRG website."), f),
+    h("p", { class: "small muted" }, link(`${site}/signin`, "Forgotten your password?"))))));
+}
+
+// ---------------------------------------------------------------- shell ------
+// The address says where you are: #a/<code>, #notes/<code>, #note/<code>/<id>
+function route() {
+  if (!App.status) return;
+  App.route = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+  App.viewId++;
+  shell();
+}
+function shell() {
+  const st = App.status;
+  const list = st.authorities || [];
+  const [view, code, id] = App.route;
+  const current = list.find((a) => a.code === code) || (list.length === 1 ? list[0] : null);
+  const rail = h("nav", { class: "rail", "aria-label": "Sections" },
+    h("div", { class: "brand" }, brand(), h("div", { class: "brand-sub" }, "Public mood on local roads")),
+    h("div", { class: "nav" }, list.map((a) => h("button", { type: "button", "aria-current": current && current.code === a.code ? "page" : null, onclick: () => { location.hash = `#a/${a.code}`; } }, a.name))),
+    h("div", { class: "rail-foot" }, h("div", {}, h("strong", {}, st.user.name), h("br"), st.user.authority),
+      st.spend ? h("div", { class: "small" }, `Claude this month: $${st.spend.month.toFixed(2)} of $${st.spend.cap}`) : null,
+      h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/logout"); } catch (e) { /* */ } API.setToken(""); location.hash = ""; location.reload(); } }, "Sign out")));
+  const main = h("main", { class: "main", id: "main" });
+  const menu = h("button", { class: "btn small", type: "button", "aria-label": "Open sections", onclick: () => rail.classList.toggle("open") }, "Menu");
+  clear($app).append(h("div", { class: "app" }, rail, h("div", {}, h("div", { class: "topbar" }, brand(), menu), main)));
+  const page = h("div", { class: "page" });
+  main.append(page);
+  if (!list.length) { page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Clarion"), h("p", {}, "Clarion is being trialled with three authorities, and yours isn't one of them yet. The FHRG team will tell members when it opens more widely.")))); return; }
+  if (!current) { page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Choose an authority"), h("p", {}, "Clarion gauges how the public feels about its roads, and how news changes that."))), h("div", { class: "stack" }, list.map((a) => h("button", { class: "btn", type: "button", onclick: () => { location.hash = `#a/${a.code}`; } }, a.name)))); return; }
+  if (view === "note" && id) return noteView(page, current, id);
+  if (view === "notes") return notesView(page, current);
+  return authorityView(page, current);
+}
+const tabs = (a, on) => h("div", { class: "tab-row no-print", role: "tablist" },
+  h("button", { type: "button", "aria-selected": on === "a" ? "true" : "false", onclick: () => { location.hash = `#a/${a.code}`; } }, "Mood and evidence"),
+  h("button", { type: "button", "aria-selected": on === "notes" ? "true" : "false", onclick: () => { location.hash = `#notes/${a.code}`; } }, "Impact notes"));
+const failure = (e) => h("div", { class: "callout crit", role: "alert" }, e.message);
+const loading = (text) => h("p", { class: "muted", role: "status" }, text);
+
+// Checks a background job until it's finished, stopping if the person moves to another page
+async function follow(ask, show) {
+  const view = App.viewId;
+  for (;;) {
+    await new Promise((r) => setTimeout(r, App.pollMs ?? 4000));
+    if (view !== App.viewId) return;
+    let job;
+    try { job = await ask(); } catch (e) { continue; }
+    if (view !== App.viewId) return;
+    show(job);
+    if (job.status !== "working") return;
+  }
+}
+const progress = (stage) => h("div", { class: "callout", role: "status" }, h("strong", {}, `${stage}…`), " This usually takes a few minutes. You can leave this page and come back.");
+
+// ---------------------------------------------------------------- an authority
+async function authorityView(page, a) {
+  page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, a.name), h("p", {}, "How people here feel about their roads, and the evidence behind it."))), tabs(a, "a"));
+  const body = h("div", { class: "stack gap" }, loading("Gathering the evidence…"));
+  page.append(body);
+  const view = App.viewId;
+  let d;
+  try { d = await API.call("/api/authority", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  if (view !== App.viewId) return;
+  clear(body).append(readingCard(a, d), ratingCard(d), surveyCard(a, d), figuresCard(d), signalsCard(d), gapsCard(d));
+  if (d.canEdit) body.append(notesCard(a, d));
+}
+
+function readingCard(a, d) {
+  const box = h("section", { class: "card" });
+  const start = h("button", { class: "btn primary no-print", type: "button" }, d.reading ? "Write a new reading" : "Write the first reading");
+  const msg = h("div", {});
+  const head = () => h("div", { class: "card-head" }, h("div", {}, h("h2", {}, "Mood reading")), start);
+  const showReading = (r) => {
+    clear(box).append(head());
+    if (r && r.status === "ready") box.append(readingBody(r));
+    else if (r && r.status === "failed") box.append(failure({ message: r.error || "That reading didn't finish." }));
+    else box.append(h("p", {}, "No reading yet. Clarion will write one from the evidence below, and say what's missing."));
+    box.append(msg);
+  };
+  const track = (job) => {
+    start.disabled = true;
+    clear(msg).append(progress(job.stage));
+    follow(async () => (await API.call("/api/reading/get", { code: a.code, id: job.id })).reading, (r) => {
+      if (r.status === "working") { clear(msg).append(progress(r.stage)); return; }
+      start.disabled = false; clear(msg); showReading(r);
+    });
+  };
+  start.addEventListener("click", async () => {
+    start.disabled = true;
+    try { track((await API.call("/api/reading/start", { code: a.code })).reading); } catch (e) { start.disabled = false; clear(msg).append(failure(e)); }
+  });
+  showReading(d.reading);
+  if (d.working) track(d.working);
+  return box;
+}
+function readingBody(r) {
+  const tone = r.direction === "Improving" ? "ok" : r.direction === "Worsening" ? "bad" : "";
+  return h("div", { class: "stack" },
+    h("p", { class: "lead" }, r.headline),
+    h("div", { class: "chips" }, h("span", { class: `pill ${tone}` }, `Direction: ${r.direction}`), h("span", { class: "pill" }, `Confidence: ${r.confidence}`)),
+    r.directionNote ? h("p", { class: "note" }, r.directionNote) : null,
+    h("p", {}, h("strong", {}, "Level. "), r.level, r.levelBasis ? ` (${r.levelBasis})` : ""),
+    r.confidenceReason ? h("p", {}, h("strong", {}, "How sure. "), r.confidenceReason) : null,
+    r.drivers.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "What seems to be driving it"), h("th", {}, "Evidence"), h("th", {}, "Kind of signal"))),
+      h("tbody", {}, r.drivers.map((x) => h("tr", {}, h("td", {}, x.theme), h("td", {}, x.evidence), h("td", {}, x.kind)))))) : null,
+    r.nextSteps.length ? h("div", { class: "prose" }, h("h3", {}, "What would improve this reading"), h("ul", {}, r.nextSteps.map((x) => h("li", {}, x)))) : null,
+    h("p", { class: "note" }, `Written by Clarion with AI on ${fmtDate(r.created)}, for ${r.by}. It's a guide, not a measure of opinion. Check it before relying on it.`));
+}
+function ratingCard(d) {
+  const x = d.authority, r = x.rating;
+  const pill = (label, v) => h("span", { class: `pill ${v === "Green" ? "ok" : v === "Red" ? "bad" : "warn"}` }, `${label}: ${v}`);
+  return h("section", { class: "card" }, h("h2", {}, "The authority's position"),
+    h("p", {}, x.fundingRoute),
+    h("div", { class: "chips" }, pill("Overall", r.overall), pill("Condition", r.condition), pill("Spend", r.spend), pill("Best practice", r.bestPractice)),
+    h("p", { class: "note" }, "DfT's road maintenance rating, ", r.published, ". ", link(r.url, "Source"), ". DfT's method doesn't appear to use residents' views."));
+}
+function surveyCard(a, d) {
+  const rows = d.evidence.surveys;
+  const box = h("section", { class: "card" }, h("h2", {}, "What residents have said in surveys"),
+    d.authority.surveyNote ? h("p", {}, d.authority.surveyNote) : null,
+    rows.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Year"), h("th", {}, "Measure"), h("th", { class: "r" }, "Score"), h("th", { class: "r" }, "Replies"), h("th", {}, "Source"))),
+      h("tbody", {}, rows.map((s) => h("tr", {}, h("td", {}, s.year), h("td", {}, s.measure), h("td", { class: "r" }, `${s.score} / ${s.outOf}`), h("td", { class: "r" }, s.responses ? fmt(s.responses) : "–"), h("td", {}, link(s.url, s.source))))))) : null);
+  if (d.canEdit) box.append(surveyForm(a));
+  return box;
+}
+function surveyForm(a) {
+  const field = (label, name, attrs) => h("label", { class: "field" }, label, h("input", { name, ...attrs }));
+  const msg = h("p", { role: "status" });
+  const f = h("form", { class: "form-grid" },
+    field("Year", "year", { type: "number", min: 2000, max: 2100, required: true }), field("Measure", "measure", { required: true, placeholder: "Condition of highways" }),
+    field("Score", "score", { type: "number", step: "any", required: true }), field("Out of", "outOf", { type: "number", value: "100" }),
+    field("Replies", "responses", { type: "number" }), field("Source", "source", { required: true, placeholder: "NHT survey 2025" }), field("Link (optional)", "url", { type: "url" }),
+    h("div", { class: "row" }, h("button", { class: "btn", type: "submit" }, "Add result")), msg);
+  f.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const b = Object.fromEntries(new FormData(f).entries());
+    try { await API.call("/api/facts/survey", { ...b, code: a.code }); route(); } catch (e) { msg.textContent = e.message; msg.className = "err"; }
+  });
+  return h("details", { class: "no-print" }, h("summary", {}, "Add a survey result"), f);
+}
+function figuresCard(d) {
+  const f = d.evidence.figures;
+  const compare = (rows, label) => h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, label), h("th", { class: "r" }, "Here"), h("th", { class: "r" }, "Region (median)"), h("th", { class: "r" }, "England (median)"), h("th", { class: "r" }, "Year ending"))),
+    h("tbody", {}, rows.map((x) => h("tr", {}, h("td", {}, x.roadClass), h("td", { class: "r" }, `${fmt(x.value, 1)}%`), h("td", { class: "r" }, x.region === null ? "–" : `${fmt(x.region, 1)}%`), h("td", { class: "r" }, x.england === null ? "–" : `${fmt(x.england, 1)}%`), h("td", { class: "r" }, x.fye))))));
+  const ksi = f.seriousCollisions.at(-1);
+  const stats = [
+    f.roadLength ? ["Road length", `${fmt(f.roadLength.km)} km`, String(f.roadLength.year)] : null,
+    f.traffic ? ["Traffic", `${f.traffic.changePct > 0 ? "+" : ""}${fmt(f.traffic.changePct, 1)}%`, `${f.traffic.sinceYear} to ${f.traffic.year}`] : null,
+    ksi ? ["Fatal and serious collisions", fmt(ksi.count), String(ksi.year)] : null,
+  ].filter(Boolean);
+  const money = f.allocations.filter((x) => x.pot === "Total" && x.amount);
+  return h("section", { class: "card" }, h("h2", {}, "Published data"),
+    stats.length ? h("div", { class: "stats" }, stats.map(([l, v, p]) => h("div", { class: "stat" }, h("span", { class: "label" }, l), h("span", { class: "value" }, v), h("span", { class: "detail" }, p)))) : null,
+    f.condition.length ? compare(f.condition, "Roads where maintenance should be considered") : null,
+    f.treatment.length ? compare(f.treatment, "Road length treated") : null,
+    money.length ? h("p", {}, `DfT maintenance allocation ${money[0].years}: ${pounds(money[0].amount)}.`) : null,
+    f.unavailable.length ? h("p", { class: "note" }, `Not available just now: ${f.unavailable.join(", ")}.`) : null,
+    f.sources.length ? h("details", {}, h("summary", {}, "Sources"), h("ul", { class: "small" }, f.sources.map((s) => h("li", {}, `${s.title}. ${s.attribution}`)))) : null);
+}
+function signalsCard(d) {
+  const s = d.evidence.signals, fms = s.fixMyStreet, pet = s.petitions, q = s.questions;
+  const missing = (sig) => h("p", { class: "note" }, sig.note);
+  return h("section", { class: "card" }, h("h2", {}, "What people are doing and raising"),
+    h("h3", {}, "Public fault reports"),
+    fms.ok && fms.data ? [
+      h("p", {}, `${fms.data.reports} reports on FixMyStreet's public feed, ${fmtDate(fms.data.from)} to ${fmtDate(fms.data.to)}${fms.data.perDay ? `: about ${fmt(fms.data.perDay, 1)} a day` : ""}.`),
+      fms.data.busiestSquare > 2 ? h("p", { class: "note" }, `${fms.data.busiestSquare} of these came from one small area, so they may be one issue rather than a wider mood.`) : null,
+      h("div", { class: "chips" }, fms.data.categories.map((c) => h("span", { class: "pill" }, `${c.name}: ${c.count}`))),
+    ] : missing(fms),
+    h("p", { class: "note" }, d.authority.reportingRoute),
+    h("h3", {}, "Parliament petitions on roads"),
+    pet.ok && pet.data ? (pet.data.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Petition"), h("th", { class: "r" }, "Signatures"), h("th", { class: "r" }, "From here"), h("th", { class: "r" }, "Share"), h("th", { class: "r" }, "Fair share"))),
+      h("tbody", {}, pet.data.map((x) => h("tr", {}, h("td", {}, link(x.url, x.title)), h("td", { class: "r" }, fmt(x.signatures)), h("td", { class: "r" }, fmt(x.local)), h("td", { class: "r" }, `${fmt(x.localShare, 1)}%`), h("td", { class: "r" }, `${fmt(x.fairShare, 1)}%`)))))) : h("p", {}, "No open petitions on roads were found.")) : missing(pet),
+    h("h3", {}, "MPs' written questions, last six months"),
+    q.ok && q.data ? (q.data.length ? h("ul", {}, q.data.map((x) => h("li", {}, `${fmtDate(x.date)}: `, link(x.url, x.heading || "Question"), `, ${x.member}`))) : h("p", {}, "None found on road topics.")) : missing(q));
+}
+function gapsCard(d) {
+  return h("section", { class: "card" }, h("h2", {}, "What's missing"), h("ul", {}, d.evidence.gaps.map((g) => h("li", {}, g))));
+}
+function notesCard(a, d) {
+  const area = h("textarea", { rows: 5, "aria-label": "Officer notes", maxlength: 6000 });
+  area.value = d.facts.notes || "";
+  const msg = h("p", { role: "status", class: "note" }, d.facts.updated ? `Last changed ${fmtDate(d.facts.updated)} by ${d.facts.updatedBy}.` : "");
+  return h("section", { class: "card no-print" }, h("h2", {}, "Officer notes"),
+    h("p", { class: "note" }, "Contract end dates, named schemes and known sensitivities. These stay with your authority, and are never sent to any step that reads the web."),
+    h("div", { class: "field" }, area), msg,
+    h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
+      try { await API.call("/api/facts/notes", { code: a.code, notes: area.value }); msg.textContent = "Saved."; msg.className = "ok"; } catch (e) { msg.textContent = e.message; msg.className = "err"; }
+    } }, "Save notes")));
+}
+
+// ---------------------------------------------------------------- impact notes
+async function notesView(page, a) {
+  page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, a.name), h("p", {}, "What an announcement means here: the money, the dates and the likely effect on public mood."))), tabs(a, "notes"));
+  const pick = h("select", { "aria-label": "Recent announcements" }, h("option", { value: "" }, "Loading recent announcements…"));
+  const url = h("input", { type: "url", placeholder: "https://www.gov.uk/…" });
+  const text = h("textarea", { rows: 5, maxlength: 30000, placeholder: "Or paste the announcement's text here" });
+  const msg = h("div", {});
+  const go = h("button", { class: "btn primary", type: "submit" }, "Write the impact note");
+  const list = h("div", { class: "stack" }, loading("Loading notes…"));
+  const f = h("form", { class: "stack" },
+    h("label", { class: "field" }, "Choose a recent announcement", pick),
+    h("label", { class: "field" }, "Or give its link", url),
+    h("label", { class: "field" }, "Or paste it", text), msg,
+    h("div", { class: "row" }, go));
+  f.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    go.disabled = true; clear(msg);
+    const chosen = pick.selectedOptions[0];
+    try {
+      const r = await API.call("/api/note/start", { code: a.code, url: url.value.trim() || pick.value, title: url.value.trim() || !pick.value ? "" : chosen.textContent, text: text.value });
+      location.hash = `#note/${a.code}/${r.note.id}`;
+    } catch (e) { go.disabled = false; msg.append(failure(e)); }
+  });
+  page.append(h("section", { class: "card" }, h("h2", {}, "New impact note"), f), h("section", { class: "card" }, h("h2", {}, "Notes so far"), list));
+  const view = App.viewId;
+  API.call("/api/announcements").then((r) => {
+    if (view !== App.viewId) return;
+    clear(pick).append(h("option", { value: "" }, r.announcements.length ? "Choose…" : (r.note || "None found")), ...r.announcements.map((x) => h("option", { value: x.url }, `${x.title} (${fmtDate(x.date)})`)));
+  }).catch(() => { clear(pick).append(h("option", { value: "" }, "The list couldn't be loaded")); });
+  try {
+    const { notes } = await API.call("/api/note/list", { code: a.code });
+    if (view !== App.viewId) return;
+    clear(list).append(...(notes.length ? notes : []).map((n) => h("div", { class: "note-row" },
+      h("a", { href: `#note/${a.code}/${n.id}` }, n.title), n.status === "working" ? h("span", { class: "pill" }, n.stage) : n.status === "failed" ? h("span", { class: "pill bad" }, "Stopped") : null,
+      h("div", { class: "note" }, `${fmtDate(n.created)}, ${n.by}`), n.headline ? h("div", {}, n.headline) : null)));
+    if (!notes.length) list.append(h("p", { class: "muted" }, "No notes yet."));
+  } catch (e) { if (view === App.viewId) clear(list).append(failure(e)); }
+}
+
+async function noteView(page, a, id) {
+  page.append(tabs(a, "notes"));
+  const body = h("div", { class: "stack gap" }, loading("Loading the note…"));
+  page.append(body);
+  const ask = async () => (await API.call("/api/note/get", { code: a.code, id })).note;
+  const show = (n) => {
+    if (n.status === "working") { clear(body).append(h("h1", {}, n.change?.title || n.input.title || "Impact note"), progress(n.stage)); return; }
+    if (n.status === "failed") { clear(body).append(h("h1", {}, "Impact note"), failure({ message: n.error || "This note didn't finish." })); return; }
+    clear(body).append(noteBody(a, n));
+  };
+  try {
+    const n = await ask();
+    show(n);
+    if (n.status === "working") follow(ask, show);
+  } catch (e) { clear(body).append(failure(e)); }
+}
+function noteBody(a, n) {
+  const c = n.change || {};
+  const m = n.mood;
+  const sources = [...(c.sources || []).map((s) => link(s.url, s.title)), ...n.dataUsed.map((u) => `[Data ${u.n}] ${u.purpose}. ${u.sources.map((s) => s.attribution || s.title).join(" ")}`)];
+  return h("div", { class: "stack gap" },
+    h("div", { class: "page-head" }, h("div", {}, h("span", { class: "eyebrow" }, `Impact note for ${a.name}`), h("h1", {}, c.title), h("p", {}, [c.announcedBy, fmtDate(c.announced)].filter(Boolean).join(", "))),
+      h("button", { class: "btn no-print", type: "button", onclick: () => window.print() }, "Print or save as PDF")),
+    h("div", { class: "callout" }, h("strong", {}, n.headline)),
+    n.whyHere ? h("p", {}, n.whyHere) : null,
+    h("section", { class: "card" }, h("h2", {}, "What changed"), h("p", {}, c.summary),
+      c.amount ? h("p", {}, h("strong", {}, "Amount. "), c.amount) : null,
+      c.deadlines.length ? h("div", { class: "prose" }, h("h3", {}, "Dates"), h("ul", {}, c.deadlines.map((d) => h("li", {}, `${d.date ? `${d.date}: ` : ""}${d.what}`)))) : null,
+      c.conditions.length ? h("div", { class: "prose" }, h("h3", {}, "Conditions"), h("ul", {}, c.conditions.map((x) => h("li", {}, x)))) : null,
+      c.primaryFound ? null : h("div", { class: "callout warn" }, "The original source wasn't found, so this rests on reports of it.")),
+    c.disagreements.length ? h("div", { class: "callout warn" }, h("strong", {}, "Sources disagree. "), c.disagreements.map((d) => `${d.point}: ${d.positions} `), "Check the original before relying on these.") : null,
+    n.impacts.length ? h("section", { class: "card" }, h("h2", {}, "Likely impacts here"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
+      h("thead", {}, h("tr", {}, h("th", {}, "Impact"), h("th", {}, "Size"), h("th", {}, "Likelihood"), h("th", {}, "Confidence"), h("th", {}, "When"), h("th", {}, "Action"))),
+      h("tbody", {}, n.impacts.map((x) => h("tr", {},
+        h("td", {}, h("strong", {}, x.route), h("div", {}, x.statement), x.working ? h("div", { class: "note" }, x.working) : null, h("div", { class: "note" }, `Basis: ${x.basis}. Check by ${fmtDate(x.checkDate)}.`), x.challenge ? h("div", { class: "note" }, `Marked down on challenge: ${x.challenge}`) : null),
+        h("td", {}, x.size), h("td", {}, x.likelihood), h("td", {}, x.confidence, x.confidenceReason ? h("div", { class: "note" }, x.confidenceReason) : null), h("td", {}, x.when), h("td", {}, x.action, x.owner ? h("div", { class: "note" }, x.owner) : null))))))) : null,
+    m ? h("section", { class: "card" }, h("h2", {}, "Likely effect on public mood"),
+      h("div", { class: "chips" }, h("span", { class: "pill" }, `Expectation gap: ${m.gap}`), h("span", { class: "pill" }, `Confidence: ${m.confidence}`)),
+      h("p", {}, h("strong", {}, "What's being promised. "), m.promise), h("p", {}, h("strong", {}, "What residents seem to experience. "), m.localExperience), h("p", {}, h("strong", {}, "Likely reaction. "), m.likelyReaction),
+      m.surveyQuestion ? h("p", {}, h("strong", {}, "A street survey could test this: "), m.surveyQuestion) : null,
+      h("p", { class: "note" }, "The expectation gap is a theory being tested in the pilot, not a measure of opinion.")) : null,
+    n.questions.length ? h("section", { class: "card" }, h("h2", {}, "Questions to expect"), h("ul", {}, n.questions.map((x) => h("li", {}, x)))) : null,
+    n.unknowns.length ? h("section", { class: "card" }, h("h2", {}, "To confirm"), h("ul", {}, n.unknowns.map((x) => h("li", {}, x)))) : null,
+    n.cut.length ? h("details", { class: "no-print" }, h("summary", {}, `Removed on challenge (${n.cut.length})`), h("ul", {}, n.cut.map((x) => h("li", {}, `${x.statement} `, h("span", { class: "note" }, x.reason))))) : null,
+    h("section", { class: "card" }, h("h2", {}, "Sources"), sources.length ? h("ul", { class: "small" }, sources.map((x) => h("li", {}, x))) : h("p", {}, "The text supplied by the officer.")),
+    h("p", { class: "note" }, `Drafted by Clarion with AI on ${fmtDate(n.created)}, for ${n.by}. Ratings are a judgement, not a measurement. An officer should check this before it's used or shared. It may be disclosable under freedom of information.`));
+}
+
+boot();
+</script>
+</body>
+</html>
