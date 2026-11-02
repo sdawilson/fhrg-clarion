@@ -72,6 +72,7 @@ ok(write, "there's a button to write the first reading");
 write.click();
 await until(() => /Direction: Not yet known/.test(text(d.querySelector(".main"))), "the reading");
 ok(/rate road condition poorly/.test(text(d.querySelector(".main"))) && /Written by Clarion with AI/.test(text(d.querySelector(".main"))), "the reading appears, labelled as AI-written");
+ok([...d.querySelectorAll("button")].some((b) => b.textContent === "Write a new reading"), "and the button now offers a new reading");
 
 // ---- a note, with hostile content from outside
 claude.script.submit_change = (body) => (body.messages.length === 1 ? ({ id: "m", type: "message", role: "assistant", stop_reason: "tool_use", usage: {}, content: [
@@ -89,8 +90,9 @@ await until(() => [...d.querySelectorAll("h2")].some((x) => x.textContent === "L
 const nt = text(d.querySelector(".main"));
 ok(/£0\.95m rests on evidence/.test(nt) && /Sources disagree/.test(nt), "the note shows its headline and where sources disagree");
 ok(/Likely effect on public mood/.test(nt) && /Expectation gap: Large/.test(nt) && /a theory being tested/.test(nt), "the mood forecast is shown, and labelled as a theory");
-ok(/Removed on challenge \(1\)/.test(nt) && /Marked down on challenge/.test(nt), "what the challenge changed is shown");
+ok(/Removed on challenge \(1\)/.test(nt) && /On challenge:/.test(nt), "what the challenge changed is shown");
 ok(/An officer should check this/.test(nt), "the note says it needs checking");
+ok(/Authorities and schemes named in the sources \(2\)/.test(nt), "the names found in the sources can be read");
 ok(!d.querySelector(".main img") && w.hacked === undefined && /<img src=x/.test(nt), "hostile text from a web page is shown as text, never run");
 ok(![...d.querySelectorAll("a")].some((a) => /^javascript:/i.test(a.getAttribute("href") || "")), "a javascript: link is never made clickable");
 [...d.querySelectorAll("button")].find((b) => /Print or save/.test(b.textContent)).click();

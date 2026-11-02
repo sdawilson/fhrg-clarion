@@ -76,7 +76,7 @@ function fixMyStreet(p: Pilot): Promise<Signal<FixMyStreet>> {
 
 export type Petition = { title: string; url: string; signatures: number; local: number; localShare: number; fairShare: number };
 const PETITION_TERMS = ["pothole", "road", "highway", "speed limit", "roadworks"];
-const NOT_ROADS = /\b(air traffic|internet traffic|web traffic|road to|road map)\b/gi; // the same words used of something else
+const NOT_ROADS = /\b(air traffic|internet traffic|web traffic|road to|road map|rail and road)\b/gi; // the same words used of something else
 const onRoads = (text: string) => ROAD_TOPIC.test(text.replace(NOT_ROADS, " "));
 const ROAD_TOPIC = /\b(pothole|potholes|road|roads|highway|highways|pavement|pavements|speed limit|speed limits|20 ?mph|roadworks|road works|traffic|motorist|motorists|cycle lane|cycle lanes)\b/i;
 const CONSTITUENCIES = 650;

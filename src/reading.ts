@@ -28,7 +28,7 @@ const FINISH = strictTool({
     properties: {
       headline: { type: "string", description: "One sentence: how the public appears to feel about roads here, and how sure we can be." },
       level: { type: "string", description: "The latest survey level in plain words, or a statement that no survey is held." },
-      level_basis: { type: "string", description: "Which survey and year, or what stands in for one." },
+      level_basis: { type: "string", description: "Which survey and year. Empty if no survey is held." },
       direction: { type: "string", enum: [...DIRECTIONS] },
       direction_kinds: { type: "array", items: { type: "string", enum: [...SIGNAL_KINDS] }, description: "The different kinds of signal that show this change." },
       confidence: { type: "string", enum: [...CONFIDENCE] },
