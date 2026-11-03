@@ -122,9 +122,9 @@ const out = r.briefing;
 ok((await api("/api/briefing/save", form(out, { summary: "Later" }), lead)).status === 409 && (await api("/api/briefing/approve", form(out), lead)).status === 409 && (await api("/api/briefing/remove", { code: WSX, id: one.id, updated: out.updated }, lead)).status === 409, "what's released stays as it was, and on record");
 
 const raced = await write();
-slowStorage.ms = 15;
+slowStorage.ms = 40; // so the delete reads the briefing just before the release lands
 const releasing = api("/api/briefing/approve", form(raced), lead);
-await new Promise((done) => setTimeout(done, 45));
+await new Promise((done) => setTimeout(done, 60));
 const gone = await api("/api/briefing/remove", { code: WSX, id: raced.id, updated: raced.updated }, lead);
 const kept = await releasing;
 slowStorage.ms = 0;
