@@ -33,6 +33,7 @@ You need four values:
 
 - **ANTHROPIC_API_KEY:** make a new key in the Anthropic Console called "FHRG Clarion". While you're there, make sure web search and web fetch are on under the organisation's **Capabilities**.
 - **FHRG_REF_KEY:** the App Builder's **Admin → Reference data → Keys for outside services**. Make a new key called "Clarion".
+- **SEARCH_KEY (optional):** a key for the Brave Search API, from brave.com/search/api. It lets officers check whether a keyword turns up for a publication. Clarion keeps only yes or no and the date. Choose the plain Search plan and set a monthly limit on your account. Without this key, officers find pieces themselves and everything else works.
 - **WEBSITE_DATABASE_URL** and **WEBSITE_DATABASE_AUTH_TOKEN:** the same read-only values the knowledgebase uses. If you don't have the token, **stop and ask Claude** rather than generating one (see the warning at the top).
 - **SESSION_SECRET:** in your password manager, generate a random password, **64 characters, letters and numbers only**.
 
@@ -55,6 +56,7 @@ WEBSITE_DATABASE_AUTH_TOKEN=
 SESSION_SECRET=
 ANTHROPIC_API_KEY=
 FHRG_REF_KEY=
+SEARCH_KEY=
 SITE_ADMINS=s.wilson@provingservices.co.uk
 MONTHLY_CAP_USD=40
 ```
@@ -112,6 +114,7 @@ From now on, every change Claude makes reaches the container by itself.
 | What you see | What to do |
 |---|---|
 | The page says "Clarion is not set up yet. Missing settings: …" | Add the named settings (type the names by hand) and click **Update Container** |
+| "The search service refused Clarion's key" | Check `SEARCH_KEY` against your Brave Search API account |
 | "The data library refused Clarion's key" | Check `FHRG_REF_KEY` against the App Builder's list of keys |
 | "Web search or fetch isn't available" | Turn them on in the Anthropic Console, under the organisation's **Capabilities** |
 | A source says "couldn't be read just now" | Try again later. If it stays that way, tell Claude which source |

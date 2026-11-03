@@ -14,3 +14,4 @@ export { scrubContacts, sweepHelp, tidyScan } from "../src/surveyai";
 export { middleFigure } from "../src/admin";
 export { buildPack } from "../src/demo";
 export { ageTargets, packFrom, propose, standFor, townsFrom, MEASURES } from "../src/sites";
+export { audienceFor, bandRates, cleanDomain, pieceWeight, readAssessment, readKeywords, summarise as summariseCoverage } from "../src/coverage";

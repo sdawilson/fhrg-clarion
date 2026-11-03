@@ -20,7 +20,13 @@
 //   POST /api/note/start           {code, url, title, text}: write an impact note (runs in the background)
 //   POST /api/note/get             {code, id}
 //   POST /api/note/list            {code}
-//   POST /api/media | /api/attention  {code}: Media Watch and the comparison, which come in a later stage
+//   POST /api/coverage/get         {code}: sources, assessments, and what's been read automatically
+//   POST /api/coverage/source      {code, ...source}: add or change a source
+//   POST /api/coverage/unsource    {code, id}: take a source off
+//   POST /api/coverage/assess      {code, ...assessment}: record an assessment
+//   POST /api/coverage/unassess    {code, id}: remove an assessment
+//   POST /api/coverage/check       {code, keywords, sources, days}: does a keyword turn up for these publications?
+//   POST /api/attention            {code}: the comparison, which comes in a later stage
 //   POST /api/admin/overview       site administrators: the position across all authorities
 //   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: leads and admins
 //   POST /api/facts/notes          {code, notes}: leads and admins
@@ -49,6 +55,10 @@
 
 import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member } from "./accounts";
 import { adminOverview, benchmark } from "./admin";
+import {
+  FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
+  removeAssessment, removeSource, saveAssessment, saveSource, summarise, withWeights,
+} from "./coverage";
 import { monthSpend } from "./claude";
 import { getConfig, missingSettings, type Config } from "./config";
 import { demoPack } from "./demo";
@@ -57,9 +67,9 @@ import { validId } from "./jobs";
 import { getNote, listNotes, readInput, startNote } from "./notes";
 import { canEdit, canSee, isMember, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
-import { announcements, fixMyStreetUrl } from "./signals";
+import { announcements, fixMyStreetUrl, loadSignals } from "./signals";
 import { loadSites } from "./sites";
-import { MAX_SCAN_CHARS, getHelp, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
+import { MAX_SCAN_CHARS, getHelp, sharedTopics, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
   addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, createSurvey, formNumber, listSurveys, loadAnswers,
   loadCensus, loadSurvey, openSurvey, publicSurvey, readCsv, saveSurvey, surveyByAccess, surveyPage, textQuestionIds, validAccess, type Survey,
@@ -133,12 +143,36 @@ async function handleAuthority(c: Config, request: Request): Promise<Response> {
   });
 }
 
-// Media Watch and the comparison come in a later stage. The routes are here so the page has one way to ask.
+// The comparison comes in a later stage. The route is here so the page has one way to ask.
 async function handleNotYet(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
   pilotFor(me, b.code);
   return json({ ready: false });
+}
+
+async function handleCoverage(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const [sources, assessments, census, rates, topics, gov, signals] = await Promise.all([
+    loadSources(c, p.code), loadAssessments(c, p.code), loadCensus(c, p.code), loadRates(c), sharedTopics(c),
+    announcements().catch(() => []), loadSignals(p).catch(() => null),
+  ]);
+  const rows = withWeights(assessments, sources);
+  const faults = signals?.fixMyStreet.data, petitions = signals?.petitions.data, questions = signals?.questions.data;
+  return json({
+    ready: true, canEdit: canEdit(me, p), today: londonToday(), searchReady: !!c.searchKey, adults: census?.adults ?? null, sources, rows, summary: summarise(rows, londonToday()),
+    topics, functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
+    audiences: Object.fromEntries(SOURCE_TYPES.map((t) => [t, audienceFor(t, census, rates)])),
+    automatic: [
+      { name: "GOV.UK: DfT and National Highways", type: "Government announcement", last: gov[0]?.date ?? "" },
+      { name: "Parliament: MPs' written questions", type: "Parliament", last: questions?.[0]?.date ?? "" },
+      { name: "Parliament: petitions", type: "Parliament", last: "", note: petitions?.length ? `${petitions.length} on road topics` : "" },
+      { name: "FixMyStreet public reports", type: "Public reports", last: faults?.to ?? "" },
+    ],
+    latest: gov.slice(0, 6),
+  });
 }
 
 async function handleAdminOverview(c: Config, request: Request): Promise<Response> {
@@ -410,7 +444,13 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/note/list": return await handleNoteList(c, request);
         case "/api/facts/survey": return await handleFactsSurvey(c, request);
         case "/api/facts/notes": return await handleFactsNotes(c, request);
-        case "/api/media": case "/api/attention": return await handleNotYet(c, request);
+        case "/api/attention": return await handleNotYet(c, request);
+        case "/api/coverage/get": return await handleCoverage(c, request);
+        case "/api/coverage/source": { const { me, p, b } = await editor(c, request, 3000); return json({ source: await saveSource(c, me, p, b, await sharedTopics(c)) }); }
+        case "/api/coverage/unsource": { const { p, b } = await editor(c, request, 1000); await removeSource(c, p, b.id); return json({ ok: true }); }
+        case "/api/coverage/assess": { const { me, p, b } = await editor(c, request, 3000); return json({ assessment: await saveAssessment(c, me, p, b, await sharedTopics(c)) }); }
+        case "/api/coverage/unassess": { const { p, b } = await editor(c, request, 1000); await removeAssessment(c, p, b.id); return json({ ok: true }); }
+        case "/api/coverage/check": { const { p, b } = await editor(c, request, 3000); return json(await checkCoverage(c, p, b)); }
         case "/api/admin/overview": return await handleAdminOverview(c, request);
         case "/api/survey/list": return await handleSurveyList(c, request);
         case "/api/survey/get": return await handleSurveyGet(c, request);

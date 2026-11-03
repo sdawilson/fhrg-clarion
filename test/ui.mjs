@@ -57,10 +57,10 @@ await until(() => [...d.querySelectorAll("h2")].some((x) => x.textContent === "M
 let page = text(d.querySelector(".main"));
 ok(d.querySelector("h1").textContent === "West Sussex: how people feel about their roads", "a lead goes straight to their authority");
 ok(/Condition of highways/.test(page) && /24 \/ 100/.test(page) && /Amber/.test(page), "the summary leads with survey results and the DfT rating");
-ok(/This needs Media Watch and one street survey/.test(page), "and says what the comparison is waiting for");
+ok(/This needs press assessments and one street survey/.test(page), "and says what the comparison is waiting for");
 ok(/Not enough authorities have results yet/.test(page), "and no FHRG figure appears yet");
 ok(!d.querySelector(".demo-banner"), "there's no demonstration banner for a member");
-ok([...d.querySelectorAll(".nav button")].map((b) => b.textContent).join() === "Summary,Media Watch,Attention and concern,Impact notes,Street surveys,Evidence,Sources & method", "the rail lists the sections");
+ok([...d.querySelectorAll(".nav button")].map((b) => b.textContent).join() === "Summary,What's being said,Attention and concern,Impact notes,Street surveys,Evidence,Sources & method", "the rail lists the sections");
 ok(d.querySelector(".brand-logo img") && /West Sussex County Council/.test(text(d.querySelector(".brand-sub"))), "with the FHRG logo and the member's authority");
 
 // write the first reading
@@ -86,12 +86,12 @@ ok(/Fix the nation's potholes/.test(page) && /MP for Horsham/.test(page), "petit
 ok(/What's missing/.test(page) && /Fault report counts/.test(page), "gaps are listed");
 ok([...d.querySelectorAll("summary")].some((x) => /Add a survey result/.test(x.textContent)) && [...d.querySelectorAll("h2")].some((x) => x.textContent === "Officer notes"), "a lead can add results and notes");
 
-// ---- pages that are waiting for Media Watch
-w.location.hash = "#media/E10000032";
-await until(() => /Media Watch comes in the next stage/.test(text(d.querySelector(".main"))), "the Media Watch page");
-ok(d.querySelector('.nav button[aria-current="page"]').textContent === "Media Watch", "the rail shows where you are");
+// ---- what's being said, and the comparison that's still to come
+w.location.hash = "#said/E10000032";
+await until(() => /Nothing assessed yet/.test(text(d.querySelector(".main"))), "the What's being said page");
+ok(d.querySelector('.nav button[aria-current="page"]').textContent === "What's being said", "the rail shows where you are");
 w.location.hash = "#attention/E10000032";
-await until(() => /This needs Media Watch/.test(text(d.querySelector(".main"))), "the comparison page");
+await until(() => /comes in the next stage of the build/.test(text(d.querySelector(".main"))), "the comparison page");
 w.location.hash = "#about/E10000032";
 await until(() => /Sources & method/.test(text(d.querySelector(".main"))), "the method page");
 ok(/two different kinds of signal agree/.test(text(d.querySelector(".main"))) && !/About this demonstration/.test(text(d.querySelector(".main"))), "the method is explained");

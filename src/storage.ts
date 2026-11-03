@@ -6,6 +6,8 @@
 //   authorities/<code>/notes/<id>.json         impact notes
 //   authorities/<code>/forecasts.json          every forecast made, with its check date
 //   authorities/<code>/surveys/ and survey-*/  street surveys and their answers (see surveys.ts)
+//   authorities/<code>/sources.json            the sources an authority follows (see coverage.ts)
+//   authorities/<code>/assessments.json        its officers' assessments of what they've found
 //   system/survey-codes/<code>.json            which survey an access code opens
 
 import type { Config } from "./config";

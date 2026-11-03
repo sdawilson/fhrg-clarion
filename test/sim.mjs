@@ -162,6 +162,7 @@ CREATE TABLE maintenance_allocations (authority TEXT, authority_type TEXT, la_co
 CREATE TABLE census_age_sex_la (la_code TEXT, la_name TEXT, region TEXT, age_band TEXT, age_from INTEGER, age_to INTEGER, sex TEXT, people INTEGER);
 CREATE TABLE neighbourhoods (msoa_code TEXT, msoa_name TEXT, place_name TEXT, la_code TEXT, la_name TEXT, lat REAL, lng REAL, rural INTEGER, rural_class TEXT, people INTEGER, adults INTEGER, aged_16_34 INTEGER, aged_35_64 INTEGER, aged_65_plus INTEGER,
   households INTEGER, households_no_car INTEGER, workers INTEGER, drive INTEGER, walk_cycle INTEGER, bus_train INTEGER, imd_score REAL, imd_people INTEGER, people_most_deprived_20pct INTEGER, town_code TEXT, town_name TEXT);
+CREATE TABLE audience_rates (kind TEXT, source_type TEXT, measure TEXT, group_type TEXT, group_name TEXT, age_from INTEGER, age_to INTEGER, value REAL, unit TEXT, year TEXT, geography TEXT, base TEXT, publisher TEXT, publication TEXT, url TEXT, licence TEXT);
 CREATE TABLE towns (town_code TEXT, town_name TEXT, la_code TEXT, la_name TEXT, lat REAL, lng REAL, people INTEGER);
 CREATE TABLE neighbourhood_shapes (msoa_code TEXT, la_code TEXT, rings TEXT);
 `);
@@ -201,6 +202,21 @@ for (let col = 0; col < 6; col++) for (let row = 0; row < 4; row++) {
   const x = 0.05, y = 0.03;
   ins("neighbourhood_shapes", 3).run(code, "E10000032", JSON.stringify([[[lng - x, lat - y], [lng + x, lat - y], [lng + x, lat + y], [lng - x, lat + y], [lng - x, lat - y]]]));
 }
+
+// Published rates, in the different age bands the real sources use
+const rate = (measure, year, rows) => rows.forEach(([from, to, value]) => ins("audience_rates", 16).run("behaviour", "", measure, "age", `${from}`, from, to, value, "%", year, "England", "", "Test", "Test", "", "OGL"));
+const FIVES = (values) => values.map((v, i) => [16 + (i ? i * 5 - 1 : 0), i === 0 ? 19 : i === values.length - 1 ? null : 19 + i * 5, v]);
+rate("Read news in a local printed newspaper in the last 12 months", "2025/26", FIVES([8, 9, 10, 12, 14, 18, 20, 22, 24, 27, 31, 36, 39, 41, 40]));
+rate("Read news in a national printed newspaper in the last 12 months", "2025/26", FIVES([10, 12, 14, 15, 19, 22, 26, 28, 31, 36, 41, 48, 54, 56, 54]));
+rate("drive: holds a full car driving licence", "2025", [[17, 20, 32], [21, 29, 61], [30, 39, 72], [40, 49, 81], [50, 59, 84], [60, 69, 84], [70, null, 74]]);
+rate("walk: walks at least once a week, any purpose", "2023", [[16, 24, 71], [25, 34, 71], [35, 44, 69], [45, 54, 71], [55, 64, 71], [65, 74, 72], [75, 84, 61], [85, null, 36]]);
+rate("cycle: cycles at least once a week, any purpose", "2023", [[16, 24, 18], [25, 34, 17], [35, 44, 16], [45, 54, 12], [55, 64, 8], [65, 74, 5], [75, 84, 3], [85, null, 1]]);
+rate("complain/contact + petition: any civic participation in last 12 months (composite)", "2025/26 (Oct 2025 to Mar 2026)", [[16, 24, 28], [25, 34, 38], [35, 49, 41], [50, 64, 42], [65, 74, 43], [75, null, 34]]);
+rate("complain/contact + petition: any civic participation in last 12 months (composite)", "2024/25 (Oct 2024 to Mar 2025)", [[16, 24, 1], [25, null, 1]]);
+rate("complain/contact: Contacted my local council (ever in last few years)", "2025", [[16, 24, 9], [25, 34, 22], [35, 44, 38], [45, 54, 33], [55, 64, 24], [65, null, 31]]);
+
+// The search service: what a site has on a keyword. Tests fill this in, and each call is noted.
+export const search = { calls: [], hits: {}, status: 200 };
 
 export const lib = { queries: [], down: false };
 const OGL = "Contains public sector information licensed under the Open Government Licence v3.0.";
@@ -294,6 +310,12 @@ globalThis.fetch = async (input, init = {}) => {
     return new Response(sse(anthropic(body)), { status: 200, headers: { "content-type": "text/event-stream" } });
   }
   if (url.startsWith("https://builder.test")) return library(url, init);
+  if (url.startsWith("https://api.search.brave.com/")) {
+    search.calls.push({ url, headers: init.headers });
+    if (search.status !== 200) return new Response("{}", { status: search.status });
+    const q = new URL(url).searchParams.get("q");
+    return new Response(JSON.stringify({ web: { results: search.hits[q] ?? [] } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
   if (/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(url)) return realFetch(input, init); // the server under test
   if (hooks.fetch) { const r = await hooks.fetch(url, init); if (r) return r; }
   const r = publicSource(url);
