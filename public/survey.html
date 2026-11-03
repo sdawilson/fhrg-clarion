@@ -129,7 +129,8 @@ function codeScreen(message) {
 
 function closedScreen() {
   const n = queue().length;
-  frame(h("h1", {}, S.paused ? "This survey is paused" : "This survey is closed"), S.paused ? h("p", {}, "Street surveys stop during a pre-election period.") : null, n ? [h("p", { class: "bad" }, `${n} form${n === 1 ? " is" : "s are"} still on this tablet.`), h("p", {}, S.paused ? "They'll send when the pause ends. Open this page at least once a week until then, as some tablets clear what's held for sites they haven't visited." : "Ask your officer to open the survey again, then press the button below."), h("button", { class: "main-btn", type: "button", onclick: () => load() }, "Try again")] : h("p", {}, "Thank you. All your forms have been sent."));
+  const again = h("button", { class: "main-btn", type: "button", onclick: () => load() }, "Try again");
+  frame(h("h1", {}, S.paused ? "This survey is paused" : "This survey is closed"), S.paused ? h("p", {}, "Street surveys stop during a pre-election period.") : null, n ? [h("p", { class: "bad" }, `${n} form${n === 1 ? " is" : "s are"} still on this tablet.`), h("p", {}, S.paused ? "They'll send when the pause ends. Until then, open this page and press Try again at least once a week, as some tablets clear forms on sites they haven't used." : "Ask your officer to open the survey again, then press the button below."), again] : [h("p", {}, "Thank you. All your forms have been sent."), S.paused ? again : null]);
 }
 
 function startScreen() {

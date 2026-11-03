@@ -26,7 +26,7 @@
 //   POST /api/briefing/save        {code, id, updated, hidden, title, summary, feel, matters, questions, lines}: an officer's changes
 //   POST /api/briefing/approve     as save: a lead of the authority releases what's on their page, which fixes it
 //   POST /api/briefing/copy        {code, id}: a new draft from one
-//   POST /api/briefing/remove      {code, id}: only a draft
+//   POST /api/briefing/remove      {code, id, updated}: only a draft
 //   POST /api/briefing/word        {code, id}: a released briefing as a Word file
 //   POST /api/briefing/election    {code, on}: the pre-election setting
 //   POST /api/coverage/get         {code}: sources, assessments, and what's been read automatically
@@ -79,7 +79,7 @@ import { findTitles, saveTitles, titlesHeld } from "./abc";
 import { loadWorks, refreshWorks, turnOff, turnOn, worksPage } from "./works";
 import { enquiriesView, loadEnquiries, readNews, removeImport, saveImport, saveMatch, savePage } from "./enquiries";
 import { adminOverview, benchmark } from "./admin";
-import { PAUSED, approveBriefing, canApprove, copyBriefing, forReader, getBriefing, listBriefings, loadElection, removeBriefing, saveBriefing, setElection, startBriefing, wordCopy, type Briefing, type Election } from "./briefings";
+import { MAX_LISTED, PAUSED, approveBriefing, canApprove, copyBriefing, forReader, getBriefing, listBriefings, loadElection, removeBriefing, saveBriefing, setElection, startBriefing, wordCopy, type Briefing, type Election } from "./briefings";
 import { loadComparison } from "./comparison";
 import {
   FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
@@ -353,7 +353,7 @@ async function handleBriefingList(c: Config, request: Request): Promise<Response
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
   const [all, election] = await Promise.all([listBriefings(c, p.code), loadElection(c, p.code)]);
-  return json({ briefings: all.map(({ id, status, stage, created, by, title, approvedBy, approvedOn }) => ({ id, status, stage, created, by, title, approvedBy, approvedOn })), canEdit: canEdit(me, p), canApprove: canApprove(me, p), election });
+  return json({ briefings: all.map(({ id, status, stage, created, by, title, approvedBy, approvedOn }) => ({ id, status, stage, created, by, title, approvedBy, approvedOn })), canEdit: canEdit(me, p), canApprove: canApprove(me, p), election, more: all.length >= MAX_LISTED });
 }
 
 async function briefingFor(c: Config, request: Request): Promise<{ me: Member; p: Pilot; x: Briefing; election: Election }> {
@@ -554,7 +554,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/briefing/save": return await handleBriefingChange(c, request, (_me, p, b, election) => saveBriefing(c, p, b, election));
         case "/api/briefing/approve": return await handleBriefingChange(c, request, (me, p, b, election) => approveBriefing(c, me, p, b, election));
         case "/api/briefing/copy": return await handleBriefingChange(c, request, (me, p, b, election) => copyBriefing(c, me, p, b.id, election));
-        case "/api/briefing/remove": { const { p, b } = await editor(c, request, 1000); await removeBriefing(c, p, b.id); return json({ ok: true }); }
+        case "/api/briefing/remove": { const { p, b } = await editor(c, request, 1000); await removeBriefing(c, p, b); return json({ ok: true }); }
         case "/api/briefing/word": { const { x, election } = await briefingFor(c, request); return json(wordCopy(x, election)); }
         case "/api/briefing/election": { const me = await signedIn(c, request); const b = await readJsonBody(request, 1000); return json({ election: await setElection(c, me, pilotFor(me, b.code), b.on) }); }
         case "/api/facts/survey": return await handleFactsSurvey(c, request);

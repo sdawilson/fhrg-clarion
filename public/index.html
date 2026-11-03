@@ -369,7 +369,7 @@ const brand = () => h("div", { class: "brand-mark" }, "Clarion");
 const Demo = {
   pack: null, job: null,
   survey(id) { if (!Demo.pack.surveys[id]) throw new Error("That survey wasn't found."); return Demo.pack.surveys[id]; },
-  election: { on: false, by: "", at: "" }, brief: null,
+  election: { on: false, by: "", at: "" }, brief: null, withoutLines: false,
   saveBriefing(b) { Demo.briefing(); const { title, summary, feel, matters, questions, lines } = b; Object.assign(Demo.brief, Demo.election.on ? { title, summary, feel, matters } : { title, summary, feel, matters, questions, lines }); },
   briefing() {
     const b = Demo.brief ??= JSON.parse(JSON.stringify(Demo.pack.briefing)), on = Demo.election.on;
@@ -398,10 +398,10 @@ const Demo = {
       case "/api/note/list": return { notes: P.noteList };
       case "/api/briefing/list": return { briefings: [Demo.briefing().briefing], canEdit: true, canApprove: true, election: Demo.election };
       case "/api/briefing/get": return Demo.briefing();
-      case "/api/briefing/start": case "/api/briefing/copy": Demo.brief = null; return Demo.briefing();
+      case "/api/briefing/start": case "/api/briefing/copy": Demo.brief = null; Demo.withoutLines = false; return Demo.briefing();
       case "/api/briefing/save": Demo.saveBriefing(b); return Demo.briefing();
-      case "/api/briefing/approve": { Demo.saveBriefing(b); const { briefing } = Demo.briefing(); Demo.brief = { ...briefing, approvedBy: "Demo officer", approvedOn: new Date().toISOString().slice(0, 10) }; return Demo.briefing(); }
-      case "/api/briefing/word": return Demo.brief.lines.length && !Demo.election.on ? P.briefingWord : P.briefingWordElection;
+      case "/api/briefing/approve": { Demo.saveBriefing(b); const { briefing } = Demo.briefing(); Demo.brief = { ...briefing, approvedBy: "Demo officer", approvedOn: new Date().toISOString().slice(0, 10) }; Demo.withoutLines = Demo.election.on; return Demo.briefing(); }
+      case "/api/briefing/word": return Demo.election.on || Demo.withoutLines ? P.briefingWordElection : P.briefingWord;
       case "/api/briefing/election": Demo.election = { on: b.on, by: "Demo viewer", at: new Date().toISOString() }; return { election: Demo.election };
       case "/api/note/get": return { note: P.note };
       case "/api/reading/get": return { reading: P.authority.reading };
@@ -1338,12 +1338,13 @@ function noteBody(a, n) {
 // ---------------------------------------------------------------- councillor briefings
 const pausedNote = () => h("div", { class: "callout warn" }, h("strong", {}, "Pre-election period. "), "Street surveys are paused, so no forms can be printed or added. Forms on tablets stay there, and paper forms wait, until your lead turns the setting off on the Councillor briefings page.");
 const paragraphs = (text) => String(text || "").split(/\n+/).filter(Boolean).map((t) => h("p", {}, t));
-// Runs a button's action once at a time, however often it's clicked
-const once = (fn, fail) => async (ev) => {
+// Runs a button's action once at a time, however often it's clicked. Buttons sharing a lock wait for one another
+const once = (fn, fail, lock = {}) => async (ev) => {
+  if (lock.busy) return;
   const btn = ev.currentTarget;
-  btn.disabled = true;
+  lock.busy = true; btn.disabled = true;
   try { await fn(); } catch (e) { fail(e); }
-  btn.disabled = false;
+  lock.busy = false; btn.disabled = false;
 };
 async function briefingsView(page, a) {
   page.append(pageHead(`${a.name}: councillor briefings`, "A plain summary for cabinet members and scrutiny. Councillors don't need an account: an officer releases a briefing, then sends it through the council's own channels."));
@@ -1371,12 +1372,12 @@ async function briefingsView(page, a) {
     d.canEdit ? newCard() : null,
     h("section", { class: "card" }, h("h2", {}, "Briefings so far"), d.briefings.length ? d.briefings.map((x) => h("div", { class: "note-row" },
       h("div", { class: "row" }, h("a", { href: `#briefing/${a.code}/${x.id}` }, x.title), pill(x)),
-      h("div", { class: "note" }, x.approvedBy ? `Released on ${fmtDate(x.approvedOn)} by ${x.approvedBy}.` : `Drafted on ${fmtDate(x.created)} for ${x.by}.`))) : h("p", { class: "muted" }, "No briefings yet.")),
+      h("div", { class: "note" }, x.approvedBy ? `Released on ${fmtDate(x.approvedOn)} by ${x.approvedBy}.` : `Drafted on ${fmtDate(x.created)} for ${x.by}.`))) : h("p", { class: "muted" }, "No briefings yet."), d.more ? h("p", { class: "note" }, "Showing the latest 60. Older ones are kept: ask the FHRG team if you need one.") : null),
     d.canApprove ? electionCard() : null);
   draw();
 }
 
-const removeDraft = (a, b, bad) => (App.demo ? null : h("button", { class: "btn ghost", type: "button", onclick: once(async () => { clear(bad); await API.call("/api/briefing/remove", { code: a.code, id: b.id }); location.hash = `#briefings/${a.code}`; }, (e) => bad.append(failure(e))) }, "Delete this draft"));
+const removeDraft = (a, b, bad, lock) => (App.demo ? null : h("button", { class: "btn ghost", type: "button", onclick: once(async () => { clear(bad); await API.call("/api/briefing/remove", { code: a.code, id: b.id, updated: b.updated }); location.hash = `#briefings/${a.code}`; }, (e) => bad.append(failure(e)), lock) }, "Delete this draft"));
 async function briefingView(page, a, id) {
   const body = h("div", { class: "stack gap" }, loading("Loading the briefing…"));
   page.append(body);
@@ -1446,19 +1447,19 @@ function briefingForm(a, d, open) {
   b.questions.forEach(addQ); b.lines.forEach(addL);
   const values = () => ({ code: a.code, id: b.id, updated: b.updated, hidden: on, title: title.value, summary: summary.value, feel: feel.value, matters: matters.value,
     questions: [...questions.children].map((row) => ({ question: row.querySelector("input").value, answer: row.querySelector("textarea")?.value ?? "" })), lines: [...lines.querySelectorAll("textarea")].map((x) => x.value) });
-  const fail = (e) => bad.append(failure(e));
-  const save = once(async () => { clear(bad); said(msg, ""); b.updated = (await API.call("/api/briefing/save", values())).briefing.updated; said(msg, App.demo ? "In the demonstration, nothing is saved." : "Saved."); }, fail);
-  const release = once(async () => { clear(bad); said(msg, ""); open(await API.call("/api/briefing/approve", values())); }, fail);
+  const fail = (e) => bad.append(failure(e)), lock = {};
+  const save = once(async () => { clear(bad); said(msg, ""); b.updated = (await API.call("/api/briefing/save", values())).briefing.updated; said(msg, App.demo ? "In the demonstration, nothing is saved." : "Saved."); }, fail, lock);
+  const release = once(async () => { clear(bad); said(msg, ""); open(await API.call("/api/briefing/approve", values())); }, fail, lock);
   return [
     h("div", { class: "page-head" }, h("div", {}, h("span", { class: "eyebrow" }, `Councillor briefing for ${a.name}`), h("h1", {}, "Draft"), h("p", {}, `Drafted on ${fmtDate(b.created)} for ${b.by}. Check every line: it may be disclosed, so it should read as if published.`), h("p", { class: "print-only" }, "Draft, not released."))),
-    on ? h("div", { class: "callout warn" }, "Pre-election period: lines to take and suggested answers are hidden, and won't be in what's released.") : null,
+    on ? h("div", { class: "callout warn" }, "Pre-election period: lines to take and suggested answers are hidden, and won't be in what's released. Changing a question's wording clears its hidden answer, and emptying its box takes the question out.") : null,
     h("section", { class: "card stack" }, h("label", { class: "field" }, "Title", title), h("label", { class: "field" }, "Summary", summary), h("label", { class: "field" }, "How residents feel", feel), h("label", { class: "field" }, "Why it matters here", matters)),
     h("section", { class: "card stack" }, h("h2", {}, "Likely questions"), questions, on ? null : h("div", { class: "row" }, moreQ)),
     on ? null : h("section", { class: "card stack" }, h("h2", {}, "Factual lines"), lines, h("div", { class: "row" }, moreL)),
     sourcesCard(b),
     h("section", { class: "card stack" }, h("h2", {}, "Release"), bad,
       d.canApprove ? h("p", {}, "Releasing records your name and the date, and fixes this version as it stands on this page. You can then take it as Word or PDF.") : h("p", { class: "note" }, `Only a lead at ${a.name} can release this.`), msg,
-      h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: save }, "Save changes"), d.canApprove ? h("button", { class: "btn primary", type: "button", onclick: release }, "Release this briefing") : null, removeDraft(a, b, bad))),
+      h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: save }, "Save changes"), d.canApprove ? h("button", { class: "btn primary", type: "button", onclick: release }, "Release this briefing") : null, removeDraft(a, b, bad, lock))),
   ];
 }
 
@@ -1882,10 +1883,12 @@ function collectPart(top, a, d) {
     } }, "Prepare forms to print"))));
   const url = `${location.origin}/s/${s.access}`, m2 = saveNote();
   const open = h("section", { class: "card" }, h("h2", {}, "Tablets"));
-  if (d.paused) open.append(h("p", {}, "Tablets can't open this survey or send forms until the pause ends. Forms stay on each tablet, so open the link on each one at least once a week, as some tablets clear what's held for sites they haven't visited."));
+  if (s.status === "draft" && d.paused) open.append(h("p", {}, "This survey can't be opened until the pause ends."));
   else if (s.status === "draft") open.append(h("p", {}, "Opening the survey fixes its questions and gives interviewers a link. Nobody on the team needs an account."), h("p", { class: "note" }, `It's set to say it's run by ${s.collector}. Check that's right before any real fieldwork.`), m2, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => setStatus("open", m2) }, "Open the survey")));
-  else if (s.status === "open") open.append(h("p", {}, "Open this link on each tablet. It carries on without a signal, and sends the forms when it can."), h("div", { class: "link-box" }, url), h("p", { class: "note" }, `Interviewers can also go to ${location.origin}/s and type the code ${s.access}. Anyone with the code can add answers while the survey is open, so keep it to the team.`), m2,
-    h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("closed", m2) }, "Close the survey"), d.results.total ? null : h("button", { class: "btn ghost", type: "button", onclick: () => setStatus("draft", m2) }, "Back to draft")));
+  else if (s.status === "open") open.append(h("p", {}, d.paused ? "Tablets can't send forms until the pause ends, and new ones can't start. Forms stay on each tablet. Until then, open this link on each one and press Try again at least once a week, as some tablets clear forms on sites they haven't used." : "Open this link on each tablet. It carries on without a signal, and sends the forms when it can."), h("div", { class: "link-box" }, url), h("p", { class: "note" }, `Interviewers can also go to ${location.origin}/s and type the code ${s.access}. Anyone with the code can add answers while the survey is open, so keep it to the team.`),
+    d.paused ? null : h("p", { class: "note" }, "On an iPad, add the link to the home screen before fieldwork starts and use it from there, so that forms are kept if they have to wait."), d.results.total || d.paused ? null : h("p", { class: "note" }, "Back to draft changes the code, so forms still on tablets couldn't then be sent. Check none are waiting first."), m2,
+    h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("closed", m2) }, "Close the survey"), d.results.total || d.paused ? null : h("button", { class: "btn ghost", type: "button", onclick: () => setStatus("draft", m2) }, "Back to draft")));
+  else if (s.status === "closed" && d.paused) open.append(h("p", {}, "The survey is closed, and can't be opened again until the pause ends."));
   else if (s.status === "closed") open.append(h("p", {}, "The survey is closed, so the tablet link has stopped working. You can still add paper forms."), m2, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("open", m2) }, "Open it again")));
   top.append(open);
   if (s.status === "draft") return;

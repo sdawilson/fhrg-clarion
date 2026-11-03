@@ -33,7 +33,7 @@ export const canApprove = isOwnLead;
 const FIXED = "A released briefing can't be changed. Start a new draft from it.";
 const RELOAD = "Reload the page to see the latest version. Copy any wording you want to keep first.";
 const MAX_SURVEYS = 6;
-const MAX_LISTED = 60;
+export const MAX_LISTED = 60;
 const MAX_QUESTIONS = 6;
 const MAX_LINES = 6;
 const TEXT_CHARS = 5000;
@@ -68,7 +68,7 @@ const RULES = `This is a briefing for cabinet members and scrutiny councillors i
 - Stay neutral and factual. Section 2 of the Local Government Act 1986 bars publicity that seems designed to affect support for a party, so nothing here may praise, blame or defend a party, a councillor or a political decision.
 - Say where each claim comes from: the survey, the street survey, assessed press pieces, enquiries, fault reports or published figures.
 - Street survey results are indicative, and always say so.
-- Never name a resident, and don't repeat unverified claims about named people or firms.
+- Name no resident, councillor, MP or candidate, and don't repeat unverified claims about named people or firms.
 - Use only the material given. If it's thin, say so plainly rather than filling the gap.`;
 
 const finishTool = (election: boolean) => strictTool({
@@ -193,9 +193,13 @@ async function change(c: Config, p: Pilot, b: any, edit: (was: Briefing) => Brie
 function edited(was: Briefing, b: any, election: Election): Briefing {
   if (was.approvedBy) throw new FriendlyError(FIXED, 409);
   if ((b?.hidden === true) !== election.on) throw new FriendlyError(`The pre-election setting has changed since this page was opened. ${RELOAD}`, 409);
+  const title = cleanText(b?.title, 160), rows: any[] = Array.isArray(b?.questions) ? b.questions : [];
+  if (!title) throw new FriendlyError("Give this briefing a title.");
+  if (rows.some((q) => !text(q?.question, ITEM_CHARS) && text(q?.answer, ITEM_CHARS))) throw new FriendlyError("Each answer needs its question. Add the question, or remove that row.");
   return {
-    ...was, title: cleanText(b?.title, 160) || was.title, summary: text(b?.summary), feel: text(b?.feel), matters: text(b?.matters),
-    questions: election.on ? was.questions.map((q, i) => { const question = text(b?.questions?.[i]?.question, ITEM_CHARS); return question && question !== q.question ? { question, answer: "" } : q; }) : readQuestions(b?.questions, false),
+    ...was, title, summary: text(b?.summary), feel: text(b?.feel), matters: text(b?.matters),
+    // an emptied box takes its question out, as there's no Remove button during a period
+    questions: election.on ? was.questions.map((q, i) => { const question = text(rows[i]?.question, ITEM_CHARS); return question === q.question ? q : { question, answer: "" }; }).filter((q) => q.question) : readQuestions(rows, false),
     lines: election.on ? was.lines : readLines(b?.lines),
   };
 }
@@ -227,13 +231,14 @@ export async function copyBriefing(c: Config, me: Member, p: Pilot, id: unknown,
   return copy;
 }
 
-export async function removeBriefing(c: Config, p: Pilot, id: unknown): Promise<void> {
-  const path = filePath(c, p.code, safeId(id));
+export async function removeBriefing(c: Config, p: Pilot, b: any): Promise<void> {
+  const path = filePath(c, p.code, safeId(b?.id));
   await withLock(path, async () => {
-    const b = await loadJob<Briefing>(c, path);
-    if (!b) throw new FriendlyError("That briefing wasn't found.", 404);
-    if (b.status === "working") throw new FriendlyError("That briefing isn't finished yet.", 409);
-    if (b.approvedBy) throw new FriendlyError("A released briefing stays on record.", 409);
+    const was = await loadJob<Briefing>(c, path);
+    if (!was) throw new FriendlyError("That briefing wasn't found.", 404);
+    if (was.status === "working") throw new FriendlyError("That briefing isn't finished yet.", 409);
+    if (was.approvedBy) throw new FriendlyError("A released briefing stays on record.", 409);
+    if (b?.updated !== was.updated) throw new FriendlyError(`This briefing has changed since this page was opened. ${RELOAD}`, 409);
     await storageDelete(c, path);
   });
 }
