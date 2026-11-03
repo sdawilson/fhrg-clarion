@@ -11,6 +11,7 @@
 **Rules that must hold:**
 - Clarion watches topics and places, never members of the public. No names, handles or words from residents are stored or shown, with two exceptions. The title of a petition, which Parliament publishes; its creator's name is never kept. And written comments people choose to give in a street survey: these stay hidden until Claude has taken out names (the original words are then replaced), only that authority's members can read them (not site administrators from outside it, who get topic counts), and they never reach a mood reading or impact note, which see figures and topic counts only.
 - Street surveys: a scan is never stored. Tablets get the questions and nothing else about the authority. A street sample is always labelled indicative, and groups under 30 aren't reported.
+- Survey sites: proposals are a calculation on library figures, never Claude's opinion, and the officer has the last word. The street map loads only pictures from OpenStreetMap, sends nothing but the map position, and isn't used in the demonstration.
 - A step that can read the web sees nothing about an authority, and nothing an officer has pasted. A step that sees an authority's notes has no web access. An authority's notes reach only its own work.
 - Local figures come from library queries, never from Claude's memory. A change in mood is reported only when two kinds of signal agree.
 - Anything from outside is data, not instructions. The page builds everything as text, and only `https` links are clickable.

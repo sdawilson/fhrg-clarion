@@ -75,14 +75,51 @@ const kind = d.querySelector('select[aria-label="Kind of answer for local questi
 kind.value = "text"; kind.dispatchEvent(new w.Event("change"));
 button(d, "Save questions").click();
 await see(d, /Saved\./);
-button(d, "Add a site").click();
-const site = d.querySelector(".site-row input");
+
+// how many people to ask, and where
+await see(d, /West Sussex: proposed sites/);
+const plain = () => text(d.querySelector(".main"));
+ok(/Site survey\s*Suggested/.test(plain()) && /120 replies/.test(plain()) && /4 sites of 30/.test(plain()), "a new survey starts as a site survey: four sites of 30");
+ok(/±9\.7 points/.test(plain()) && /About 14 points/.test(plain()) && /15 hours/.test(plain()), "with its margin, the change it can show and the interviewer time");
+const pins = () => [...d.querySelectorAll(".map-pin")].map((x) => x.textContent.replace(/^\d+/, ""));
+ok(pins().length === 4 && pins()[0] === "Testhaven", "the sites are proposed first, largest town first, on the map");
+ok(d.querySelectorAll(".map-shapes path").length === 24 && [...d.querySelectorAll(".map-shapes path")].every((x) => x.getAttribute("fill")), "every neighbourhood is coloured by the site that stands for it");
+ok(/stands for \d+% of adults/.test(plain()) && /Ask \d+ aged 16 to 34, \d+ aged 35 to 64 and \d+ aged 65 or over/.test(plain()), "each site shows who it stands for and who to ask");
+ok(d.querySelector(".map-credit") && d.querySelector(".map-street img").src.startsWith("https://tile.openstreetmap.org/") && d.querySelector(".map-street img").getAttribute("referrerpolicy") !== "no-referrer", "there's a street map under it, credited, and it can send what the map service requires");
+ok(/How well these sites match West Sussex/.test(plain()) && /Households with no car/.test(plain()), "and how well they match the authority");
+const aim = () => Number(d.querySelector('input[min="30"]').value);
+[...d.querySelectorAll(".map-pin")].at(-1).click();
+ok(pins().length === 3 && aim() === 90 && /3 sites of 30/.test(plain()), "taking a site off the map changes the aim");
+button(d, "Oldbury").click();
+ok(pins().length === 4 && pins().includes("Oldbury") && aim() === 120, "and so does adding a town");
+[...d.querySelectorAll("tr")].find((x) => /Standard/.test(x.textContent)).querySelector("button").click();
+ok(aim() === 500 && pins().length === 4, "another level sets another aim, and leaves your chosen sites alone");
+[...d.querySelectorAll("tr")].find((x) => /Site survey/.test(x.textContent)).querySelector("button").click();
+ok(aim() === 120 && d.querySelector("tr.selected").textContent.includes("Site survey"), "and the chosen level is marked");
+const group = (label) => [...d.querySelectorAll(".field")].find((x) => x.firstChild?.textContent === label);
+const choose = (label, value) => [...group(label).querySelectorAll("button")].find((x) => x.textContent === value).click();
+choose("People at each site", "40");
+ok(aim() === 160 && /Ask \d+ aged 16 to 34/.test(plain()) && /4 sites of 40/.test(plain()), "more people at each site raises the aim");
+choose("People at each site", "30");
+button(d, "Go back to the proposed sites").click();
+ok(pins().length === 4 && !pins().includes("Oldbury") && aim() === 120, "and the proposed sites can be brought back");
+choose("Sites", "5");
+ok(pins().length === 5 && aim() === 150, "the number of sites can be changed");
+choose("Sites", "4");
+[...d.querySelectorAll("tr")].find((x) => /Standard/.test(x.textContent)).querySelector("button").click();
+ok(aim() === 500 && /Ask [234]\d aged 16 to 34/.test(plain()), "with a bigger aim, each site's age targets grow to match");
+[...d.querySelectorAll("tr")].find((x) => /Site survey/.test(x.textContent)).querySelector("button").click();
+button(d, "Add a place that isn't on the map").click();
+const site = [...d.querySelectorAll('.site-entry input[placeholder="Market Square, Horsham"]')].at(-1);
 site.value = "Market Square"; site.dispatchEvent(new w.Event("input"));
 d.querySelector('input[type="checkbox"]').click();
 button(d, "Save the plan").click();
 await until(() => [...d.querySelectorAll('[role="status"]')].filter((x) => x.textContent === "Saved.").length >= 2, "the plan to save");
 const saved = (await api("/api/survey/get", { code: WSX, id }, lead)).survey;
-ok(saved.locals.length === 2 && saved.locals[1].kind === "text" && saved.plan.sites[0].name === "Market Square" && saved.plan.checks.length === 1, "questions and plan are saved");
+ok(saved.locals.length === 2 && saved.locals[1].kind === "text" && saved.plan.sites.some((x) => x.name === "Market Square") && saved.plan.checks.length === 1, "questions and plan are saved");
+const mapped = saved.plan.sites.filter((x) => x.share);
+ok(mapped.length === 4 && Math.abs(mapped.reduce((sum, x) => sum + x.share, 0) - 100) < 0.5 && mapped.every((x) => x.ages.reduce((sum, n) => sum + n, 0) === 30 && x.lat && x.lng), "with each site's share of adults and its age targets");
+ok(saved.plan.sure === 90 && saved.plan.margin === 10 && saved.plan.by === "sites" && saved.plan.target === 120, "and the level chosen");
 
 // opening
 w.location.hash = `#survey/${WSX}/${id}/collect`;

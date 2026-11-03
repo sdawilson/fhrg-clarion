@@ -31,6 +31,7 @@
 //   POST /api/survey/new           {code, title, purpose}
 //   POST /api/survey/save          {code, id, title, purpose, locals, plan, collector, printedTo}
 //   POST /api/survey/status        {code, id, status}: open, closed or draft
+//   POST /api/survey/sites         {code}: neighbourhood figures, towns and proposed survey sites
 //   POST /api/survey/suggest       {code, id}: Claude suggests local questions (runs in the background)
 //   POST /api/survey/wording       {code, id}: Claude checks their wording (runs in the background)
 //   POST /api/survey/scan          {code, id, files}: Claude reads scanned forms (runs in the background)
@@ -57,6 +58,7 @@ import { getNote, listNotes, readInput, startNote } from "./notes";
 import { canEdit, canSee, isMember, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
 import { announcements, fixMyStreetUrl } from "./signals";
+import { loadSites } from "./sites";
 import { MAX_SCAN_CHARS, getHelp, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
   addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, createSurvey, formNumber, listSurveys, loadAnswers,
@@ -71,7 +73,7 @@ const PAGE_HEADERS: Record<string, string> = {
   "x-frame-options": "DENY",
   "x-robots-tag": "noindex, nofollow",
   "referrer-policy": "no-referrer",
-  "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+  "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
 };
 let page: string | null = null;
 let tabletPage: string | null = null;
@@ -251,7 +253,7 @@ async function handleSurveyGet(c: Config, request: Request): Promise<Response> {
   const edit = canEdit(me, p);
   const [rows, census, sorting] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id)]);
   return json({
-    ...surveyPage(s, rows, census, edit, isMember(me, p)),
+    ...surveyPage(s, rows, census, edit, isMember(me, p), p.constituencies.length),
     sorting: sorting?.status === "working" ? sorting : null, dropped: edit && sorting?.status === "ready" ? sorting.result?.dropped ?? 0 : 0,
   });
 }
@@ -415,6 +417,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/survey/new": return await handleSurveyNew(c, request);
         case "/api/survey/save": return await handleSurveySave(c, request);
         case "/api/survey/status": return await handleSurveyStatus(c, request);
+        case "/api/survey/sites": { const { p } = await editor(c, request, 1000); return json(await loadSites(c, p)); }
         case "/api/survey/suggest": { const { me, p, s } = await surveyEditor(c, request); return json({ job: await startSuggest(c, me, p, s) }); }
         case "/api/survey/wording": { const { me, p, s } = await surveyEditor(c, request); return json({ job: await startWording(c, me, p, s) }); }
         case "/api/survey/scan": { const { me, p, b, s } = await surveyEditor(c, request, MAX_SCAN_CHARS + 1000); return json({ job: await startScan(c, me, p, s, b.files) }); }

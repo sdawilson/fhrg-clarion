@@ -160,6 +160,10 @@ CREATE TABLE collisions (collision_index TEXT, collision_year INTEGER, date_iso 
 CREATE TABLE collision_casualties (collision_index TEXT, casualty_severity INTEGER);
 CREATE TABLE maintenance_allocations (authority TEXT, authority_type TEXT, la_code TEXT, funding_pot TEXT, fye INTEGER, years TEXT, amount_gbp REAL, note TEXT, source TEXT);
 CREATE TABLE census_age_sex_la (la_code TEXT, la_name TEXT, region TEXT, age_band TEXT, age_from INTEGER, age_to INTEGER, sex TEXT, people INTEGER);
+CREATE TABLE neighbourhoods (msoa_code TEXT, msoa_name TEXT, place_name TEXT, la_code TEXT, la_name TEXT, lat REAL, lng REAL, rural INTEGER, rural_class TEXT, people INTEGER, adults INTEGER, aged_16_34 INTEGER, aged_35_64 INTEGER, aged_65_plus INTEGER,
+  households INTEGER, households_no_car INTEGER, workers INTEGER, drive INTEGER, walk_cycle INTEGER, bus_train INTEGER, imd_score REAL, imd_people INTEGER, people_most_deprived_20pct INTEGER, town_code TEXT, town_name TEXT);
+CREATE TABLE towns (town_code TEXT, town_name TEXT, la_code TEXT, la_name TEXT, lat REAL, lng REAL, people INTEGER);
+CREATE TABLE neighbourhood_shapes (msoa_code TEXT, la_code TEXT, rings TEXT);
 `);
 const ins = (t, n) => db.prepare(`INSERT INTO ${t} VALUES (${Array(n).fill("?").join(",")})`);
 const AUTH = [["E10000032", "West Sussex", "South East", "County council"], ["E10000016", "Kent", "South East", "County council"], ["E10000030", "Surrey", "South East", "County council"],
@@ -183,6 +187,20 @@ ins("road_condition_la", 8).run("E10000004", "Bedfordshire", "East of England", 
 ins("road_treatment_la", 10).run("E10000004", "Bedfordshire", "East of England", "A", 2026, 500, 1, 2, 3, 40);
 for (const [pot, amount] of [["Baseline", 20720000], ["Incentive", 7583000], ["Total", 28303000]]) ins("maintenance_allocations", 9).run("West Sussex", "local highway authority", "E10000032", pot, 2027, "2026 to 2027", amount, "", "DfT");
 ins("maintenance_allocations", 9).run("West Sussex", "local highway authority", "E10000032", "Total", 2028, "2027 to 2028", 32904000, "", "DfT");
+
+// A made-up West Sussex: 24 neighbourhoods in a grid around six towns, with the real tables' columns
+const TOWNS = [["T1", "Testhaven", 1, 1, 100000], ["T2", "Seaton", 4, 1, 60000], ["T3", "Hilltop", 1, 3, 30000], ["T4", "Riverford", 4, 3, 20000], ["T5", "Oldbury", 2.6, 2, 12000], ["T6", "Marsh End", 5, 0, 9000], ["T7", "Smallville", 3, 0, 3000]];
+const spot = (col, row) => [-0.9 + col * 0.1, 50.8 + row * 0.06];
+TOWNS.forEach(([code, name, col, row, people]) => { const [lng, lat] = spot(col, row); ins("towns", 7).run(code, name, "E10000032", "West Sussex", lat, lng, people); });
+for (let col = 0; col < 6; col++) for (let row = 0; row < 4; row++) {
+  const [lng, lat] = spot(col, row), code = `M${col}${row}`;
+  const near = [...TOWNS].sort((a, b) => Math.hypot(a[2] - col, a[3] - row) - Math.hypot(b[2] - col, b[3] - row))[0], inside = Math.hypot(near[2] - col, near[3] - row) < 0.8;
+  const adults = 5000 + col * 300 + row * 200;
+  ins("neighbourhoods", 25).run(code, `West Sussex ${code}`, `Place ${code}`, "E10000032", "West Sussex", lat, lng, inside ? 0 : 1, inside ? "Urban" : "Rural", adults + 1000, adults, Math.round(adults * (0.2 + col * 0.02)), Math.round(adults * 0.5), Math.round(adults * (0.3 - col * 0.02)),
+    2500, 200 + row * 100, 3000, 1500 + col * 50, 300, 150, 12, adults, row === 0 ? 900 : 0, inside ? near[0] : null, inside ? near[1] : null);
+  const x = 0.05, y = 0.03;
+  ins("neighbourhood_shapes", 3).run(code, "E10000032", JSON.stringify([[[lng - x, lat - y], [lng + x, lat - y], [lng + x, lat + y], [lng - x, lat + y], [lng - x, lat - y]]]));
+}
 
 export const lib = { queries: [], down: false };
 const OGL = "Contains public sector information licensed under the Open Government Licence v3.0.";

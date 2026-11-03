@@ -63,6 +63,13 @@ ok(street.responses === 412 && street.satisfied > 20 && street.satisfied < 45, "
 ok(JSON.stringify(t.buildPack()) === packText, "and building it again gives the same figures");
 ok(page.topics.find((x) => x.topic === "Potholes").count === 10 && pack.attention.topics.find((x) => x.topic === "Potholes").replies === 10, "the comments and the comparison agree");
 
+// ---- the demonstration's map is as made up as the rest of it
+const places = pack.sites.towns.map((x) => x.name);
+ok(pack.sites.ready && pack.sites.tiles === false && places.includes("Northbridge") && pack.sites.proposals[4].length === 4, "the demonstration proposes sites from the same sums, with no street map");
+ok(pack.sites.hoods.every((m) => m[0] > 2 && m[1] > 54), "its map sits out at sea, so it can't land on a real place");
+const planned = Object.values(pack.surveys)[0].survey.plan.sites;
+ok(planned.length === 4 && planned.every((x) => places.includes(x.name) && x.share > 0), "and its survey's sites are the ones proposed");
+
 // ---- the demonstration in the browser
 const before = store.size, spendCalls = claude.calls.length;
 let dom = await open("/demo"), d = dom.window.document, w = dom.window;
