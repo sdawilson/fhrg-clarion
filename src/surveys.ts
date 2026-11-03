@@ -317,7 +317,7 @@ export function readCsv(text: string): Incoming[] {
 // ----- targets and weights, from Census 2021
 
 export type Census = { cells: Record<string, number>; adults: number };
-const cellKey = (age: string, sex: string) => `${age}|${sex}`;
+export const cellKey = (age: string, sex: string) => `${age}|${sex}`;
 const ageBand = (from: number) => AGES.find(([, a, b]) => from >= a && from <= b)?.[0];
 
 export async function loadCensus(c: Config, code: string): Promise<Census | null> {
@@ -506,24 +506,46 @@ const pctOf = (r: Results, id: string, labels: string[]) => {
   return !q || q.held ? null : round(q.options.filter((o) => labels.includes(o.label)).reduce((sum, o) => sum + o.pct, 0));
 };
 
-// Every survey with enough answers to report, for this authority's own evidence. It holds figures and topic
-// counts only: residents' words stay on the survey's own page.
+// A survey with enough answers to the main question to report. Figures and topic counts only: residents' words
+// stay on the survey's own page.
+export function summarise(s: Survey, all: Answer[], census: Census | null): StreetSummary | null {
+  const rows = all.filter((r) => !r.excluded);
+  const results = surveyResults(s, rows, census);
+  const satisfied = pctOf(results, "c1", [...SATISFIED]);
+  if (satisfied === null) return null;
+  return {
+    title: s.title, id: s.id, status: s.status, ran: s.openedOn, current: Date.now() - Date.parse(s.updated) < CURRENT_DAYS * DAY_MS, responses: results.used, weighted: results.weighted,
+    satisfied, dissatisfied: pctOf(results, "c1", [...DISSATISFIED]), better: pctOf(results, "c2", ["Better"]), worse: pctOf(results, "c2", ["Worse"]), blameCouncil: pctOf(results, "c4", ["The local council"]),
+    topics: topicCounts(cleanComments(s, rows)).slice(0, 6),
+    note: "A street sample, not a random one, so this is indicative only.",
+  };
+}
+
 export async function streetSummaries(c: Config, code: string): Promise<StreetSummary[]> {
   const surveys = (await listSurveys(c, code)).filter((s) => s.status !== "draft");
   if (!surveys.length) return [];
   const census = await loadCensus(c, code);
   const out: StreetSummary[] = [];
   for (const s of surveys) {
-    const rows = (await loadAnswers(c, code, s.id)).filter((r) => !r.excluded);
-    const results = surveyResults(s, rows, census);
-    const satisfied = pctOf(results, "c1", [...SATISFIED]);
-    if (satisfied === null) continue; // too few answers to the main question to say anything
-    out.push({
-      title: s.title, id: s.id, status: s.status, ran: s.openedOn, current: Date.now() - Date.parse(s.updated) < CURRENT_DAYS * DAY_MS, responses: results.used, weighted: results.weighted,
-      satisfied, dissatisfied: pctOf(results, "c1", [...DISSATISFIED]), better: pctOf(results, "c2", ["Better"]), worse: pctOf(results, "c2", ["Worse"]), blameCouncil: pctOf(results, "c4", ["The local council"]),
-      topics: topicCounts(cleanComments(s, rows)).slice(0, 6),
-      note: "A street sample, not a random one, so this is indicative only.",
-    });
+    const summary = summarise(s, await loadAnswers(c, code, s.id), census);
+    if (summary) out.push(summary);
   }
-  return out;
+  return out.sort((a, b) => b.ran.localeCompare(a.ran)); // the latest to go into the field comes first
+}
+
+// Everything a survey's page shows. `edit`: a lead or site administrator. `own`: a member of the authority, the
+// only people who get the words of a comment. Topic counts go to everyone who can see the survey.
+export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edit: boolean, own: boolean) {
+  const used = rows.filter((r) => !r.excluded);
+  const cleaned = cleanComments(s, used);
+  const comments = own ? cleaned : [];
+  const numbers = rows.map((r) => Number(r.form)).filter(Number.isInteger);
+  return {
+    survey: edit ? s : { ...s, access: "" }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS,
+    template: edit ? templateCsv(s) : "",
+    census: census ? { adults: census.adults } : null, targets: ageSexTargets(census, s.plan.target),
+    results: surveyResults(s, rows, census), topics: topicCounts(cleaned), comments, ownComments: own, waiting: waitingComments(s, used),
+    problems: edit ? findProblems(s, rows) : [], excluded: edit ? rows.filter((r) => r.excluded).map((r) => ({ n: r.n, form: r.form })) : [],
+    sample: edit && own ? commentSample(comments) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1,
+  };
 }

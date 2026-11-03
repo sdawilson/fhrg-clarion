@@ -46,7 +46,7 @@ const see = (d, pattern) => until(() => pattern.test(text(d.querySelector(".main
 // ---- starting a survey
 let dom = await open(lead, `#surveys/${WSX}`), d = dom.window.document, w = dom.window;
 await see(d, /No surveys yet/);
-ok(button(d, "Street surveys").getAttribute("aria-selected") === "true", "Street surveys has its own tab");
+ok(button(d, "Street surveys").getAttribute("aria-current") === "page", "Street surveys has its own section");
 let f = d.querySelector(".card form");
 f.querySelector("input").value = "Autumn roads";
 f.querySelector("textarea").value = "How people feel about the A27 works.";
@@ -264,9 +264,12 @@ await see(d, /Indicative only/);
 button(d, "Download the answers").click();
 await until(() => w.downloaded, "the download");
 ok((await w.downloaded.text()).includes("form,site,entered_by,weight"), "a lead can download the answers");
-w.location.hash = `#a/${WSX}`;
+w.location.hash = `#evidence/${WSX}`;
 await see(d, /Street samples aren't random/);
 ok(d.querySelector(`a[href="#survey/${WSX}/${id}/results"]`), "the authority's page links to the survey");
+w.location.hash = `#a/${WSX}`;
+await see(d, /Satisfied with roads and pavements/);
+ok(/Indicative/.test(text(d.querySelector(".main"))), "and the summary leads with its result, labelled indicative");
 
 dom = await open(boss, `#survey/${WSX}/${id}/results`); d = dom.window.document;
 await see(d, /The comments themselves stay with the authority/);

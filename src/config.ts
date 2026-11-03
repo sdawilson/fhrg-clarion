@@ -19,7 +19,7 @@
 //              WEB_SEARCH_MAX (default 4: searches in each step of reading an announcement, of which there
 //              are at most 5), DATA_QUERIES_MAX (default 8: library queries per impact note),
 //              DAILY_JOBS_MAX (default 20: readings and notes per authority per day; site administrators
-//              aren't limited)
+//              aren't limited), DEMO (on, the default, or off: the Northbridge demonstration at /demo)
 
 import process from "node:process";
 
@@ -43,6 +43,7 @@ export type Config = {
   webMax: number;
   dataMax: number;
   dailyJobsMax: number;
+  demo: boolean;
 };
 
 // Settings are pasted in by hand, so be forgiving: ignore stray spaces, invisible characters and
@@ -62,7 +63,7 @@ function env(name: string, fallback = "", keepEmpty = false): string {
 
 // For the start-up log: which settings arrived (names only, never values)
 const SECRET_SETTINGS = ["ANTHROPIC_API_KEY", "STORAGE_ACCESS_KEY", "WEBSITE_DATABASE_URL", "WEBSITE_DATABASE_AUTH_TOKEN", "SESSION_SECRET", "SSO_SECRET", "FHRG_REF_KEY"];
-const VARIABLE_SETTINGS = ["STORAGE_ZONE", "STORAGE_HOST", "ROOT_FOLDER", "WEBSITE_URL", "SITE_ADMINS", "CLAUDE_MODEL", "CLAUDE_EFFORT", "FHRG_REF_URL", "MONTHLY_CAP_USD", "WEB_SEARCH_MAX", "DATA_QUERIES_MAX", "DAILY_JOBS_MAX"];
+const VARIABLE_SETTINGS = ["STORAGE_ZONE", "STORAGE_HOST", "ROOT_FOLDER", "WEBSITE_URL", "SITE_ADMINS", "CLAUDE_MODEL", "CLAUDE_EFFORT", "FHRG_REF_URL", "DEMO", "MONTHLY_CAP_USD", "WEB_SEARCH_MAX", "DATA_QUERIES_MAX", "DAILY_JOBS_MAX"];
 
 function folder(name: string, fallback: string): string {
   const f = env(name, fallback, true).replace(/^\/+|\/+$/g, "");
@@ -97,6 +98,7 @@ export function getConfig(): Config {
     webMax: num("WEB_SEARCH_MAX", 4, 1, 10),
     dataMax: num("DATA_QUERIES_MAX", 8, 1, 20),
     dailyJobsMax: num("DAILY_JOBS_MAX", 20, 1, 500),
+    demo: !/^(0|no|false|off)$/i.test(env("DEMO", "on")),
   };
 }
 

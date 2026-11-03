@@ -4,6 +4,12 @@ Clarion gauges how the public in each local highway authority feels about its ro
 
 It runs as one Node program in a bunny.net Magic Container. Members sign in with their FHRG website account. To set it up, follow **[SETUP.md](SETUP.md)**.
 
+## Three modes
+
+- **Demonstration:** `/demo` opens Northbridge, a fictional authority with made-up data. No account, no calls to Claude, and nothing is saved.
+- **One authority:** members sign in with their FHRG account and see their own authority. Leads can run surveys and add results.
+- **FHRG administrators:** site administrators start on all authorities, with figures and topic counts only, listed alphabetically and never ranked. They can open any authority, but written comments stay with that authority's members.
+
 ## What it does so far
 
 For the pilot authorities (Lincolnshire, Kirklees and West Sussex):
@@ -27,6 +33,8 @@ For the pilot authorities (Lincolnshire, Kirklees and West Sussex):
 | `src/evidence.ts` | Everything held on an authority |
 | `src/reading.ts`, `src/notes.ts` | The mood reading and the impact note |
 | `src/surveys.ts`, `src/surveyai.ts` | Street surveys, and what Claude does for them |
+| `src/demo.ts` | The Northbridge demonstration's made-up data |
+| `src/admin.ts` | The position across all authorities |
 | `src/claude.ts`, `src/jobs.ts`, `src/style.ts` | Claude, background jobs, and the house style |
 | `public/index.html` | The page (it ships with the server) |
 | `public/survey.html` | The tablet page for interviewers, at `/s/<code>` |

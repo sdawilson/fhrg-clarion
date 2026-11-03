@@ -12,6 +12,7 @@ export type Pilot = {
   code: string; // ONS code, as used across the reference library
   name: string;
   kind: string;
+  region: string;
   strategicAuthority: string;
   fundingRoute: string;
   rating: { overall: string; condition: string; spend: string; bestPractice: string; published: string; url: string };
@@ -32,7 +33,7 @@ export { ALLOCATIONS_URL };
 
 export const PILOTS: Pilot[] = [
   {
-    code: "E10000019", name: "Lincolnshire", kind: "County council", strategicAuthority: "Greater Lincolnshire Combined Authority",
+    code: "E10000019", name: "Lincolnshire", kind: "County council", region: "East Midlands", strategicAuthority: "Greater Lincolnshire Combined Authority",
     fundingRoute: "DfT's highways maintenance money is paid through the combined authority, not directly to the county council.",
     rating: { overall: "Amber", condition: "Amber", spend: "Amber", bestPractice: "Amber", published: "January 2026", url: RATINGS_URL },
     fixMyStreetArea: "Lincolnshire", reportingRoute: "FixMyStreet is the council's own reporting system, so its public feed shows most reports.",
@@ -45,7 +46,7 @@ export const PILOTS: Pilot[] = [
     needed: ["The 2025 NHT survey report"],
   },
   {
-    code: "E08000034", name: "Kirklees", kind: "Metropolitan borough", strategicAuthority: "West Yorkshire Combined Authority",
+    code: "E08000034", name: "Kirklees", kind: "Metropolitan borough", region: "Yorkshire and The Humber", strategicAuthority: "West Yorkshire Combined Authority",
     fundingRoute: "DfT's highways maintenance money is paid through West Yorkshire Combined Authority's settlement, not directly to Kirklees.",
     rating: { overall: "Amber", condition: "Amber", spend: "Green", bestPractice: "Amber", published: "January 2026", url: RATINGS_URL },
     fixMyStreetArea: "Kirklees", reportingRoute: "Few reports reach FixMyStreet's public feed, so its counts aren't a good signal here. Clarion needs the council's own fault report counts.",
@@ -58,7 +59,7 @@ export const PILOTS: Pilot[] = [
     needed: ["Any NHT or residents' survey results", "Fault report counts by category and month"],
   },
   {
-    code: "E10000032", name: "West Sussex", kind: "County council", strategicAuthority: "",
+    code: "E10000032", name: "West Sussex", kind: "County council", region: "South East", strategicAuthority: "",
     fundingRoute: "DfT pays West Sussex directly: £28.303m for 2026/27, of which £7.583m is incentive funding.",
     rating: { overall: "Amber", condition: "Amber", spend: "Green", bestPractice: "Amber", published: "January 2026", url: RATINGS_URL },
     fixMyStreetArea: "West+Sussex", reportingRoute: "The main reporting route is Love West Sussex, so FixMyStreet's public feed shows only part of the picture. Clarion needs the council's own fault report counts.",
