@@ -35,7 +35,7 @@
 //   POST /api/abc/find             {code, q}: titles in ABC's register that match what's been typed
 //   POST /api/abc/status           ABC titles held (site administrators)
 //   POST /api/abc/save             {text}: ABC's table, pasted (site administrators)
-//   POST /api/attention            {code}: the comparison, which comes in a later stage
+//   POST /api/attention            {code}: each topic by public concern and media attention
 //   POST /api/admin/overview       site administrators: the position across all authorities
 //   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: leads and admins
 //   POST /api/facts/notes          {code, notes}: leads and admins
@@ -66,6 +66,7 @@ import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member }
 import { findTitles, saveTitles, titlesHeld } from "./abc";
 import { enquiriesView, loadEnquiries, readNews, removeImport, saveImport, saveMatch, savePage } from "./enquiries";
 import { adminOverview, benchmark } from "./admin";
+import { loadComparison } from "./comparison";
 import {
   FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
   removeAssessment, removeSource, saveAssessment, saveSource, summarise, withWeights, type Rate,
@@ -154,12 +155,10 @@ async function handleAuthority(c: Config, request: Request): Promise<Response> {
   });
 }
 
-// The comparison comes in a later stage. The route is here so the page has one way to ask.
-async function handleNotYet(c: Config, request: Request): Promise<Response> {
+async function handleAttention(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
-  pilotFor(me, b.code);
-  return json({ ready: false });
+  return json(await loadComparison(c, pilotFor(me, b.code)));
 }
 
 async function handleCoverage(c: Config, request: Request): Promise<Response> {
@@ -492,7 +491,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/note/list": return await handleNoteList(c, request);
         case "/api/facts/survey": return await handleFactsSurvey(c, request);
         case "/api/facts/notes": return await handleFactsNotes(c, request);
-        case "/api/attention": return await handleNotYet(c, request);
+        case "/api/attention": return await handleAttention(c, request);
         case "/api/enquiries/get": return await handleEnquiries(c, request);
         case "/api/enquiries/import": { const { me, p, b } = await editor(c, request, 3000000); return json({ import: await saveImport(c, me, p, b) }); }
         case "/api/enquiries/remove": { const { p, b } = await editor(c, request, 1000); await removeImport(c, p, b.id); return json({ ok: true }); }

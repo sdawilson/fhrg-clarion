@@ -2,6 +2,7 @@
 // and public signals. Code gathers this, not Claude, so a reading or note starts from checked material.
 
 import type { Config } from "./config";
+import { ownSignals, type Contacts, type Said } from "./comparison";
 import { loadFigures, type Figures } from "./library";
 import type { Pilot, SurveyResult } from "./pilots";
 import { loadSignals, type Signals } from "./signals";
@@ -48,7 +49,7 @@ export async function saveNotes(c: Config, code: string, notes: unknown, by: str
   });
 }
 
-export type Evidence = { figures: Figures; signals: Signals; surveys: SurveyResult[]; streets: StreetSummary[]; gaps: string[]; gathered: string };
+export type Evidence = { figures: Figures; signals: Signals; surveys: SurveyResult[]; streets: StreetSummary[]; said?: Said[]; contacts?: Contacts[]; gaps: string[]; gathered: string };
 
 export function findGaps(p: Pilot, surveys: SurveyResult[], signals: Signals, figures: Figures, hasStreetSurvey = false): string[] {
   const gaps = [...p.needed.filter((n) => !(surveys.length && /survey/i.test(n)))];
@@ -66,19 +67,21 @@ export async function loadEvidence(c: Config, p: Pilot, facts: Facts): Promise<E
   const surveys: SurveyResult[] = [...p.surveys, ...facts.surveys].sort((a, b) => b.year - a.year);
   // read fresh each time, because answers arrive through the day
   const streets = await streetSummaries(c, p.code).catch((e) => { console.log(`[warn] street surveys: ${(e as Error).message}`); return [] as StreetSummary[]; });
-  return { figures, signals, surveys, streets, gaps: findGaps(p, surveys, signals, figures, streets.length > 0), gathered: new Date().toISOString() };
+  const { said, contacts } = await ownSignals(c, p).catch((e) => { console.log(`[warn] own signals: ${(e as Error).message}`); return { said: [] as Said[], contacts: [] as Contacts[] }; });
+  return { figures, signals, surveys, streets, said, contacts, gaps: findGaps(p, surveys, signals, figures, streets.length > 0), gathered: new Date().toISOString() };
 }
 
-// The kinds of signal Clarion really holds. Pulse questions and press or social media come in later stages of
-// the build, so they can't count yet. A national petition only says something about this authority if it draws
-// more than a fair share of its signatures from here.
+// The kinds of signal Clarion really holds. Pulse questions come in a later stage of the build, so they can't count
+// yet. A national petition only says something about this authority if it draws more than a fair share of its
+// signatures from here. Assessed pieces are open talk, and an authority's own enquiries are actions.
 export function kindsHeld(e: Evidence): string[] {
   const s = e.signals;
   return [
     ...(e.surveys.length ? ["survey"] : []),
     ...(e.streets?.some((x) => x.current) ? ["street survey"] : []),
-    ...(s.fixMyStreet.ok && s.fixMyStreet.data?.reports ? ["actions"] : []),
+    ...((s.fixMyStreet.ok && s.fixMyStreet.data?.reports) || e.contacts?.length ? ["actions"] : []),
     ...((s.petitions.ok && s.petitions.data?.some((p) => p.localShare > p.fairShare)) || (s.questions.ok && s.questions.data?.length) ? ["representatives"] : []),
+    ...(e.said?.length ? ["open talk"] : []),
   ];
 }
 
@@ -93,6 +96,8 @@ export function briefing(p: Pilot, e: Evidence, facts: Facts): Record<string, un
     ...(e.streets.length ? { street_surveys: e.streets.map(({ id: _id, ...rest }) => rest) } : {}),
     published_figures: e.figures,
     public_signals: { fix_my_street: e.signals.fixMyStreet.data, petitions: e.signals.petitions.data, mps_written_questions: e.signals.questions.data },
+    ...(e.said?.length ? { assessed_press_and_media_last_four_weeks: e.said } : {}),
+    ...(e.contacts?.length ? { enquiries_and_complaints_latest_month: e.contacts } : {}),
     missing_evidence: e.gaps,
     ...(facts.notes ? { officer_notes: facts.notes } : {}),
   };
