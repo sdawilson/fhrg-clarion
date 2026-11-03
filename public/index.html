@@ -155,6 +155,51 @@ progress.bar { width: 100%; height: 6px; accent-color: var(--accent); }
 .note-row:last-child { border-bottom: 0; }
 .field textarea { width: 100%; }
 .busy { display: grid; gap: 10px; place-items: center; min-height: 100%; align-content: center; }
+/* street surveys */
+.q-list { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; }
+.local { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); }
+.site-row { display: grid; gap: 8px; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr) auto; align-items: end; }
+@media (max-width: 640px) { .site-row { grid-template-columns: minmax(0, 1fr); } }
+.link-box { padding: 10px 12px; border: 1.5px solid var(--line-2); border-radius: var(--radius-sm); background: var(--bg); overflow-wrap: anywhere; font-weight: 700; }
+.entry-row { display: grid; gap: 4px 12px; grid-template-columns: minmax(0, 3fr) 5rem minmax(0, 2fr); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.entry-row.wide { grid-template-columns: minmax(0, 1fr); }
+.entry-row input { border: 1.5px solid var(--line-2); border-radius: var(--radius-sm); padding: 5px 8px; background: var(--surface); text-align: center; width: 100%; }
+.entry-row textarea { border: 1.5px solid var(--line-2); border-radius: var(--radius-sm); padding: 5px 8px; background: var(--surface); width: 100%; }
+.entry-row .echo { font-size: 0.88rem; color: var(--ink-2); min-height: 1.3em; }
+.entry-row .echo.bad { color: var(--crit-ink); font-weight: 600; }
+@media (max-width: 640px) { .entry-row { grid-template-columns: minmax(0, 1fr); } }
+.scan-form { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.unclear select, .unclear textarea { border-color: var(--warn); border-width: 2.5px; }
+table.answers { table-layout: fixed; }
+.answers th:nth-child(2), .answers th:nth-child(3) { width: 5.5rem; }
+.answers th:nth-child(4) { width: 34%; }
+.meter { height: 8px; min-width: 60px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--s1); border-radius: 0 4px 4px 0; }
+.comment { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.comment:last-child { border-bottom: 0; }
+.sheets { display: grid; gap: 16px; }
+.sheet { background: #fff; color: #111; padding: 12mm; border: 1px solid var(--line); max-width: 210mm; font-size: 10.5pt; line-height: 1.32; display: grid; gap: 7px; }
+.sheet h2 { font-size: 13pt; color: #111; }
+.sheet h3 { font-size: 10.5pt; color: #111; margin-top: 3px; }
+.sheet-head { display: flex; justify-content: space-between; gap: 14px; border-bottom: 1.5pt solid #111; padding-bottom: 5px; }
+.sheet-no { text-align: right; white-space: nowrap; font-weight: 700; }
+.sheet-note { font-size: 8.5pt; }
+.sheet-q { break-inside: avoid; display: grid; gap: 2px; }
+.sheet-q > strong { font-weight: 700; }
+.sheet-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 12px; }
+.sheet-opt { display: flex; gap: 6px; align-items: center; }
+.sheet-box { flex: none; width: 3.6mm; height: 3.6mm; border: 0.9pt solid #111; }
+.sheet-lines { height: 15mm; border: 0.9pt solid #111; }
+.sheet-back { display: grid; gap: 7px; margin-top: 8px; }
+.sheet-site { display: flex; gap: 6px; align-items: flex-end; }
+.sheet-site span { flex: 1; border-bottom: 0.9pt solid #111; height: 5mm; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  .page, .sheets { display: block; max-width: none; }
+  .sheet { border: 0; padding: 0; max-width: none; break-after: page; }
+  .sheet:last-child { break-after: auto; }
+  .sheet-back { break-before: page; margin-top: 0; }
+}
 .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--navy-deep); color: #fff; padding: 8px 14px; border-radius: 8px; z-index: 60; }
 @media print {
   .rail, .topbar, .no-print { display: none !important; }
@@ -186,6 +231,8 @@ function h(tag, attrs, ...kids) {
   return el;
 }
 const clear = (el) => { el.replaceChildren(); return el; };
+// append, for lists and for parts that may not be there
+const add = (el, ...kids) => { el.append(...kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false)); return el; };
 const fmt = (n, places = 0) => (Number.isFinite(n) ? n.toLocaleString("en-GB", { maximumFractionDigits: places }) : "–");
 const pounds = (n) => `£${(n / 1e6).toLocaleString("en-GB", { maximumFractionDigits: 3 })}m`;
 function fmtDate(iso) { if (!iso) return ""; const d = new Date(String(iso).slice(0, 10) + "T12:00:00Z"); return isNaN(d) ? String(iso) : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); }
@@ -262,7 +309,8 @@ function authScreen(message) {
 }
 
 // ---------------------------------------------------------------- shell ------
-// The address says where you are: #a/<code>, #notes/<code>, #note/<code>/<id>
+// The address says where you are: #a/<code>, #notes/<code>, #note/<code>/<id>, #surveys/<code>,
+// #survey/<code>/<id>/<part>, #print/<code>/<id>/<first form>/<last form>
 function route() {
   if (!App.status) return;
   App.route = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
@@ -289,11 +337,15 @@ function shell() {
   if (!current) { page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Choose an authority"), h("p", {}, "Clarion gauges how the public feels about its roads, and how news changes that."))), h("div", { class: "stack" }, list.map((a) => h("button", { class: "btn", type: "button", onclick: () => { location.hash = `#a/${a.code}`; } }, a.name)))); return; }
   if (view === "note" && id) return noteView(page, current, id);
   if (view === "notes") return notesView(page, current);
+  if (view === "surveys") return surveysView(page, current);
+  if (view === "survey" && id) return surveyView(page, current, id, App.route[3]);
+  if (view === "print" && id) return printView(page, current, id, Number(App.route[3]), Number(App.route[4]));
   return authorityView(page, current);
 }
 const tabs = (a, on) => h("div", { class: "tab-row no-print", role: "tablist" },
   h("button", { type: "button", "aria-selected": on === "a" ? "true" : "false", onclick: () => { location.hash = `#a/${a.code}`; } }, "Mood and evidence"),
-  h("button", { type: "button", "aria-selected": on === "notes" ? "true" : "false", onclick: () => { location.hash = `#notes/${a.code}`; } }, "Impact notes"));
+  h("button", { type: "button", "aria-selected": on === "notes" ? "true" : "false", onclick: () => { location.hash = `#notes/${a.code}`; } }, "Impact notes"),
+  h("button", { type: "button", "aria-selected": on === "surveys" ? "true" : "false", onclick: () => { location.hash = `#surveys/${a.code}`; } }, "Street surveys"));
 const failure = (e) => h("div", { class: "callout crit", role: "alert" }, e.message);
 const loading = (text) => h("p", { class: "muted", role: "status" }, text);
 
@@ -381,6 +433,9 @@ function surveyCard(a, d) {
     d.authority.surveyNote ? h("p", {}, d.authority.surveyNote) : null,
     rows.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Year"), h("th", {}, "Measure"), h("th", { class: "r" }, "Score"), h("th", { class: "r" }, "Replies"), h("th", {}, "Source"))),
       h("tbody", {}, rows.map((s) => h("tr", {}, h("td", {}, s.year), h("td", {}, s.measure), h("td", { class: "r" }, `${s.score} / ${s.outOf}`), h("td", { class: "r" }, s.responses ? fmt(s.responses) : "–"), h("td", {}, link(s.url, s.source))))))) : null);
+  if (d.evidence.streets.length) box.append(h("h3", {}, "Street surveys"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Survey"), h("th", { class: "r" }, "Replies"), h("th", { class: "r" }, "Satisfied"), h("th", { class: "r" }, "Dissatisfied"))),
+    h("tbody", {}, d.evidence.streets.map((x) => h("tr", {}, h("td", {}, h("a", { href: `#survey/${a.code}/${x.id}/results` }, x.title)), h("td", { class: "r" }, fmt(x.responses)), h("td", { class: "r" }, x.satisfied === null ? "–" : `${fmt(x.satisfied)}%`), h("td", { class: "r" }, x.dissatisfied === null ? "–" : `${fmt(x.dissatisfied)}%`)))))),
+    h("p", { class: "note" }, "Street samples aren't random, so these are indicative."));
   if (d.canEdit) box.append(surveyForm(a));
   return box;
 }
@@ -538,6 +593,359 @@ function noteBody(a, n) {
     n.cut.length ? h("details", { class: "no-print" }, h("summary", {}, `Removed on challenge (${n.cut.length})`), h("ul", {}, n.cut.map((x) => h("li", {}, `${x.statement} `, h("span", { class: "note" }, x.reason))))) : null,
     h("section", { class: "card" }, h("h2", {}, "Sources"), sources.length ? h("ul", { class: "small" }, sources.map((x) => h("li", {}, x))) : h("p", {}, "The text supplied by the officer.")),
     h("p", { class: "note" }, `Drafted by Clarion with AI on ${fmtDate(n.created)}, for ${n.by}. Ratings are a judgement, not a measurement. An officer should check this before it's used or shared. It may be disclosable under freedom of information.`));
+}
+
+// ---------------------------------------------------------------- street surveys
+const STATUS = { draft: ["Draft", ""], open: ["Open", "ok"], closed: ["Closed", ""] };
+const statusPill = (s) => h("span", { class: `pill ${STATUS[s][1]}` }, STATUS[s][0]);
+const NOTICE = (who) => `Taking part is voluntary, you need to be 16 or over, and you can skip any question. We don't ask for your name, so please don't write anyone's name or address. An AI tool takes out any names and sorts comments into topics. Run by ${who}.`;
+const surveyRef = (s) => s.id.slice(-6).toUpperCase();
+const saveNote = () => h("p", { role: "status" });
+const said = (el, text, cls = "ok") => { el.textContent = text; el.className = cls; };
+
+function download(name, text) {
+  const url = URL.createObjectURL(new Blob(["\ufeff", text], { type: "text/csv;charset=utf-8" }));
+  const a = h("a", { href: url, download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+const asBase64 = (file) => new Promise((done, no) => { const r = new FileReader(); r.onload = () => done(String(r.result).split(",")[1]); r.onerror = () => no(new Error("That file couldn't be read.")); r.readAsDataURL(file); });
+const asText = (file) => new Promise((done, no) => { const r = new FileReader(); r.onload = () => done(String(r.result)); r.onerror = () => no(new Error("That file couldn't be read.")); r.readAsText(file); });
+// Photos are made smaller here, because the detail isn't needed and phones take huge ones
+async function scanFile(file) {
+  if (file.type === "application/pdf") return { media: file.type, data: await asBase64(file) };
+  try {
+    const picture = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(picture.width, picture.height));
+    const canvas = h("canvas", { width: Math.round(picture.width * scale), height: Math.round(picture.height * scale) });
+    canvas.getContext("2d").drawImage(picture, 0, 0, canvas.width, canvas.height);
+    return { media: "image/jpeg", data: canvas.toDataURL("image/jpeg", 0.85).split(",")[1] };
+  } catch (e) { throw new Error("That picture couldn't be read. Try a JPEG or a PDF."); }
+}
+
+// Claude's help: start it, keep the person posted, then show what came back
+const waitNote = (job) => h("div", { class: "callout", role: "status" }, h("strong", {}, `${job.stage}…`), job.total ? ` ${fmt(job.done)} of ${fmt(job.total)} done.` : " Please keep this page open. It usually takes under a minute.");
+function watchHelp(a, id, job, box, show) {
+  clear(box).append(waitNote(job));
+  follow(async () => (await API.call("/api/survey/help", { code: a.code, id, job: job.id })).job, (j) => {
+    if (j.status === "working") { clear(box).append(waitNote(j)); return; }
+    clear(box);
+    if (j.status === "failed") box.append(failure({ message: j.error || "That didn't finish." })); else show(j);
+  });
+}
+async function askHelp(a, id, path, extra, box, show) {
+  clear(box).append(h("p", { class: "muted", role: "status" }, "Starting…"));
+  try { watchHelp(a, id, (await API.call(path, { code: a.code, id, ...extra })).job, box, show); } catch (e) { clear(box).append(failure(e)); }
+}
+
+async function surveysView(page, a) {
+  page.append(h("div", { class: "page-head" }, h("div", {}, h("h1", {}, a.name), h("p", {}, "Ask people directly, on paper or on a tablet, and compare what they say with what's being reported."))), tabs(a, "surveys"));
+  const body = h("div", { class: "stack gap" }, loading("Loading surveys…"));
+  page.append(body);
+  const view = App.viewId;
+  let d;
+  try { d = await API.call("/api/survey/list", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  if (view !== App.viewId) return;
+  add(clear(body), h("section", { class: "card" }, h("h2", {}, "Surveys so far"), d.surveys.length ? d.surveys.map((s) => h("div", { class: "note-row" },
+    h("div", { class: "row" }, h("a", { href: `#survey/${a.code}/${s.id}` }, s.title), statusPill(s.status)),
+    h("div", { class: "note" }, `${fmt(s.responses)} of ${fmt(s.target)} replies. Started ${fmtDate(s.created)} by ${s.by}.`))) : h("p", { class: "muted" }, "No surveys yet.")));
+  if (d.canEdit) body.append(newSurveyCard(a));
+}
+function newSurveyCard(a) {
+  const title = h("input", { required: true, maxlength: 120 }), purpose = h("textarea", { rows: 3, maxlength: 2000, placeholder: "What do you need to find out, and why now?" });
+  const msg = h("div", {});
+  const f = h("form", { class: "stack" }, h("label", { class: "field" }, "Title", title), h("label", { class: "field" }, "What you want to find out", purpose), msg, h("div", { class: "row" }, h("button", { class: "btn primary", type: "submit" }, "Start a survey")));
+  f.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try { const r = await API.call("/api/survey/new", { code: a.code, title: title.value, purpose: purpose.value }); location.hash = `#survey/${a.code}/${r.survey.id}/setup`; } catch (e) { clear(msg).append(failure(e)); }
+  });
+  return h("section", { class: "card" }, h("h2", {}, "New survey"), f);
+}
+
+async function surveyView(page, a, id, part) {
+  const top = h("div", { class: "stack gap" }, tabs(a, "surveys"), loading("Loading the survey…"));
+  page.append(top);
+  const view = App.viewId;
+  let d;
+  try { d = await API.call("/api/survey/get", { code: a.code, id }); } catch (e) { if (view === App.viewId) clear(top).append(tabs(a, "surveys"), failure(e)); return; }
+  if (view !== App.viewId) return;
+  const s = d.survey;
+  const parts = d.canEdit ? [["setup", "Set up"], ["collect", "Collect"], ["check", "Check"], ["results", "Results"]] : [["results", "Results"]];
+  const on = parts.some((x) => x[0] === part) ? part : !d.canEdit ? "results" : s.status === "draft" ? "setup" : s.status === "open" ? "collect" : "results";
+  add(clear(top), tabs(a, "surveys"),
+    h("div", { class: "page-head" }, h("div", {}, h("span", { class: "eyebrow" }, "Street survey"), h("h1", {}, s.title), h("div", { class: "row" }, statusPill(s.status), h("span", { class: "note" }, `${fmt(d.results.used)} of ${fmt(s.plan.target)} replies`)))),
+    parts.length > 1 ? h("div", { class: "tab-row no-print", role: "tablist" }, parts.map(([key, label]) => h("button", { type: "button", "aria-selected": key === on ? "true" : "false", onclick: () => { location.hash = `#survey/${a.code}/${id}/${key}`; } }, label))) : null);
+  ({ setup: setupPart, collect: collectPart, check: checkPart, results: resultsPart })[on](top, a, d);
+}
+
+// ----- set up
+function setupPart(top, a, d) {
+  const s = d.survey, draft = s.status === "draft";
+  const save = async (fields, msg, words = "Saved.") => { try { await API.call("/api/survey/save", { code: a.code, id: s.id, ...fields }); if (msg) said(msg, words); return true; } catch (e) { if (msg) said(msg, e.message, "err"); return false; } };
+  const title = h("input", { value: s.title, maxlength: 120, disabled: !draft }), purpose = h("textarea", { rows: 3, maxlength: 2000, disabled: !draft }), collector = h("input", { value: s.collector, maxlength: 160 });
+  purpose.value = s.purpose;
+  const aboutFields = () => (draft ? { title: title.value, purpose: purpose.value, collector: collector.value } : { collector: collector.value });
+  const m1 = saveNote();
+  top.append(h("section", { class: "card" }, h("h2", {}, "The survey"),
+    h("label", { class: "field" }, "Title", title), h("label", { class: "field" }, "What you want to find out", purpose),
+    h("label", { class: "field" }, "Who's collecting the data", collector, h("span", { class: "hint" }, "This appears on every form. Confirm it's right before any real fieldwork.")),
+    m1, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => save(aboutFields(), m1) }, "Save"))));
+
+  // the questions
+  let locals = s.locals.map((q) => ({ ...q }));
+  const editor = h("div", { class: "stack" }), help = h("div", { class: "stack" }), m2 = saveNote();
+  const addBtn = h("button", { class: "btn small", type: "button", onclick: () => { locals.push({ text: "", kind: "choice", options: [] }); drawLocals(); } }, "Add a question");
+  function drawLocals() {
+    addBtn.disabled = locals.length >= d.maxLocal;
+    clear(editor).append(...locals.map((q, i) => {
+      const text = h("input", { value: q.text, maxlength: 200, "aria-label": `Local question ${i + 1}`, oninput: () => { q.text = text.value; } });
+      const options = h("textarea", { rows: 3, placeholder: "One answer on each line", "aria-label": `Answers for local question ${i + 1}`, hidden: q.kind === "text", oninput: () => { q.options = options.value.split("\n").map((x) => x.trim()).filter(Boolean); } });
+      options.value = q.options.join("\n");
+      const kind = h("select", { "aria-label": `Kind of answer for local question ${i + 1}`, onchange: () => { q.kind = kind.value; options.hidden = q.kind === "text"; } }, h("option", { value: "choice" }, "Tick one answer"), h("option", { value: "text" }, "Written answer"));
+      kind.value = q.kind;
+      return h("div", { class: "local field" }, h("div", { class: "row" }, h("strong", {}, `Local question ${i + 1}`), h("span", { class: "spacer" }), h("button", { class: "btn small ghost", type: "button", onclick: () => { locals.splice(i, 1); drawLocals(); } }, "Remove")), text, kind, options);
+    }));
+  }
+  const suggestList = (j) => {
+    const list = j.result || [];
+    add(help, h("h3", {}, "Suggested questions"), list.length ? list.map((q) => h("div", { class: "local" }, h("div", {}, q.text), q.options.length ? h("div", { class: "note" }, q.options.join(" / ")) : h("div", { class: "note" }, "A written answer"), q.why ? h("div", { class: "note" }, q.why) : null,
+      h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: (ev) => { if (locals.length >= d.maxLocal) return said(m2, `A survey can have up to ${d.maxLocal} local questions.`, "err"); locals.push({ text: q.text, kind: q.kind, options: q.options }); drawLocals(); ev.target.disabled = true; } }, "Add this question")))) : h("p", { class: "muted" }, "No suggestions came back."));
+  };
+  const wordingList = (j) => {
+    const list = j.result || [];
+    add(help, h("h3", {}, "Wording check"), list.map((v) => { const i = Number(v.id.slice(1)) - 1; return h("div", { class: "local" }, h("div", { class: "row" }, h("strong", {}, `Local question ${i + 1}`), h("span", { class: `pill ${v.verdict === "Fine" ? "ok" : "warn"}` }, v.verdict)), v.reason ? h("div", {}, v.reason) : null,
+      v.better ? h("div", { class: "row" }, h("span", { class: "note" }, v.better), h("button", { class: "btn small", type: "button", onclick: (ev) => { if (locals[i]) { locals[i].text = v.better; drawLocals(); ev.target.disabled = true; } } }, "Use this wording")) : null); }));
+  };
+  const coreList = (list, from) => h("ol", { class: "q-list", start: from }, list.map((q) => h("li", {}, q.text, q.options.length ? h("span", { class: "note" }, ` (${q.options.join(" / ")})`) : null)));
+  const qCard = h("section", { class: "card" }, h("h2", {}, "Questions"),
+    h("h3", {}, "Core questions"), h("p", { class: "note" }, "Every survey asks these, so results compare across time and between authorities."), coreList(d.core, 1));
+  if (draft) {
+    drawLocals();
+    qCard.append(h("h3", {}, "Local questions"), h("p", { class: "note" }, `Up to ${d.maxLocal}. Claude can suggest some from what you want to find out, and check the wording. You sign them off.`), editor, m2,
+      h("div", { class: "row" }, addBtn, h("button", { class: "btn", type: "button", onclick: () => save({ locals }, m2) }, "Save questions"),
+        h("button", { class: "btn", type: "button", onclick: async () => { if (await save(aboutFields(), m2)) askHelp(a, s.id, "/api/survey/suggest", {}, help, suggestList); } }, "Suggest questions"),
+        h("button", { class: "btn", type: "button", onclick: async () => { if (await save({ locals }, m2, "")) askHelp(a, s.id, "/api/survey/wording", {}, help, wordingList); } }, "Check the wording")), help);
+  } else if (s.locals.length) qCard.append(h("h3", {}, "Local questions"), coreList(s.locals, d.core.length + 1));
+  qCard.append(h("h3", {}, "About the person"), h("p", { class: "note" }, "These check you've heard from a fair mix of people, and let results be weighted to the local population."), coreList(d.about, d.core.length + s.locals.length + 1));
+  top.append(qCard);
+
+  // the plan
+  const target = h("input", { type: "number", min: 30, max: 5000, value: String(s.plan.target) });
+  let sites = s.plan.sites.map((x) => ({ ...x }));
+  const siteBox = h("div", { class: "stack" });
+  function drawSites() {
+    clear(siteBox).append(...sites.map((x, i) => {
+      const bind = (key, label, placeholder) => { const el = h("input", { value: x[key], maxlength: 80, placeholder, oninput: () => { x[key] = el.value; } }); return h("label", { class: "field" }, label, el); };
+      return h("div", { class: "site-row" }, bind("name", "Site", "Market Square, Horsham"), bind("when", "When", "Saturday 10am to 2pm"), bind("interviewers", "Interviewers", "2"), h("button", { class: "btn small ghost", type: "button", onclick: () => { sites.splice(i, 1); drawSites(); } }, "Remove"));
+    }));
+  }
+  drawSites();
+  const checks = d.accessChecks.map((c) => { const box = h("input", { type: "checkbox", checked: s.plan.checks.includes(c), value: c }); return { box, row: h("label", { class: "check" }, box, c) }; });
+  const m3 = saveNote();
+  top.append(h("section", { class: "card" }, h("h2", {}, "Fieldwork plan"),
+    h("label", { class: "field" }, "How many replies you're aiming for", target, h("span", { class: "hint" }, "About 400 is enough for an overall result, with a margin of about 5 points if the sample were random. A street sample isn't random, so treat that as a guide.")),
+    d.targets.length ? h("div", { class: "stack" }, h("h3", {}, "Who to reach"), h("p", { class: "note" }, "From Census 2021, so the people you speak to match the people who live here."), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Age"), h("th", { class: "r" }, "Women"), h("th", { class: "r" }, "Men"))), h("tbody", {}, d.targets.map((x) => h("tr", {}, h("td", {}, x.age), h("td", { class: "r" }, fmt(x.female)), h("td", { class: "r" }, fmt(x.male)))))))) : h("p", { class: "note" }, "Census figures couldn't be read just now."),
+    h("h3", {}, "Sites and times"), siteBox, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => { sites.push({ name: "", when: "", interviewers: "" }); drawSites(); } }, "Add a site")),
+    h("h3", {}, "Before you go out"), h("div", { class: "stack" }, checks.map((x) => x.row)),
+    m3, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => save({ plan: { target: Number(target.value), sites, checks: checks.filter((x) => x.box.checked).map((x) => x.box.value) } }, m3) }, "Save the plan"))));
+}
+
+// ----- collect
+function collectPart(top, a, d) {
+  const s = d.survey;
+  const setStatus = async (status, msg) => { try { await API.call("/api/survey/status", { code: a.code, id: s.id, status }); route(); } catch (e) { said(msg, e.message, "err"); } };
+  const printed = s.printedTo || 0;
+  const first = h("input", { type: "number", min: 1, value: String(printed + 1) }), last = h("input", { type: "number", min: 1, value: String(printed + Math.min(s.plan.target, 500)) }), m = saveNote();
+  top.append(h("section", { class: "card" }, h("h2", {}, "Paper forms"), h("p", {}, "Each form gets its own number, so forms can't be entered twice."), printed ? h("p", { class: "note" }, `Forms up to ${fmt(printed)} have been prepared so far. New ones carry on from there, so numbers aren't used twice.`) : null,
+    h("div", { class: "form-grid" }, h("label", { class: "field" }, "First form number", first), h("label", { class: "field" }, "Last form number", last)), m,
+    h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
+      const from = Number(first.value), to = Number(last.value);
+      if (!(from >= 1) || !(to >= from) || to - from >= 1000) return said(m, "Choose up to 1,000 forms at a time.", "err");
+      try { await API.call("/api/survey/save", { code: a.code, id: s.id, printedTo: to }); location.hash = `#print/${a.code}/${s.id}/${from}/${to}`; } catch (e) { said(m, e.message, "err"); }
+    } }, "Prepare forms to print"))));
+  const url = `${location.origin}/s/${s.access}`, m2 = saveNote();
+  const open = h("section", { class: "card" }, h("h2", {}, "Tablets"));
+  if (s.status === "draft") open.append(h("p", {}, "Opening the survey fixes its questions and gives interviewers a link. Nobody on the team needs an account."), h("p", { class: "note" }, `It's set to say it's run by ${s.collector}. Check that's right before any real fieldwork.`), m2, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => setStatus("open", m2) }, "Open the survey")));
+  if (s.status === "open") open.append(h("p", {}, "Open this link on each tablet. It carries on without a signal, and sends the forms when it can."), h("div", { class: "link-box" }, url), h("p", { class: "note" }, `Interviewers can also go to ${location.origin}/s and type the code ${s.access}. Anyone with the code can add answers while the survey is open, so keep it to the team.`), m2,
+    h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("closed", m2) }, "Close the survey"), d.results.total ? null : h("button", { class: "btn ghost", type: "button", onclick: () => setStatus("draft", m2) }, "Back to draft")));
+  if (s.status === "closed") open.append(h("p", {}, "The survey is closed, so the tablet link has stopped working. You can still add paper forms."), m2, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("open", m2) }, "Open it again")));
+  top.append(open);
+  if (s.status === "draft") return;
+  top.append(h("section", { class: "card" }, h("h2", {}, "Answers so far"), h("div", { class: "stats" }, [["On tablets", "tablet"], ["Typed in", "paper"], ["From scans", "scan"], ["From files", "csv"]].map(([label, key]) => h("div", { class: "stat" }, h("span", { class: "label" }, label), h("span", { class: "value" }, fmt(d.results.bySource[key] || 0)))))));
+  top.append(entryCard(a, d), scanCard(a, d), csvCard(a, d));
+}
+function entryCard(a, d) {
+  const s = d.survey;
+  const form = h("input", { value: String(d.nextForm), maxlength: 20, "aria-label": "Form number" });
+  const site = h("input", { maxlength: 80, list: "site-list" });
+  const msg = saveNote();
+  const rows = d.questions.map((q, i) => {
+    if (q.kind === "text") { const area = h("textarea", { rows: 2, maxlength: 1000, "aria-label": q.text }); return { q, input: area, row: h("div", { class: "entry-row wide" }, h("label", {}, `${i + 1}. ${q.text}`), area), read: () => area.value }; }
+    const input = h("input", { inputmode: "numeric", maxlength: 2, autocomplete: "off", "aria-label": q.text }), echo = h("span", { class: "echo" });
+    const row = { q, input, row: h("div", { class: "entry-row" }, h("label", {}, `${i + 1}. ${q.text}`), input, echo), read: () => input.value.trim(), bad: () => !!input.value.trim() && !q.options[Number(input.value) - 1] };
+    input.addEventListener("input", () => { const picked = q.options[Number(input.value) - 1]; echo.textContent = !input.value.trim() ? "" : picked || `Choose 1 to ${q.options.length}`; echo.className = `echo ${input.value.trim() && !picked ? "bad" : ""}`; });
+    return row;
+  });
+  const clearForm = () => { rows.forEach((r) => { r.input.value = ""; r.input.dispatchEvent(new Event("input")); }); };
+  const go = h("button", { class: "btn primary", type: "submit" }, "Save and next form");
+  rows.forEach((r, i) => r.input.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && r.q.kind !== "text") { ev.preventDefault(); (rows[i + 1]?.input || go).focus(); } }));
+  const f = h("form", { class: "stack" }, h("div", { class: "form-grid" }, h("label", { class: "field" }, "Form number", form), h("label", { class: "field" }, "Site", site, h("datalist", { id: "site-list" }, s.plan.sites.map((x) => h("option", { value: x.name }))))), h("div", {}, rows.map((r) => r.row)), msg, h("div", { class: "row" }, go));
+  f.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (rows.some((r) => r.bad?.())) return said(msg, "Check the answers marked in red.", "err");
+    const answers = Object.fromEntries(rows.map((r) => [r.q.id, r.read()]).filter(([, v]) => v));
+    try {
+      const r = await API.call("/api/survey/answers", { code: a.code, id: s.id, via: "paper", forms: [{ form: form.value, site: site.value, answers }] });
+      if (!r.added) return said(msg, r.problems.join(" ") || "That form wasn't saved.", "err");
+      said(msg, `Form ${form.value} saved.${r.problems.length ? ` ${r.problems.join(" ")}` : ""}`, r.problems.length ? "err" : "ok");
+      if (/^\d+$/.test(form.value)) form.value = String(Number(form.value) + 1);
+      clearForm(); rows[0].input.focus();
+    } catch (e) { said(msg, e.message, "err"); }
+  });
+  return h("section", { class: "card" }, h("details", {}, h("summary", {}, "Type in paper forms"), h("p", { class: "note" }, "Type the number beside each ticked box, then press Enter. Leave a question empty if it wasn't answered."), f));
+}
+function scanCard(a, d) {
+  const s = d.survey, file = h("input", { type: "file", multiple: true, accept: "image/*,application/pdf", "aria-label": "Scanned forms" }), box = h("div", { class: "stack" });
+  const showForms = (j) => {
+    const forms = j.result?.forms || [], msg = saveNote();
+    if (!forms.length) return box.append(h("p", { class: "muted" }, "No forms could be read in that file."));
+    const parts = forms.map((f, i) => {
+      const number = h("input", { value: f.form, maxlength: 20, "aria-label": `Form number ${i + 1}` }), site = h("input", { value: f.site, maxlength: 80, "aria-label": `Site for form ${i + 1}` });
+      const fields = d.questions.map((q) => {
+        const unclear = f.unclear.includes(q.id);
+        const input = q.kind === "text" ? h("textarea", { rows: 2, maxlength: 1000 }) : h("select", {}, h("option", { value: "" }, "No answer"), q.options.map((o) => h("option", { value: o }, o)));
+        input.value = f.answers[q.id] || "";
+        return { q, input, row: h("label", { class: `field ${unclear ? "unclear" : ""}` }, unclear ? `${q.text} (please check)` : q.text, input) };
+      });
+      return { number, site, fields, el: h("div", { class: "scan-form" }, h("div", { class: "form-grid" }, h("label", { class: "field" }, "Form number", number), h("label", { class: "field" }, "Site", site)), fields.map((x) => x.row)) };
+    });
+    const unclearCount = forms.reduce((n, f) => n + f.unclear.length, 0);
+    add(box, h("p", {}, `Clarion read ${forms.length} form${forms.length === 1 ? "" : "s"}. Check each one against the paper before saving.`, unclearCount ? ` ${unclearCount} answer${unclearCount === 1 ? " is" : "s are"} marked to check.` : ""), ...parts.map((x) => x.el), msg,
+      h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: async (ev) => {
+        const list = parts.map((x) => ({ form: x.number.value, site: x.site.value, answers: Object.fromEntries(x.fields.map((y) => [y.q.id, y.input.value]).filter(([, v]) => v)) }));
+        try {
+          const r = await API.call("/api/survey/answers", { code: a.code, id: s.id, via: "scan", forms: list });
+          said(msg, `${r.added} form${r.added === 1 ? "" : "s"} saved.${r.problems.length ? ` ${r.problems.join(" ")}` : ""}`, r.problems.length ? "err" : "ok");
+          if (!r.problems.length) ev.target.disabled = true;
+        } catch (e) { said(msg, e.message, "err"); }
+      } }, "Save these forms")));
+  };
+  return h("section", { class: "card" }, h("details", {}, h("summary", {}, "Upload scanned forms"),
+    h("div", { class: "stack" }, h("p", { class: "note" }, "Photos or a PDF, up to 20 forms at a time. Include both sides of each form together. Clarion reads them, you check every one, and the scans aren't kept. Keep this page open until you've saved them."), h("label", { class: "field" }, "Choose files", file),
+      h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
+        if (!file.files.length) return clear(box).append(failure({ message: "Choose a file first." }));
+        try { askHelp(a, s.id, "/api/survey/scan", { files: await Promise.all([...file.files].map(scanFile)) }, box, showForms); } catch (e) { clear(box).append(failure(e)); }
+      } }, "Read the forms")), box)));
+}
+function csvCard(a, d) {
+  const s = d.survey, file = h("input", { type: "file", accept: ".csv,text/csv", "aria-label": "File of forms" }), msg = saveNote();
+  return h("section", { class: "card" }, h("details", {}, h("summary", {}, "Upload a file of forms"),
+    h("div", { class: "stack" }, h("p", { class: "note" }, "A CSV file with one form on each row, from a spreadsheet or another survey tool. A choice can be its words, or its number on the form."),
+      h("details", {}, h("summary", {}, "Which column is which"), h("ul", { class: "small" }, d.questions.map((q) => h("li", {}, `${q.id}: ${q.text}`)))),
+      h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => download("street-survey-template.csv", d.template) }, "Download the template")),
+      h("label", { class: "field" }, "Choose a file", file), msg,
+      h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
+        if (!file.files[0]) return said(msg, "Choose a file first.", "err");
+        try { const r = await API.call("/api/survey/csv", { code: a.code, id: s.id, csv: await asText(file.files[0]) }); said(msg, `${r.added} form${r.added === 1 ? "" : "s"} added.${r.problems.length ? ` ${r.problems.slice(0, 10).join(" ")}` : ""}`, r.problems.length ? "err" : "ok"); } catch (e) { said(msg, e.message, "err"); }
+      } }, "Add these forms")))));
+}
+
+// ----- check
+function checkPart(top, a, d) {
+  const s = d.survey, msg = saveNote(), number = h("input", { maxlength: 20, "aria-label": "Form number to leave out" });
+  const leave = async (n, excluded) => { try { await API.call("/api/survey/form", { code: a.code, id: s.id, n, excluded }); route(); } catch (e) { said(msg, e.message, "err"); } };
+  add(top, h("section", { class: "card" }, h("h2", {}, "Forms to look at"),
+    h("p", { class: "note" }, "Clarion flags these and removes nothing. Matching replies can be genuine, so check before leaving one out."), msg,
+    d.problems.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Form"), h("th", {}, "Why"), h("th", {}))), h("tbody", {}, d.problems.map((x) => h("tr", {}, h("td", {}, x.form), h("td", {}, x.why), h("td", { class: "r" }, h("button", { class: "btn small", type: "button", onclick: () => leave(x.n, true) }, "Leave out"))))))) : h("p", { class: "muted" }, "Nothing to look at."),
+    h("h3", {}, "Put a mistake right"), h("p", { class: "note" }, "Leave out the form, then enter it again with the same number."),
+    h("div", { class: "row" }, h("label", { class: "field" }, "Form number", number), h("button", { class: "btn", type: "button", onclick: async () => { try { await API.call("/api/survey/form", { code: a.code, id: s.id, form: number.value, excluded: true }); route(); } catch (e) { said(msg, e.message, "err"); } } }, "Leave out this form")),
+    d.excluded.length ? h("div", { class: "stack" }, h("h3", {}, "Left out"), h("div", { class: "row" }, d.excluded.map((x) => h("button", { class: "btn small", type: "button", onclick: () => leave(x.n, false) }, `Put back form ${x.form}`)))) : null));
+
+  const progressBox = h("div", {});
+  const c = h("section", { class: "card" }, h("h2", {}, "Written comments"),
+    h("p", {}, "Before anyone can read them, Claude takes out names and anything else that identifies a person, and sorts each comment into a topic. Only people in your authority can see them."));
+  if (d.waiting) c.append(h("p", {}, h("strong", {}, `${fmt(d.waiting)} comment${d.waiting === 1 ? "" : "s"} waiting.`)), h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => askHelp(a, s.id, "/api/survey/sort", {}, progressBox, () => route()) }, "Take out names and sort")));
+  else c.append(h("p", { class: "muted" }, "No comments waiting."));
+  if (d.dropped) c.append(h("p", { class: "note" }, `${fmt(d.dropped)} comment${d.dropped === 1 ? " was" : "s were"} taken out, because Claude wouldn't process ${d.dropped === 1 ? "it" : "them"}. Nobody has seen ${d.dropped === 1 ? "it" : "them"}.`));
+  c.append(progressBox);
+  if (d.sorting) watchHelp(a, s.id, d.sorting, progressBox, () => route());
+  if (d.sample.length) {
+    const left = d.sample.filter((x) => !x.checked).length;
+    c.append(h("h3", {}, "Check a sample"), h("p", { class: "note" }, `Please read one comment in ten, in case a name has got through. ${left ? `${left} still to check.` : "All checked."}`));
+    const topics = [...new Set([...d.topics.map((x) => x.topic), "Other"])];
+    for (const x of d.sample) {
+      const area = h("textarea", { rows: 2, maxlength: 1000, "aria-label": "Comment" }), pick = h("select", { "aria-label": "Topic" }, topics.map((t) => h("option", { value: t }, t))), m = saveNote();
+      area.value = x.text; pick.value = x.topic;
+      c.append(h("div", { class: "local" }, h("div", { class: "note" }, `Form ${x.form}. ${x.question}`), area, h("div", { class: "row" }, pick, x.checked ? h("span", { class: "pill ok" }, "Checked") : null, h("button", { class: "btn small", type: "button", onclick: async () => {
+        try { await API.call("/api/survey/comment", { code: a.code, id: s.id, n: x.n, q: x.id, text: area.value, topic: pick.value }); said(m, "Saved."); } catch (e) { said(m, e.message, "err"); }
+      } }, "Looks right"), m)));
+    }
+  }
+  top.append(c);
+}
+
+// ----- results
+function resultsPart(top, a, d) {
+  const r = d.results, s = d.survey;
+  const q1 = r.questions.find((x) => x.id === "c1");
+  const pct = (labels) => (q1 && !q1.held ? q1.options.filter((o) => labels.includes(o.label)).reduce((n, o) => n + o.pct, 0) : null);
+  const stat = (label, value, detail) => h("div", { class: "stat" }, h("span", { class: "label" }, label), h("span", { class: "value" }, value), detail ? h("span", { class: "detail" }, detail) : null);
+  const good = pct(["Very satisfied", "Fairly satisfied"]), bad = pct(["Fairly dissatisfied", "Very dissatisfied"]);
+  top.append(h("div", { class: "callout" }, h("strong", {}, "Indicative only. "), `A street sample isn't random. ${r.weighted ? "Results are weighted to the local population's age and sex from Census 2021." : d.census ? "Results aren't weighted yet, because there aren't enough replies giving age and sex." : "Results aren't weighted, because the Census figures couldn't be read just now."} Groups under 30 people aren't shown.`),
+    h("div", { class: "stats" }, stat("Replies", fmt(r.used), `Aim: ${fmt(s.plan.target)}${r.excluded ? `. ${fmt(r.excluded)} left out` : ""}`), stat("Satisfied", good === null ? "–" : `${fmt(good)}%`, "Very or fairly"), stat("Dissatisfied", bad === null ? "–" : `${fmt(bad)}%`, "Very or fairly")));
+  const wrap = h("section", { class: "card" }, h("h2", {}, "Answers"));
+  for (const q of r.questions) {
+    wrap.append(h("h3", {}, q.text));
+    if (q.held) { wrap.append(h("p", { class: "note" }, `${fmt(q.answered)} replies so far. Results appear at 30.`)); continue; }
+    wrap.append(h("div", { class: "tbl-wrap" }, h("table", { class: "tbl answers" }, h("thead", {}, h("tr", {}, h("th", {}, "Answer"), h("th", { class: "r" }, "Share"), h("th", { class: "r" }, "Replies"), h("th", { "aria-hidden": "true" }))),
+      h("tbody", {}, q.options.map((o) => h("tr", {}, h("td", {}, o.label), h("td", { class: "r" }, `${fmt(o.pct)}%`), h("td", { class: "r" }, fmt(o.count)), h("td", { "aria-hidden": "true" }, h("div", { class: "meter" }, h("span", { style: { width: `${Math.min(100, o.pct)}%` } })))))))),
+      q.range !== null ? h("p", { class: "note" }, `${fmt(q.answered)} replies. If this were a random sample, the likely range would be about plus or minus ${fmt(q.range)} points.`) : null);
+  }
+  top.append(wrap);
+  const shown = r.groups.filter((g) => g.answered >= 30);
+  const groups = [...new Set(shown.map((g) => g.group))];
+  if (groups.length) top.append(h("section", { class: "card" }, h("h2", {}, "Who's satisfied"), h("p", { class: "note" }, "Satisfaction with road and pavement condition, for each group with at least 30 replies."),
+    groups.map((g) => h("div", { class: "stack" }, h("h3", {}, g), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Group"), h("th", { class: "r" }, "Replies"), h("th", { class: "r" }, "Satisfied"), h("th", { class: "r" }, "Dissatisfied"))),
+      h("tbody", {}, shown.filter((x) => x.group === g).map((x) => h("tr", {}, h("td", {}, x.label), h("td", { class: "r" }, fmt(x.answered)), h("td", { class: "r" }, `${fmt(x.satisfied)}%`), h("td", { class: "r" }, `${fmt(x.dissatisfied)}%`))))))))));
+  if (r.targetMet.length) top.append(h("section", { class: "card" }, h("h2", {}, "How the sample compares"), h("p", { class: "note" }, "Replies against the numbers planned from Census 2021."), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Age"), h("th", { class: "r" }, "Planned"), h("th", { class: "r" }, "So far"))), h("tbody", {}, r.targetMet.map((x) => h("tr", {}, h("td", {}, x.age), h("td", { class: "r" }, fmt(x.want)), h("td", { class: "r" }, fmt(x.got)))))))));
+  const c = h("section", { class: "card" }, h("h2", {}, "What people said"), h("p", { class: "note" }, "With names taken out. These stay with your authority, and aren't used in mood readings."));
+  if (d.waiting) c.append(h("p", { class: "note" }, `${fmt(d.waiting)} more ${d.waiting === 1 ? "is" : "are"} waiting to have names taken out.`));
+  if (!d.comments.length) c.append(h("p", { class: "muted" }, "No comments to show yet."));
+  for (const t of d.topics) c.append(h("details", {}, h("summary", {}, `${t.topic} (${fmt(t.count)})`), d.comments.filter((x) => x.topic === t.topic).map((x) => h("div", { class: "comment" }, x.text))));
+  top.append(c);
+  if (d.canEdit) { const msg = saveNote(); top.append(h("div", { class: "row no-print" }, h("button", { class: "btn", type: "button", onclick: async () => { try { const r2 = await API.call("/api/survey/export", { code: a.code, id: s.id }); download(r2.name, r2.csv); } catch (e) { said(msg, e.message, "err"); } } }, "Download the answers"), msg)); }
+}
+
+// ----- forms to print
+async function printView(page, a, id, from, to) {
+  const top = h("div", { class: "stack gap" }, loading("Preparing the forms…"));
+  page.append(top);
+  const view = App.viewId;
+  let d;
+  try { d = await API.call("/api/survey/get", { code: a.code, id }); } catch (e) { if (view === App.viewId) clear(top).append(failure(e)); return; }
+  if (view !== App.viewId) return;
+  const s = d.survey;
+  const first = Number.isInteger(from) && from > 0 ? from : 1, last = Number.isInteger(to) && to >= first ? Math.min(to, first + 999) : first;
+  clear(top).append(h("div", { class: "page-head no-print" }, h("div", {}, h("h1", {}, "Forms to print"), h("p", {}, `Forms ${first} to ${last}, for ${s.title}. Print double-sided on A4.`)),
+    h("div", { class: "row" }, h("a", { class: "btn", href: `#survey/${a.code}/${s.id}/collect` }, "Back"), h("button", { class: "btn primary", type: "button", onclick: () => window.print() }, "Print"))));
+  const sheets = h("div", { class: "sheets" });
+  for (let n = first; n <= last; n++) sheets.append(paperForm(s, d.questions, n));
+  top.append(sheets);
+}
+function paperForm(s, questions, n) {
+  const block = (q, i) => h("div", { class: "sheet-q" }, h("strong", {}, `${i + 1}. ${q.text}`),
+    q.kind === "text" ? h("div", { class: "sheet-lines" }) : h("div", { class: "sheet-opts" }, q.options.map((o, k) => h("div", { class: "sheet-opt" }, h("span", { class: "sheet-box" }), `${k + 1}  ${o}`))));
+  const main = questions.filter((q) => q.part !== "about"), about = questions.filter((q) => q.part === "about");
+  return h("article", { class: "sheet" },
+    h("div", { class: "sheet-head" }, h("div", {}, h("h2", {}, s.title), h("div", { class: "sheet-note" }, "Your views on local roads and pavements")), h("div", { class: "sheet-no" }, `Form ${n}`, h("div", { class: "sheet-note" }, `Survey ${surveyRef(s)}`))),
+    h("p", { class: "sheet-note" }, NOTICE(s.collector)),
+    h("div", { class: "sheet-site" }, "Site", h("span", {})),
+    main.map((q) => block(q, questions.indexOf(q))),
+    // the back of the sheet, with its own form number so a scanned side can't lose its form
+    h("div", { class: "sheet-back" }, h("div", { class: "sheet-head" }, h("h3", {}, "About you"), h("div", { class: "sheet-no" }, `Form ${n}`, h("div", { class: "sheet-note" }, `Survey ${surveyRef(s)}`))),
+      h("p", { class: "sheet-note" }, "This helps check that we've heard from a fair mix of people."),
+      about.map((q) => block(q, questions.indexOf(q))),
+      h("p", { class: "sheet-note" }, "Thank you for taking part.")));
 }
 
 boot();

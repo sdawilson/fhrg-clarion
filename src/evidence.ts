@@ -6,6 +6,7 @@ import { loadFigures, type Figures } from "./library";
 import type { Pilot, SurveyResult } from "./pilots";
 import { loadSignals, type Signals } from "./signals";
 import { savePretty, storageJson } from "./storage";
+import { streetSummaries, type StreetSummary } from "./surveys";
 import { FriendlyError, cached, cleanLong, cleanText, forget, withLock } from "./util";
 
 const FIGURES_MS = 6 * 60 * 60 * 1000;
@@ -47,14 +48,14 @@ export async function saveNotes(c: Config, code: string, notes: unknown, by: str
   });
 }
 
-export type Evidence = { figures: Figures; signals: Signals; surveys: SurveyResult[]; gaps: string[]; gathered: string };
+export type Evidence = { figures: Figures; signals: Signals; surveys: SurveyResult[]; streets: StreetSummary[]; gaps: string[]; gathered: string };
 
-export function findGaps(p: Pilot, surveys: SurveyResult[], signals: Signals, figures: Figures): string[] {
+export function findGaps(p: Pilot, surveys: SurveyResult[], signals: Signals, figures: Figures, hasStreetSurvey = false): string[] {
   const gaps = [...p.needed.filter((n) => !(surveys.length && /survey/i.test(n)))];
   if (!surveys.length && !gaps.some((g) => /survey/i.test(g))) gaps.unshift("A survey result to anchor the reading");
   if (figures.unavailable.length) gaps.push(`Published figures that couldn't be read just now: ${figures.unavailable.join(", ")}`);
   for (const s of [signals.fixMyStreet, signals.petitions, signals.questions]) if (!s.ok) gaps.push(`${s.source}: couldn't be read just now`);
-  gaps.push("A street survey in this authority");
+  if (!hasStreetSurvey) gaps.push("A street survey in this authority");
   return gaps;
 }
 
@@ -63,16 +64,19 @@ export async function loadEvidence(c: Config, p: Pilot, facts: Facts): Promise<E
   // a source that was down shouldn't stay missing for hours
   if (figures.unavailable.length || !signals.fixMyStreet.ok || !signals.petitions.ok || !signals.questions.ok) forget(`evidence|${p.code}`);
   const surveys: SurveyResult[] = [...p.surveys, ...facts.surveys].sort((a, b) => b.year - a.year);
-  return { figures, signals, surveys, gaps: findGaps(p, surveys, signals, figures), gathered: new Date().toISOString() };
+  // read fresh each time, because answers arrive through the day
+  const streets = await streetSummaries(c, p.code).catch((e) => { console.log(`[warn] street surveys: ${(e as Error).message}`); return [] as StreetSummary[]; });
+  return { figures, signals, surveys, streets, gaps: findGaps(p, surveys, signals, figures, streets.length > 0), gathered: new Date().toISOString() };
 }
 
-// The kinds of signal Clarion really holds. Street surveys, pulse questions and press or social media come in
-// later stages of the build, so they can't count yet. A national petition only says something about this
-// authority if it draws more than a fair share of its signatures from here.
+// The kinds of signal Clarion really holds. Pulse questions and press or social media come in later stages of
+// the build, so they can't count yet. A national petition only says something about this authority if it draws
+// more than a fair share of its signatures from here.
 export function kindsHeld(e: Evidence): string[] {
   const s = e.signals;
   return [
     ...(e.surveys.length ? ["survey"] : []),
+    ...(e.streets?.some((x) => x.current) ? ["street survey"] : []),
     ...(s.fixMyStreet.ok && s.fixMyStreet.data?.reports ? ["actions"] : []),
     ...((s.petitions.ok && s.petitions.data?.some((p) => p.localShare > p.fairShare)) || (s.questions.ok && s.questions.data?.length) ? ["representatives"] : []),
   ];
@@ -86,6 +90,7 @@ export function briefing(p: Pilot, e: Evidence, facts: Facts): Record<string, un
     dft_rating: p.rating, reporting_route: p.reportingRoute,
     constituencies_shared_with_others: p.constituencies.filter((x) => x.shared).map((x) => `${x.name}: ${x.shared}`),
     survey_results: e.surveys, survey_note: p.surveyNote,
+    ...(e.streets.length ? { street_surveys: e.streets.map(({ id: _id, ...rest }) => rest) } : {}),
     published_figures: e.figures,
     public_signals: { fix_my_street: e.signals.fixMyStreet.data, petitions: e.signals.petitions.data, mps_written_questions: e.signals.questions.data },
     missing_evidence: e.gaps,

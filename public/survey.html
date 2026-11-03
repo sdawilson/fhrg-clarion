@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Street survey</title>
+<meta name="theme-color" content="#264a6f">
+<style>
+/* For interviewers on tablets, often outdoors: large, plain and high contrast, one question at a time. */
+:root { --navy: #264a6f; --navy-deep: #1a3452; --bg: #f4f6f9; --surface: #fff; --ink: #17212c; --ink-2: #46566a; --line: #a9b6c7; --focus: #f2b705; --good: #2f7a4f; --crit: #a33a2e; }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 20px; line-height: 1.4; }
+#app { min-height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+header { background: var(--navy); color: #fff; padding: 10px 18px; display: flex; justify-content: space-between; gap: 12px; align-items: center; font-weight: 700; }
+main { padding: 22px 18px; max-width: 760px; width: 100%; margin: 0 auto; display: grid; gap: 16px; align-content: start; }
+footer { padding: 10px 18px; font-size: 0.82rem; color: var(--ink-2); text-align: center; }
+h1 { font-size: 1.5rem; line-height: 1.25; margin: 0; color: var(--navy-deep); }
+p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 4px solid var(--focus); outline-offset: 2px; }
+.choice { width: 100%; min-height: 66px; padding: 14px 18px; border: 2.5px solid var(--navy); border-radius: 10px; background: var(--surface); color: var(--navy-deep); text-align: left; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+.choice[aria-pressed="true"] { background: var(--navy); color: #fff; }
+.choices { display: grid; gap: 10px; }
+.main-btn { width: 100%; min-height: 66px; padding: 14px 18px; border: 0; border-radius: 10px; background: var(--navy); color: #fff; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+.main-btn:disabled { opacity: 0.55; }
+.quiet { min-height: 54px; padding: 10px 18px; border: 2px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; touch-action: manipulation; }
+.nav { display: flex; gap: 10px; justify-content: space-between; }
+textarea, input, select { width: 100%; padding: 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--surface); }
+label { display: grid; gap: 6px; font-weight: 700; }
+.note { font-size: 0.86rem; color: var(--ink-2); }
+.steps { font-weight: 700; color: var(--ink-2); font-size: 0.9rem; }
+.bad { color: var(--crit); font-weight: 700; }
+.good { color: var(--good); font-weight: 700; }
+.card { background: var(--surface); border: 2px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+@media (prefers-color-scheme: dark) {
+  :root { --navy: #8db5ea; --navy-deep: #dbe5f0; --bg: #0f1620; --surface: #17212c; --ink: #e8edf3; --ink-2: #b5c0cd; --line: #42526a; --good: #6fcf8f; --crit: #ff8f85; }
+  header { background: #1a3452; }
+  .main-btn, .choice[aria-pressed="true"] { color: #0b1420; }
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "value") el.value = v;
+    else if (v === true) el.setAttribute(k, "");
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return el;
+}
+const CODE = (location.pathname.split("/")[2] || "").toUpperCase();
+const SEND_EVERY_MS = window.SEND_EVERY_MS || 30000;
+const store = {
+  get(key, fallback) { try { const v = localStorage.getItem(`${key}_${CODE}`); return v === null ? fallback : JSON.parse(v); } catch (e) { return fallback; } },
+  set(key, value) { try { localStorage.setItem(`${key}_${CODE}`, JSON.stringify(value)); return true; } catch (e) { return false; } },
+};
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+const NOTICE = (who) => `Taking part is voluntary, you need to be 16 or over, and you can skip any question. We don't ask for your name, so please don't give anyone's name or address. An AI tool takes out any names and sorts comments into topics. Run by ${who}.`;
+
+const S = { survey: null, closed: false, stuck: false, sending: false, site: store.get("clarion_site", ""), form: null, i: 0 };
+const app = document.getElementById("app");
+const status = h("span", { role: "status" });
+
+async function call(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (!res.ok) { const err = new Error((data && data.error) || "Something went wrong."); err.status = res.status; throw err; }
+  return data;
+}
+
+function queue() { return store.get("clarion_queue", []); }
+function drawStatus() {
+  const n = queue().length;
+  status.textContent = (S.closed || S.stuck) && n ? `${n} form${n === 1 ? "" : "s"} still on this tablet` : n ? `${n} form${n === 1 ? "" : "s"} waiting to send` : "All sent";
+}
+// Forms stay on the tablet until Clarion says it has them. Each has its own id, so sending one twice does no harm.
+async function send() {
+  if (S.sending || !CODE) return;
+  S.sending = true;
+  try {
+    for (;;) {
+      const waiting = queue();
+      if (!waiting.length) break;
+      const batch = waiting.slice(0, 20);
+      const r = await call("/api/s/submit", { access: CODE, forms: batch });
+      const gone = new Set(r.done || []);
+      store.set("clarion_queue", queue().filter((f) => !gone.has(f.client)));
+      S.stuck = gone.size < batch.length; // refused, perhaps because the survey is full: keep them and say so
+      S.closed = false;
+      drawStatus();
+      if (S.stuck) break;
+    }
+  } catch (e) {
+    if (e.status === 409) { S.closed = true; drawStatus(); if (!S.form) closedScreen(); }
+    if (e.status === 404) S.stuck = true; // the survey has gone back to a draft, so its code no longer works
+  } finally {
+    S.sending = false;
+    drawStatus();
+  }
+}
+
+function frame(...kids) {
+  const title = S.survey ? S.survey.title : "Street survey";
+  app.replaceChildren(h("header", {}, h("span", {}, title), status), h("main", {}, kids), h("footer", {}, "Clarion, from the Future Highways Research Group"));
+  window.scrollTo(0, 0);
+}
+
+function codeScreen(message) {
+  const input = h("input", { "aria-label": "Survey code", autocapitalize: "characters", autocomplete: "off", maxlength: 12 });
+  const f = h("form", {}, h("label", {}, "Survey code", input));
+  const go = (ev) => { ev.preventDefault(); const code = input.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""); if (code) location.href = `/s/${code}`; };
+  f.addEventListener("submit", go);
+  f.append(h("p", { class: "note" }, "Your officer will give you this."), h("button", { class: "main-btn", type: "submit" }, "Continue"));
+  frame(h("h1", {}, "Street survey"), message ? h("p", { class: "bad", role: "alert" }, message) : null, f);
+}
+
+function closedScreen() {
+  const n = queue().length;
+  frame(h("h1", {}, "This survey is closed"), n ? [h("p", { class: "bad" }, `${n} form${n === 1 ? " is" : "s are"} still on this tablet.`), h("p", {}, "Ask your officer to open the survey again, then press the button below."), h("button", { class: "main-btn", type: "button", onclick: () => load() }, "Try again")] : h("p", {}, "Thank you. All your forms have been sent."));
+}
+
+function startScreen() {
+  const sites = S.survey.sites;
+  const site = sites.length ? h("select", { "aria-label": "Site" }, h("option", { value: "" }, "Choose a site"), sites.map((x) => h("option", { value: x }, x))) : h("input", { "aria-label": "Site", maxlength: 80 });
+  site.value = S.site;
+  const msg = h("p", { class: "bad", role: "alert" });
+  frame(h("h1", {}, "Ready for the next person"), h("label", {}, "Where are you?", site),
+    h("div", { class: "card" }, h("p", {}, "Please read this out or show it first."), h("p", { class: "note" }, NOTICE(S.survey.collector))), msg,
+    h("button", { class: "main-btn", type: "button", onclick: () => {
+      if (!site.value.trim()) { msg.textContent = "Say where you are first."; return; }
+      S.site = site.value.trim();
+      store.set("clarion_site", S.site);
+      S.form = { client: uid(), site: S.site, answers: {}, started: Date.now() };
+      S.i = 0;
+      question();
+    } }, "Start"));
+}
+
+function question() {
+  const qs = S.survey.questions, q = qs[S.i], form = S.form;
+  const next = () => { if (S.i + 1 < qs.length) { S.i++; question(); } else finish(); };
+  const back = h("button", { class: "quiet", type: "button", onclick: () => { if (S.i > 0) { S.i--; question(); } else { S.form = null; startScreen(); } } }, S.i > 0 ? "Back" : "Cancel");
+  const heading = h("h1", { tabindex: "-1" }, q.text);
+  if (q.kind === "text") {
+    const area = h("textarea", { rows: 5, maxlength: 1000, "aria-label": q.text, oninput: () => { form.answers[q.id] = area.value; } });
+    area.value = form.answers[q.id] || "";
+    frame(h("div", { class: "steps" }, `Question ${S.i + 1} of ${qs.length}`), heading, area, h("p", { class: "note" }, "Please leave out anyone's name or address."), h("button", { class: "main-btn", type: "button", onclick: next }, "Next"), h("div", { class: "nav" }, back));
+  } else {
+    frame(h("div", { class: "steps" }, `Question ${S.i + 1} of ${qs.length}`), heading,
+      h("div", { class: "choices" }, q.options.map((o) => h("button", { class: "choice", type: "button", "aria-pressed": form.answers[q.id] === o ? "true" : "false", onclick: () => { form.answers[q.id] = o; next(); } }, o))),
+      h("div", { class: "nav" }, back, h("button", { class: "quiet", type: "button", onclick: () => { delete form.answers[q.id]; next(); } }, "Skip")));
+  }
+  heading.focus();
+}
+
+function finish() {
+  const f = S.form;
+  S.form = null; // nothing of this person's stays on the screen
+  const answers = Object.fromEntries(Object.entries(f.answers).filter(([, v]) => String(v).trim()));
+  const saved = !Object.keys(answers).length || store.set("clarion_queue", [...queue(), { client: f.client, site: f.site, secs: Math.round((Date.now() - f.started) / 1000), answers }]);
+  drawStatus();
+  frame(h("h1", {}, "Thank you"), saved ? null : h("p", { class: "bad", role: "alert" }, "This tablet's storage is full, so that form wasn't kept. Send the waiting forms before carrying on."),
+    h("button", { class: "main-btn", type: "button", onclick: startScreen }, "Next person"));
+  send();
+}
+
+async function load() {
+  if (!CODE) return codeScreen();
+  frame(h("p", { role: "status" }, "Opening the survey…"));
+  try {
+    S.survey = (await call("/api/s/get", { access: CODE })).survey;
+    S.closed = false;
+    store.set("clarion_survey", S.survey);
+  } catch (e) {
+    if (e.status === 404) return codeScreen(e.message);
+    if (e.status === 409) { S.closed = true; drawStatus(); return closedScreen(); }
+    if (e.status === 429) return codeScreen(e.message);
+    S.survey = store.get("clarion_survey", null); // no signal: carry on with what the tablet already has
+    if (!S.survey) return codeScreen("There's no signal here, and this survey hasn't been opened on this tablet before.");
+  }
+  document.title = S.survey.title;
+  drawStatus();
+  startScreen();
+  send();
+}
+
+window.addEventListener("online", send);
+setInterval(send, SEND_EVERY_MS);
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/s/sw.js").catch(() => {});
+drawStatus();
+load();
+</script>
+</body>
+</html>

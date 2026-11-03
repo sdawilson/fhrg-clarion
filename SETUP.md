@@ -103,7 +103,8 @@ From now on, every change Claude makes reaches the container by itself.
 - **Keep it to exactly one instance** (Regions and Scaling: minimum 1, maximum 1).
 - **Type setting names by hand** when you add one, then click **Update Container**.
 - **Spending:** site administrators see the month's Claude spend at the bottom of the side rail. Clarion stops starting new work at `MONTHLY_CAP_USD`. Each authority can also start up to `DAILY_JOBS_MAX` readings and notes a day (20 unless you set it); site administrators aren't limited.
-- **Signing in from the website** comes in a separate small change, so members needn't type their password.
+- **Signing in from the website:** members open Clarion from `https://fhrg.co.uk/clarion` and arrive signed in, using `CLARION_SSO_SECRET` on the website and `SSO_SECRET` here.
+- **Street surveys:** Clarion's Census figures come from the data library's `census_age_sex_la` table. Each authority can ask Claude for help with surveys up to 100 times a day, and a scan counts as one. Scans aren't kept. What Claude read from a scan goes as soon as it reaches the person who asked, or within a day if nobody comes back for it.
 
 ## If something isn't right
 
@@ -115,6 +116,8 @@ From now on, every change Claude makes reaches the container by itself.
 | A source says "couldn't be read just now" | Try again later. If it stays that way, tell Claude which source |
 | "Clarion has reached this month's spending limit" | Raise `MONTHLY_CAP_USD`, or wait for the new month |
 | "has reached today's limit" | Try again tomorrow, or raise `DAILY_JOBS_MAX` |
+| A survey says "Census figures couldn't be read" | Check the data library has been reloaded, and that `FHRG_REF_KEY` works. Results still appear, unweighted |
+| A tablet says forms are still on it | The survey is closed. Open it again on the **Collect** tab, then press **Try again** on the tablet |
 | "Something went wrong" | Open the app's **Logs** in Magic Containers; the last lines say why |
 | `/health` doesn't answer | Open the app's **Logs** in Magic Containers; the last lines say why it stopped |
 | The **Build and deploy** run fails | Open it in the **Actions** tab; the failing step is marked. Tell Claude what it says |

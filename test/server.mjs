@@ -25,6 +25,15 @@ ok(!logs.join("\n").includes(simEnv.SESSION_SECRET) && !logs.join("\n").includes
 
 let r = await fetch(`${base}/health`);
 ok(r.status === 200 && (await r.json()).ok === true, "/health answers");
+// the tablet page, with no account
+r = await fetch(`${base}/s/ABCD2345`);
+const tabletPage = await r.text();
+ok(r.status === 200 && /One question|Street survey/.test(tabletPage) && /noindex/.test(r.headers.get("x-robots-tag") || "") && r.headers.get("referrer-policy") === "no-referrer", "the tablet page opens without an account, hidden from search engines and with its code kept out of referrers");
+ok((await (await fetch(`${base}/s`)).text()).includes("Survey code"), "and at the plain address, for typing a code in");
+r = await fetch(`${base}/s/sw.js`);
+ok(r.status === 200 && /javascript/.test(r.headers.get("content-type")) && /clarion-survey/.test(await r.text()), "its helper for working without a signal is served");
+r = await post("/api/s/get", {});
+ok(r.status === 404, "the tablet's route answers without an account");
 r = await fetch(`${base}/`);
 const html = await r.text();
 const csp = r.headers.get("content-security-policy") || "";
@@ -77,6 +86,15 @@ for (let i = 0; i < 31; i++) last = (await post("/api/login", { email: `nobody${
 ok(last === 429, "31 failed sign-ins from one address are stopped");
 for (let i = 0; i < 9; i++) last = (await post("/api/login", { email: "lead@westsussex.gov.uk", password: "wrong" }, { "x-real-ip": `198.51.100.${i}` })).status;
 ok(last === 429, "so are repeated failures on one account from many addresses");
+
+// a scan may be larger than anything else
+const bulky = "x".repeat(3 * 1024 * 1024);
+r = await post("/api/survey/get", bulky).catch(() => ({ status: "closed" }));
+ok(r.status === 413 || r.status === "closed", "an oversized request is refused");
+r = await post("/api/survey/scan", JSON.stringify({ code: "E10000032", id: "20261102120000000-abcd1234", data: bulky }), { "x-session-token": login.token });
+ok(r.status === 404, "but a scan of that size is read");
+r = await post("/api/survey/scan", "x".repeat(12 * 1024 * 1024)).catch(() => ({ status: "closed" }));
+ok(r.status === 413 || r.status === "closed", "and it has a limit too");
 
 server.close();
 console.log(failures ? `\n${failures} FAILED` : "\nAll passed");

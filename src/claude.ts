@@ -111,7 +111,7 @@ export type ToolHandler = (input: Record<string, any>) => Promise<unknown>;
 
 type RunOptions = {
   system: string;
-  prompt: string;
+  prompt: string | any[]; // words, or content blocks such as a scanned form
   tools: any[]; // the finish tool, any tools Clarion answers, and any of Anthropic's server tools
   finish: string; // the tool that hands in the result
   handlers?: Record<string, ToolHandler>;

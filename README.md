@@ -4,13 +4,14 @@ Clarion gauges how the public in each local highway authority feels about its ro
 
 It runs as one Node program in a bunny.net Magic Container. Members sign in with their FHRG website account. To set it up, follow **[SETUP.md](SETUP.md)**.
 
-## Stage 1 (this version)
+## What it does so far
 
 For the pilot authorities (Lincolnshire, Kirklees and West Sussex):
 
 - **Evidence:** survey results, DfT ratings, published figures compared with the region and England, public fault reports, petitions and MPs' questions, and what's missing.
 - **Mood reading:** Claude writes a reading from that evidence. A change is only reported when two kinds of signal agree.
 - **Impact note:** choose an announcement, and Clarion pins down what changed, tests it against nine routes of impact, challenges its own claims, and logs each forecast with a check date.
+- **Street Surveys:** fixed core questions plus up to five local ones, which Claude can suggest and check. A plan with age and sex targets from Census 2021. Numbered A4 forms to print, and a link for tablets that works without a signal. Answers come from tablets, typed-in forms, scans read by Claude and checked by a person, or a CSV file. Claude takes names out of written comments and sorts them into topics. Results are weighted to the local population, always labelled indicative, and feed the mood reading as figures and topic counts.
 
 ## What's here
 
@@ -25,8 +26,10 @@ For the pilot authorities (Lincolnshire, Kirklees and West Sussex):
 | `src/signals.ts` | FixMyStreet, petitions, MPs' questions and GOV.UK |
 | `src/evidence.ts` | Everything held on an authority |
 | `src/reading.ts`, `src/notes.ts` | The mood reading and the impact note |
+| `src/surveys.ts`, `src/surveyai.ts` | Street surveys, and what Claude does for them |
 | `src/claude.ts`, `src/jobs.ts`, `src/style.ts` | Claude, background jobs, and the house style |
 | `public/index.html` | The page (it ships with the server) |
+| `public/survey.html` | The tablet page for interviewers, at `/s/<code>` |
 | `test/` | Tests against simulated services; no keys needed |
 
 ## Where things live

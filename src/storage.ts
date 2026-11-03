@@ -5,6 +5,8 @@
 //   authorities/<code>/readings/<id>.json      mood readings
 //   authorities/<code>/notes/<id>.json         impact notes
 //   authorities/<code>/forecasts.json          every forecast made, with its check date
+//   authorities/<code>/surveys/ and survey-*/  street surveys and their answers (see surveys.ts)
+//   system/survey-codes/<code>.json            which survey an access code opens
 
 import type { Config } from "./config";
 import { fetchWithTimeout } from "./util";

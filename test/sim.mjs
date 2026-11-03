@@ -43,11 +43,13 @@ function query(sql, args) {
   const me = (u) => { const a = authorities.find((x) => x.id === u.authority_id); return { ...u, a_id: a.id, a_name: a.name, a_status: a.status }; };
   if (/WHERE u.email = \?/.test(sql)) return users.filter((u) => u.email === args[0]).map(me);
   if (/WHERE u.id = \?/.test(sql)) return users.filter((u) => u.id === Number(args[0])).map(me);
+  if (/FROM news_topics/.test(sql)) return newsTopics.map((name) => ({ name }));
   return [];
 }
+export const newsTopics = ["Potholes", "Street lighting", "Road safety"];
 
 // ----- Claude: `claude.script` decides what each job's model says; every call is recorded
-export const claude = { calls: [], script: {}, fail: null, failMessage: "nope", refused: [], dropAfter: 0 };
+export const claude = { calls: [], script: {}, fail: null, failMessage: "nope", refused: [], dropAfter: 0, hold: null };
 export const website = { down: false };
 const message = (content, stop = "tool_use", extra = {}) => ({ id: "msg", type: "message", role: "assistant", content, stop_reason: stop, usage: { input_tokens: 1000, output_tokens: 200, ...extra } });
 const use = (name, input) => ({ type: "tool_use", id: `tu_${name}_${Math.random().toString(36).slice(2, 8)}`, name, input });
@@ -111,7 +113,8 @@ function sse(m) {
 
 function anthropic(body) {
   const sys = String(body.system || "");
-  claude.calls.push({ body, sys, prompt: typeof body.messages[0].content === "string" ? body.messages[0].content : "" });
+  const first = body.messages[0].content;
+  claude.calls.push({ body, sys, prompt: typeof first === "string" ? first : first.map((b) => b.text ?? "").join("") });
   const names = (body.tools || []).map((t) => t.name);
   const finish = names.find((n) => n.startsWith("submit_"));
   const custom = claude.script[finish];
@@ -132,6 +135,16 @@ function anthropic(body) {
     return message([use(finish, assessment())]);
   }
   if (finish === "submit_review") return message([use(finish, review())]);
+  if (finish === "submit_questions") return message([use(finish, { questions: [{ text: "Have you noticed the work on the A27?", kind: "choice", options: ["Yes", "No", "Don't know"], why: "Shows how far the scheme has reached people." }, { text: "What would you change first?", kind: "text", options: [], why: "Priorities in people's own words." }] })]);
+  if (finish === "submit_wording") return message([use(finish, { verdicts: [{ id: "l1", verdict: "leading", reason: "It assumes the roads are bad.", better: "How are the roads near you?" }, { id: "l9", verdict: "Fine", reason: "", better: "" }] })]);
+  if (finish === "submit_forms") return message([use(finish, { forms: [
+    { form_number: "71", site: "Market Square", answers: [{ id: "c1", answer: "fairly satisfied" }, { id: "c2", answer: "Worse" }, { id: "c3", answer: "Saw a big hole. Jane Smith told me." }, { id: "zz", answer: "not a question" }], unclear: ["c2"] },
+    { form_number: "72", site: "", answers: [{ id: "c1", answer: "A scribble" }, { id: "c2", answer: "Better" }, { id: "a2", answer: "Female" }], unclear: [] },
+  ] })]);
+  if (finish === "submit_comments") {
+    const comments = JSON.parse(/<comments>\n([\s\S]*)\n<\/comments>/.exec(typeof first === "string" ? first : "")?.[1] || "[]");
+    return message([use(finish, { comments: comments.filter((x) => !x.text.includes("lost in the post")).map((x) => ({ ref: x.ref, text: x.text.replace(/Jane Smith/g, "[removed]"), topic: /light/i.test(x.text) ? "street lighting" : /hole/i.test(x.text) ? "Potholes" : "Made-up topic" })) })]);
+  }
   return message([{ type: "text", text: "Hello." }], "end_turn");
 }
 
@@ -146,6 +159,7 @@ CREATE TABLE traffic_la (la_code TEXT, la_name TEXT, year INTEGER, link_length_k
 CREATE TABLE collisions (collision_index TEXT, collision_year INTEGER, date_iso TEXT, la_code TEXT, collision_severity INTEGER);
 CREATE TABLE collision_casualties (collision_index TEXT, casualty_severity INTEGER);
 CREATE TABLE maintenance_allocations (authority TEXT, authority_type TEXT, la_code TEXT, funding_pot TEXT, fye INTEGER, years TEXT, amount_gbp REAL, note TEXT, source TEXT);
+CREATE TABLE census_age_sex_la (la_code TEXT, la_name TEXT, region TEXT, age_band TEXT, age_from INTEGER, age_to INTEGER, sex TEXT, people INTEGER);
 `);
 const ins = (t, n) => db.prepare(`INSERT INTO ${t} VALUES (${Array(n).fill("?").join(",")})`);
 const AUTH = [["E10000032", "West Sussex", "South East", "County council"], ["E10000016", "Kent", "South East", "County council"], ["E10000030", "Surrey", "South East", "County council"],
@@ -162,6 +176,9 @@ AUTH.forEach(([code, name, region, kind, ownRegion], i) => {
   for (let k = -1; k < 7; k++) if (!(name === "Nottinghamshire" && k < 1)) ins("traffic_la", 6).run(code, name, 2019 + k, 4000, 1, k === 1 ? 700 : 1000 + k * 10);
   for (let k = 0; k < 3; k++) { ins("collisions", 5).run(`C${i}-${k}`, 2024, "2024-01-01", code, k + 1); ins("collision_casualties", 2).run(`C${i}-${k}`, k + 1); }
 });
+// the real bands. West Sussex has more older people than younger ones, which is what weighting has to correct.
+const CENSUS_BANDS = [["0 to 4", 0, 4], ["5 to 9", 5, 9], ["10 to 15", 10, 15], ["16 to 19", 16, 19], ["20 to 24", 20, 24], ...[25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80].map((a) => [`${a} to ${a + 4}`, a, a + 4]), ["85 and over", 85, null]];
+for (const [band, from, to] of CENSUS_BANDS) for (const sex of ["Female", "Male"]) ins("census_age_sex_la", 8).run("E10000032", "West Sussex", "South East", band, from, to, sex, from < 16 ? 9999 : from < 35 ? 10000 : from < 65 ? 20000 : 30000);
 ins("road_condition_la", 8).run("E10000004", "Bedfordshire", "East of England", "A", 2026, "red", 40, ""); // abolished, and not in authorities
 ins("road_treatment_la", 10).run("E10000004", "Bedfordshire", "East of England", "A", 2026, 500, 1, 2, 3, 40);
 for (const [pot, amount] of [["Baseline", 20720000], ["Incentive", 7583000], ["Total", 28303000]]) ins("maintenance_allocations", 9).run("West Sussex", "local highway authority", "E10000032", pot, 2027, "2026 to 2027", amount, "", "DfT");
@@ -170,7 +187,7 @@ ins("maintenance_allocations", 9).run("West Sussex", "local highway authority", 
 export const lib = { queries: [], down: false };
 const OGL = "Contains public sector information licensed under the Open Government Licence v3.0.";
 const dataset = (title, tables) => ({ name: title, title, attribution: `${title}. ${OGL}`, sourceDate: "2026-10", loadedAt: "2026-10-20", tables: tables.map((name) => ({ name })) });
-const DATASETS = [dataset("Road traffic statistics", ["authorities", "traffic_la"]), dataset("Road condition statistics", ["road_condition_la"]), dataset("Road treatment", ["road_treatment_la"]), dataset("Road lengths", ["road_length_la"]), dataset("Road casualties", ["collisions", "collision_casualties"]), dataset("Highways maintenance funding", ["maintenance_allocations"])];
+const DATASETS = [dataset("Road traffic statistics", ["authorities", "traffic_la"]), dataset("Road condition statistics", ["road_condition_la"]), dataset("Road treatment", ["road_treatment_la"]), dataset("Road lengths", ["road_length_la"]), dataset("Road casualties", ["collisions", "collision_casualties"]), dataset("Highways maintenance funding", ["maintenance_allocations"]), dataset("Census 2021", ["census_age_sex_la"])];
 const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 function library(url, init) {
   if (lib.down) return reply(500, { error: "Down" });
@@ -253,6 +270,7 @@ globalThis.fetch = async (input, init = {}) => {
   }
   if (url === "https://api.anthropic.com/v1/messages") {
     if (claude.fail) return new Response(JSON.stringify({ error: { message: claude.failMessage } }), { status: claude.fail });
+    if (claude.hold) await claude.hold;
     const body = JSON.parse(init.body), no = refused(body);
     if (no) { claude.refused.push(no); return new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: no } }), { status: 400 }); }
     return new Response(sse(anthropic(body)), { status: 200, headers: { "content-type": "text/event-stream" } });

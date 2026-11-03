@@ -9,3 +9,5 @@ export { strictTool } from "../src/claude";
 export { loadFigures, refQuery } from "../src/library";
 export { getConfig } from "../src/config";
 export { withLock, median, addMonths } from "../src/util";
+export { ageSexTargets, answersCsv, commentSample, findProblems, formNumber, likelyRange, parseCsv, readAnswers, readCsv, readLocals, surveyResults, templateCsv, topicCounts, validAccess, waitingComments, weightsFor, CORE, ABOUT } from "../src/surveys";
+export { scrubContacts, sweepHelp, tidyScan } from "../src/surveyai";
