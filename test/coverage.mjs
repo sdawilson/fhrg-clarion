@@ -68,6 +68,15 @@ ok(/don't paste/.test(refused({ summary: "x".repeat(201) })), "a pasted article 
 ok(/future/.test(refused({ date: "2026-12-01" })) && /topic/.test(refused({ topic: "Nonsense" })) && /source/.test(refused({ source: "b" })) && /relevance/.test(refused({ tone: "Angry" })), "and so is anything that isn't a real choice");
 ok(/plain number/.test(refused({ reach: "12k" })), "including a reach that can't be read");
 
+// ABC's register
+const pasted = ["Period\tProduct\tOwner\tSector/Platform\tTotal\tMetric", "Jan - Dec 2025\tHuddersfield Daily Examiner\tReach Regionals Limited\tRegional Publication\t1524\tCirculation (average per issue)", "Dec-25\tThe Gazette\tReach Regionals Limited\tRegional Publication\t22,817\tCirculation (average per issue)", "Jan - Dec 2025\tBoston Target\tReach Regionals Limited\tRegional Publication\t816\tCirculation (average per issue)\r", "Jan - Dec 2025\tSomething Else\tOwner\tRegional Publication\t900\tPage views", "A line with no columns", ""].join("\n");
+const abcRows = t.readAbcTable(pasted);
+ok(abcRows.length === 3 && abcRows[0].name === "Boston Target" && abcRows[0].total === 816, "ABC's table is read from what's pasted, passing over headings and anything that isn't a circulation figure");
+ok(abcRows.find((x) => x.name === "The Gazette").total === 22817 && abcRows.find((x) => x.name === "The Gazette").period === "Dec 2025", "with commas and a spreadsheet's changed dates put right");
+ok(t.closestTitles(abcRows, "huddersfield examiner")[0]?.name === "Huddersfield Daily Examiner" && t.closestTitles(abcRows, "The Boston").length === 1, "a title is found from the words typed, in any case, with or without \"the\"");
+ok(t.closestTitles(abcRows, "ga").length === 0 && t.closestTitles(abcRows, "the").length === 0 && t.closestTitles(abcRows, "Worthing Herald").length === 0, "too little typed, or no such title, finds nothing");
+ok(t.closestTitles(Array.from({ length: 40 }, (_, i) => ({ name: `Town Gazette ${i}`, owner: "", period: "", total: 1 })), "gazette").length === 6, "and only a handful of matches is ever given, never the whole list");
+
 // waiting for something from outside
 const never = new Promise(() => {});
 let started = 0, began = Date.now();
@@ -91,7 +100,18 @@ const api = async (path, body, token) => { const r = await handleRequest(new Req
 const login = async (email) => (await api("/api/login", { email, password: "pw" })).token;
 const lead = await login("lead@westsussex.gov.uk"), member = await login("member@westsussex.gov.uk"), kirk = await login("officer@kirklees.gov.uk");
 
-let r = await api("/api/coverage/get", { code: WSX });
+await addUser(4, "boss@fhrg.test", "Bo Boss", 99, "member");
+const boss = await login("boss@fhrg.test");
+let r = await api("/api/abc/save", { text: pasted }, lead);
+ok(r.status === 403 && (await api("/api/abc/status", {}, lead)).status === 403, "only site administrators can load ABC's list");
+ok((await api("/api/abc/find", { code: WSX, q: "Examiner" })).status === 401 && (await api("/api/abc/find", { code: WSX, q: "Examiner" }, kirk)).status === 403, "and finding a title needs a sign-in, for your own authority");
+ok((await api("/api/abc/find", { code: WSX, q: "Examiner" }, member)).titles.length === 0, "with no list held, nothing is found");
+ok((await api("/api/abc/save", { text: "nothing useful" }, boss)).status === 400, "a paste with no titles in it is refused");
+r = await api("/api/abc/save", { text: pasted }, boss);
+ok(r.count === 3 && (await api("/api/abc/status", {}, boss)).by === "Bo Boss", "an administrator's paste is saved, and says how many titles came through");
+r = await api("/api/abc/find", { code: WSX, q: "Examiner" }, member);
+ok(r.titles.length === 1 && r.titles[0].total === 1524, "and a member sees the title that matches");
+r = await api("/api/coverage/get", { code: WSX });
 ok(r.status === 401, "this needs a sign-in");
 ok((await api("/api/coverage/get", { code: WSX }, kirk)).status === 403, "and it's only for your own authority");
 r = await api("/api/coverage/get", { code: WSX }, member);
@@ -245,6 +265,16 @@ field("Type").value = "Local Newsletter"; field("Type").dispatchEvent(new w.Even
 button(d, "Add this source").click();
 await see(d, /Moorside News/);
 ok(/Add reach/.test(text(d.querySelector(".main"))), "a source with no reach is asked for it");
+typeIn(w, field("Name"), "huddersfield exam");
+await see(d, /Huddersfield Daily Examiner \(Reach Regionals Limited\): 1,524 copies an issue, Jan - Dec 2025/);
+ok(/Audit Bureau of Circulations/.test(text(d.querySelector(".main"))), "typing a name offers ABC's figure, credited to ABC");
+button(d, "Use this").click();
+ok(field("Name").value === "Huddersfield Daily Examiner" && field("Reach, if you have a figure").value === "1524" && field("Reach is counted in").value === "copies" && field("Where the reach comes from").value === "ABC, Jan - Dec 2025", "and taking it fills in the reach and where it came from");
+button(d, "Add this source").click();
+await see(d, /1,524 copies/);
+ok(/ABC, Jan - Dec 2025/.test(text(d.querySelector(".main"))), "and that's what's saved");
+await api("/api/coverage/unsource", { code: WSX, id: (await api("/api/coverage/get", { code: WSX }, lead)).sources.find((x) => x.name.startsWith("Huddersfield")).id }, lead);
+w.location.hash = `#said/${WSX}/latest`; await see(d, /Latest assessments/); w.location.hash = `#said/${WSX}/sources`; await see(d, /Assessed by your officers/);
 ok(/testhavencourier\.example/.test(text(d.querySelector(".main"))), "and the sources list shows which site is checked");
 field("Name").value = "Moorside Radio"; field("Name").dispatchEvent(new w.Event("input"));
 field("Type").value = "Local Radio"; field("Type").dispatchEvent(new w.Event("change"));

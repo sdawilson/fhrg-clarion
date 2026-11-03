@@ -371,6 +371,7 @@ const Demo = {
       case "/api/authority": return P.authority;
       case "/api/coverage/get": return P.coverage;
       case "/api/coverage/summary": return { summary: P.coverage.summary };
+      case "/api/abc/find": return { titles: P.abcTitles.filter((x) => (b.q || "").length > 2 && x.name.toLowerCase().includes(b.q.toLowerCase())) };
       case "/api/coverage/check": {
         const words = b.keywords || [];
         if (!words.length) throw new Error("Give one or two keywords.");
@@ -780,19 +781,32 @@ function saidSources(top, a, d) {
   function drawForm(was) {
     const f = { ...(was || {}) }, picks = {};
     let unitChosen = !!f.reachUnit;
-    const input = (key, label, attrs, hint) => { const el = h("input", { value: f[key] === null || f[key] === undefined ? "" : String(f[key]), ...attrs, oninput: () => { f[key] = el.value; } }); return h("label", { class: "field" }, label, el, hint ? h("span", { class: "hint" }, hint) : null); };
+    const input = (key, label, attrs, hint) => { const el = picks[key] = h("input", { value: f[key] === null || f[key] === undefined ? "" : String(f[key]), ...attrs, oninput: () => { f[key] = el.value; } }); return h("label", { class: "field" }, label, el, hint ? h("span", { class: "hint" }, hint) : null); };
     const select = (key, label, list, blank, then) => { const el = picks[key] = h("select", { "aria-label": label, onchange: () => { f[key] = el.value; then?.(); } }, blank ? h("option", { value: "" }, blank) : null, list.map((v) => h("option", { value: v }, v))); el.value = f[key] || (blank ? "" : list[0]); f[key] = el.value; return h("label", { class: "field" }, label, el); };
     const unitFollows = () => { if (!unitChosen) f.reachUnit = picks.reachUnit.value = d.reachUnitFor[f.type]; }; // radio is listeners, and so on, until an officer says otherwise
+    // ABC's register, if a title matches what's typed. Where nothing matches, the officer enters reach as before
+    const abc = h("div", { class: "stack" });
+    let wait, latest = 0;
+    const put = (key, value) => { f[key] = value; picks[key].value = value; };
+    const useTitle = (t) => { put("name", t.name); put("reach", String(t.total)); put("reachUnit", "copies"); put("reachBand", ""); put("reachFrom", `ABC, ${t.period}`); unitChosen = true; clear(abc); };
+    const lookUp = async () => {
+      const mine = ++latest;
+      let r;
+      try { r = await API.call("/api/abc/find", { code: a.code, q: f.name || "" }); } catch (e) { return; } // nothing lost: the officer can enter it
+      if (mine !== latest) return;
+      add(clear(abc), r.titles.length ? h("p", { class: "note" }, "Figures from ABC, the Audit Bureau of Circulations:") : null, r.titles.map((t) => h("div", { class: "row" }, h("span", {}, `${t.name} (${t.owner}): ${fmt(t.total)} copies an issue, ${t.period}`), h("button", { class: "btn small", type: "button", onclick: () => useTitle(t) }, "Use this"))));
+    };
     const m = saveNote();
     const campaign = d.topics.map((t) => { const box = h("input", { type: "checkbox", value: t, checked: (f.campaign || []).includes(t) }); return { box, row: h("label", { class: "check" }, box, t) }; });
     clear(formBox).append(h("h3", {}, was ? `Change ${was.name}` : "Add a source"),
       h("div", { class: "form-grid" }, input("name", "Name", { maxlength: 100 }), select("type", "Type", d.types, null, unitFollows), input("domain", "Web address, if it has its own site", { maxlength: 120, placeholder: "northbridgecourier.example" }, "Clarion checks the whole site for keywords. Leave this blank for a page on Facebook or the BBC"),
         input("reach", "Reach, if you have a figure", { inputmode: "numeric" }, "An ABC certificate, station figures or members"), select("reachUnit", "Reach is counted in", d.reachUnits, null, () => { unitChosen = true; }), select("reachBand", "Or your estimate", d.reachBands, "Not needed"), input("reachFrom", "Where the reach comes from", { maxlength: 80, placeholder: "ABC certificate, June 2026" }),
         select("leaning", "Political leaning", d.leanings), select("stance", "Usual stance on the council", d.stances)),
-      h("div", { class: "field" }, "Campaigning on", h("div", { class: "row" }, campaign.map((x) => x.row))),
+      abc, h("div", { class: "field" }, "Campaigning on", h("div", { class: "row" }, campaign.map((x) => x.row))),
       m, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: async () => { try { await API.call("/api/coverage/source", { code: a.code, ...f, campaign: campaign.filter((x) => x.box.checked).map((x) => x.box.value) }); route(); } catch (e) { said(m, e.message, "err"); } } }, was ? "Save the change" : "Add this source"), was ? h("button", { class: "btn ghost", type: "button", onclick: () => drawForm(null) }, "Cancel") : null));
     unitFollows();
-    if (was) formBox.scrollIntoView?.({ block: "nearest" });
+    picks.name.addEventListener("input", () => { clearTimeout(wait); wait = setTimeout(lookUp, 300); });
+    if (was) { lookUp(); formBox.scrollIntoView?.({ block: "nearest" }); }
   }
   if (d.canEdit) { drawForm(null); top.append(formBox); }
   top.append(h("section", { class: "card" }, h("div", { class: "row" }, h("h3", {}, "Automatic press searches"), h("span", { class: "pill" }, "Off")), h("p", {}, "For an authority whose NLA licence covers it, Clarion could search and read articles by itself. Standard NLA licences appear to rule out text mining and AI use, so this stays off until NLA confirms which licence covers it.")));
@@ -808,6 +822,15 @@ function aboutView(page, a) {
 }
 
 // ---------------------------------------------------------------- all authorities, for FHRG administrators
+// ABC's register, pasted in here so that officers can take a source's reach from it
+function abcCard() {
+  const status = h("p", { class: "note" }, "Checking…"), box = h("textarea", { rows: 6, "aria-label": "ABC's table" }), m = saveNote();
+  const show = (x) => { status.textContent = x.count ? `${fmt(x.count)} title${x.count === 1 ? "" : "s"} held, saved on ${fmtDate(x.at)} by ${x.by}.` : "No titles held yet."; };
+  API.call("/api/abc/status").then(show).catch(() => { status.textContent = "The list couldn't be read just now."; });
+  return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "ABC circulation figures"), h("p", {}, "So officers can take a source's reach from ABC's register. They see only the titles that match what they type."))), status,
+    h("label", { class: "field" }, "Paste the rows from ABC's table", box, h("span", { class: "hint" }, "This replaces the list held. Paste it again whenever ABC publishes new figures.")), m,
+    h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => { try { const x = await API.call("/api/abc/save", { text: box.value }); show(x); box.value = ""; said(m, `Saved ${fmt(x.count)} title${x.count === 1 ? "" : "s"}.`); } catch (e) { said(m, e.message, "err"); } } }, "Save the list")));
+}
 async function adminView(page) {
   const body = h("div", { class: "stack gap" }, loading("Bringing the figures together…"));
   page.append(pageHead("All authorities: the position across the FHRG", "Figures and topic counts only. Residents' comments and officer notes aren't brought together here."), body);
@@ -833,7 +856,7 @@ async function adminView(page) {
     h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Core questions by authority"), h("p", {}, "In alphabetical order, not ranked. A difference may reflect local choices, geography or who was asked. For FHRG administrators only."))),
       h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Authority"), h("th", { class: "r" }, "Replies"), h("th", { class: "r" }, "Satisfied"), h("th", { class: "r" }, "Say worse"), h("th", {}, "Direction of mood"), h("th", {}, "Latest survey"))),
         h("tbody", {}, d.authorities.map((x) => h("tr", {}, h("td", {}, h("a", { href: `#a/${x.code}` }, x.name)), h("td", { class: "r" }, x.street ? fmt(x.street.responses) : "–"), h("td", { class: "r" }, x.street ? `${fmt(x.street.satisfied)}%` : "–"), h("td", { class: "r" }, x.street?.worse == null ? "–" : `${fmt(x.street.worse)}%`), h("td", {}, directionPill(x.direction)), h("td", {}, x.street ? fmtDate(x.street.ran) : "No survey yet"))))))),
-    h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Use and spend"), h("p", {}, "This month."))), h("div", { class: "grid g4" }, stat("Mood readings", fmt(d.use.readings)), stat("Impact notes", fmt(d.use.notes)), stat("Forecasts due a check", fmt(d.use.forecastsDue)), stat("Claude spend", `$${d.use.spend.toFixed(2)}`, `Limit $${d.use.cap}`))));
+    abcCard(), h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Use and spend"), h("p", {}, "This month."))), h("div", { class: "grid g4" }, stat("Mood readings", fmt(d.use.readings)), stat("Impact notes", fmt(d.use.notes)), stat("Forecasts due a check", fmt(d.use.forecastsDue)), stat("Claude spend", `$${d.use.spend.toFixed(2)}`, `Limit $${d.use.cap}`))));
 }
 
 function readingCard(a, d) {
