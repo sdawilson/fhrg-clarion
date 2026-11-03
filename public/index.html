@@ -812,14 +812,22 @@ function saidSources(top, a, d) {
   if (d.canEdit) { drawForm(null); top.append(formBox); }
   top.append(h("section", { class: "card" }, h("div", { class: "row" }, h("h3", {}, "Automatic press searches"), h("span", { class: "pill" }, "Off")), h("p", {}, "For an authority whose NLA licence covers it, Clarion could search and read articles by itself. Standard NLA licences appear to rule out text mining and AI use, so this stays off until NLA confirms which licence covers it.")));
 }
-// Enquiries and complaints. The file is read here in the browser, and only counts are sent: names, addresses, emails and
-// free text never leave the officer's computer.
+// Enquiries and complaints. The file is read here in the browser, and only counts are sent. No check recognises every
+// name, so several stand together: a column that looks personal can't be chosen, the officer sees what will be sent first,
+// anything like contact details is refused, a label on fewer than 3 rows is pooled, and an area under 10 isn't sent by name.
 const ENQUIRY_TEMPLATE = "Date raised,Service,Ward,Method,Type\n01/10/2026,Road defects,Moorside,Online,Enquiry\n02/10/2026,Street lights,Dale End,Phone,Complaint\n";
 const NOT_USED = "";
 const COLUMN_USES = [[NOT_USED, "Not used"], ["date", "Date"], ["category", "Category"], ["area", "Ward or road"], ["route", "How it came in"], ["kind", "Enquiry or complaint"]];
-const COLUMN_GUESSES = [["date", /date|raised|created|received|logged|opened/i], ["category", /service|categor|subject|topic|issue|problem|request|reason/i], ["area", /ward|parish|division|road|street|area|locality|town/i], ["route", /method|channel|source|route|how|via/i], ["kind", /type|complaint|class/i]];
-// A column that looks personal can't be used at all. "Ward name" and "Service description" are fine, but an address never is
-const personalColumn = (name) => /address|e-?mail|phone|mobile|tele|post ?code|dob|birth/i.test(name) || (/name|customer|citizen|resident|caller|complainant|note|comment|descri|detail|free ?text|message|narrative|summary/i.test(name) && !/ward|street|road|service|categor|area|parish|division|town|method|channel/i.test(name));
+const COLUMN_GUESSES = [["date", /date|raised|created|received|logged|opened/i], ["category", /service|categor|topic|issue|problem|request|reason/i], ["area", /ward|parish|division|road|street|area|locality|town/i], ["route", /method|channel|source|route|how|via/i], ["kind", /type|complaint|class/i]];
+const PLACE_HEADING = /ward|parish|division|locality|\btown\b|\broad\b|\bstreet\b(?! ?light)/i;
+// Always personal, whatever else the heading says. "Ward name" and "Service description" are the only kind of exception
+const personalColumn = (name) => {
+  const n = name.trim().toLowerCase();
+  if (/address|e-?mail|phone|mobile|tele|post ?code|dob|birth/.test(n)) return true;
+  if (/^(ward|street|road|service|categor(y|ies)|area|parish|division|town|locality|method|channel)[ _-](name|description)$/.test(n)) return false;
+  return /name|user|customer|citizen|resident|caller|complainant|requester|requestor|applicant|reporter|person|contact\b(?! (method|channel|type))|owner|agent|officer|staff|\bby\b|assigned|note|comment|descri|detail|free ?text|message|narrative|summary|subject|title/.test(n);
+};
+const looksPersonal = (s) => /[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+/.test(s) || /(?<!\d)\+?\d(?:[\s().-]*\d){9,12}(?!\d)/.test(s) || /\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i.test(s) || /\b\d+[a-z]?,?\s+([a-z'-]+\s+){1,3}(road|rd|street|st|avenue|ave|lane|close|drive|dr|way|crescent|place|court|gardens|terrace|grove|walk|hill|rise|mews|square)\b/i.test(s) || /\b(mr|mrs|ms|miss|mx|dr|cllr|councillor|sir|rev)\.?\s+[a-z]/i.test(s);
 function readCsv(text) {
   const clean = text.replace(/^\ufeff/, ""), first = clean.split(/\r?\n/, 1)[0];
   const sep = [",", ";", "\t"].sort((x, y) => first.split(y).length - first.split(x).length)[0];
@@ -849,36 +857,53 @@ function readMonth(v) {
   if (/^\d{5}(\.\d+)?$/.test(t)) { const d = new Date(Date.UTC(1899, 11, 30) + Number(t) * 86400000); return made(String(d.getUTCFullYear()), d.getUTCMonth() + 1); } // a spreadsheet's own date number
   return "";
 }
-const LABEL_LIMIT = 60;
-function countUp(rows, use) {
-  const months = {}, seen = { category: new Set(), area: new Set(), route: new Set() }, thisMonth = new Date().toISOString().slice(0, 7);
+const LABEL_LIMIT = 60, POOL_UNDER = 3, AREA_FROM = 10;
+function countUp(rows, use, width) {
+  const seen = { category: new Set(), area: new Set(), route: new Set() }, bad = { category: 0, area: 0, route: 0 }, thisMonth = new Date().toISOString().slice(0, 7), held = [];
   let skipped = 0;
-  const bump = (tally, key, n = 1) => { tally[key] = (tally[key] || 0) + n; };
   for (const r of rows) {
-    const month = readMonth(r[use.date]);
-    if (!month || month > thisMonth) { skipped++; continue; }
-    const m = months[month] ||= { categories: Object.create(null), areas: Object.create(null), routes: Object.create(null) };
-    const label = (i) => { const v = i === undefined ? "" : String(r[i] ?? "").replace(/\s+/g, " ").trim(); return v.length > LABEL_LIMIT ? "" : v; }; // anything long is free text
-    const category = label(use.category) || "Not given", area = label(use.area), way = label(use.route);
-    const pair = m.categories[category] ||= [0, 0];
-    pair[use.kind !== undefined && /complain/i.test(r[use.kind] ?? "") ? 1 : 0]++;
-    seen.category.add(category);
-    if (area) { bump(m.areas, area); seen.area.add(area); }
-    if (way) { bump(m.routes, way); seen.route.add(way); }
+    const dateText = String(r[use.date] ?? "").trim(), middle = dateText.match(/^\d{1,2}[-/.](\d{1,2})[-/.]\d/);
+    if (r.length === width && middle && Number(middle[1]) > 12) throw new Error("Some dates have the month first, as American systems write them. Clarion would read those as the wrong month, so change them to day first and try again.");
+    const month = readMonth(dateText);
+    if (r.length !== width || !month || month >= thisMonth) { skipped++; continue; } // a row with extra cells has a comma in it and has slipped
+    const label = (key) => {
+      const v = use[key] === undefined ? "" : String(r[use[key]] ?? "").replace(/\s+/g, " ").trim();
+      if (v) seen[key].add(v);
+      if (looksPersonal(v)) { bad[key]++; return ""; }
+      return v.length > LABEL_LIMIT ? "" : v; // anything long is free text
+    };
+    held.push({ month, category: label("category"), area: label("area"), route: label("route"), complaint: use.kind !== undefined && /complain/i.test(r[use.kind] ?? "") });
   }
-  const added = rows.length - skipped;
-  for (const [key, name] of [["category", "category"], ["area", "ward or road"], ["route", "route in"]]) if (added > 50 && seen[key].size > added / 2) throw new Error(`Nearly every row has a different ${name}, so that column looks like free text. Choose a different one.`);
+  const added = held.length;
+  for (const [key, name] of [["category", "category"], ["area", "ward or road"], ["route", "route in"]]) {
+    if (bad[key] > Math.max(1, added / 100)) throw new Error(`Some rows in the ${name} column look like addresses or contact details, so Clarion won't use that column.`);
+    if (added > 50 && seen[key].size > added / 2) throw new Error(`Nearly every row has a different ${name}, so that column looks like free text. Choose a different one.`);
+  }
+  const tally = (key) => { const t = new Map(); for (const x of held) if (x[key]) t.set(x[key], (t.get(x[key]) || 0) + 1); return t; };
+  const categories = tally("category"), routes = tally("route"), months = {};
+  for (const x of held) {
+    const m = months[x.month] ||= { categories: Object.create(null), areas: Object.create(null), routes: Object.create(null), hiddenAreas: 0 };
+    const name = !x.category ? "Not given" : categories.get(x.category) < POOL_UNDER ? "Other" : x.category;
+    (m.categories[name] ||= [0, 0])[x.complaint ? 1 : 0]++;
+    if (x.area) m.areas[x.area] = (m.areas[x.area] || 0) + 1;
+    if (x.route && routes.get(x.route) >= POOL_UNDER) m.routes[x.route] = (m.routes[x.route] || 0) + 1;
+  }
+  for (const m of Object.values(months)) for (const [area, n] of Object.entries(m.areas)) if (n < AREA_FROM) { delete m.areas[area]; m.hiddenAreas++; }
   return { months, rows: rows.length, skipped, added };
 }
 const fmtMonth = (m) => new Date(`${m}-15T12:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 
+const monthsText = (list) => {
+  const sorted = [...list].sort(), together = sorted.every((m, i) => !i || new Date(`${m}-15`) - new Date(`${sorted[i - 1]}-15`) < 32 * 86400000);
+  return sorted.length === 1 ? fmtMonth(sorted[0]) : together ? `${fmtMonth(sorted[0])} to ${fmtMonth(sorted[sorted.length - 1])}` : sorted.map(fmtMonth).join(", ");
+};
 function enquiryImport(a, e) {
   const file = h("input", { type: "file", accept: ".csv,text/csv", "aria-label": "File of enquiries" }), m1 = saveNote(), columns = h("section", { class: "card" }, h("h3", {}, "Match the columns"), h("p", { class: "note" }, "Choose a file to see its columns here."));
   async function choose() {
     const picked = file.files[0];
     if (!picked) return;
     let csv;
-    try { csv = readCsv(await asText(picked)); } catch (err) { return said(m1, err.message, "err"); }
+    try { csv = readCsv(await asTextEither(picked)); } catch (err) { return said(m1, err.message, "err"); }
     if (!csv.header.length || !csv.rows.length) return said(m1, "That file has no rows. Save your spreadsheet as CSV and try again.", "err");
     said(m1, "", "");
     const taken = new Set();
@@ -888,31 +913,43 @@ function enquiryImport(a, e) {
       if (use) taken.add(use);
       return { name, i, locked, use };
     });
-    const m2 = saveNote();
+    const m2 = saveNote(), preview = h("div", { class: "stack" });
     let busy = false;
-    const bring = async (ev) => {
+    const send = async (ev, made) => {
       if (busy) return;
+      busy = true; ev.target.disabled = true;
+      try {
+        await API.call("/api/enquiries/import", { code: a.code, rows: made.rows, skipped: made.skipped, months: made.months });
+        route();
+      } catch (err) { said(m2, err.message, "err"); busy = false; ev.target.disabled = false; }
+    };
+    const check = () => {
+      clear(preview);
       const use = Object.fromEntries(cols.filter((c) => c.use).map((c) => [c.use, c.i]));
       if (use.date === undefined || use.category === undefined) return said(m2, "Choose which column is the date, and which is the category.", "err");
       const dup = COLUMN_USES.find(([key]) => key && cols.filter((c) => c.use === key).length > 1);
       if (dup) return said(m2, `Choose one column only for ${dup[1].toLowerCase()}.`, "err");
-      busy = true; ev.target.disabled = true;
-      try {
-        const made = countUp(csv.rows, use);
-        await API.call("/api/enquiries/import", { code: a.code, file: picked.name, rows: made.rows, skipped: made.skipped, months: made.months });
-        route();
-      } catch (err) { said(m2, err.message, "err"); busy = false; ev.target.disabled = false; }
+      const place = cols.find((c) => (c.use === "category" || c.use === "route") && PLACE_HEADING.test(c.name));
+      if (place) return said(m2, `"${place.name}" looks like a place. Use it as the ward or road, where small numbers are left out.`, "err");
+      let made;
+      try { made = countUp(csv.rows, use, csv.header.length); } catch (err) { return said(m2, err.message, "err"); }
+      if (!made.added) return said(m2, "No finished months with dates Clarion could read were found. Dates should have the day first.", "err");
+      said(m2, "", "");
+      const list = (part) => [...new Set(Object.values(made.months).flatMap((m) => Object.keys(m[part])))].sort();
+      add(preview, h("p", {}, h("strong", {}, "Only this leaves your computer. "), `Counts for ${monthsText(Object.keys(made.months))}, from ${fmt(made.added)} rows.`), made.skipped ? h("p", { class: "note" }, `${fmt(made.skipped)} rows are left out: the month hasn't finished, the date can't be read, or the columns have slipped.`) : null,
+        h("p", { class: "note" }, `Categories: ${list("categories").join(", ")}.`), list("areas").length ? h("p", { class: "note" }, `Wards or roads: ${list("areas").join(", ")}.`) : null, list("routes").length ? h("p", { class: "note" }, `Ways in: ${list("routes").join(", ")}.`) : null,
+        h("p", { class: "note" }, "If you can see a person's name or address here, don't send this: choose a different column."), h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: (ev) => send(ev, made) }, "Send these counts")));
     };
     clear(columns).append(h("h3", {}, "Match the columns"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Column in your file"), h("th", {}, "Clarion uses it as"))),
-      h("tbody", {}, cols.map((c) => { const box = c.locked ? null : h("select", { "aria-label": `Use for ${c.name}`, onchange: () => { c.use = box.value; } }, COLUMN_USES.map(([key, label]) => h("option", { value: key }, label))); if (box) box.value = c.use; return h("tr", {}, h("td", {}, c.name), h("td", {}, box || h("span", { class: "pill serious" }, "Ignored, never sent"))); })))),
-    h("p", { class: "note" }, "Columns that look personal can't be used. Free text is left out too, as it often holds names. Only counts leave this computer."), m2, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: bring }, `Bring in the counts from ${fmt(csv.rows.length)} row${csv.rows.length === 1 ? "" : "s"}`)));
+      h("tbody", {}, cols.map((c) => { const box = c.locked ? null : h("select", { "aria-label": `Use for ${c.name}`, onchange: () => { c.use = box.value; clear(preview); } }, COLUMN_USES.map(([key, label]) => h("option", { value: key }, label))); if (box) box.value = c.use; return h("tr", {}, h("td", {}, c.name), h("td", {}, box || h("span", { class: "pill serious" }, "Ignored, never sent"))); })))),
+    h("p", { class: "note" }, "Columns that look personal can't be used. Free text is left out too, as it often holds names."), m2, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: check }, `Check what will be sent from ${fmt(csv.rows.length)} row${csv.rows.length === 1 ? "" : "s"}`)), preview);
   }
   file.addEventListener("change", choose);
   const last = e.imports[0];
-  return h("div", { class: "grid g2" }, h("section", { class: "card" }, h("h3", {}, "Bring in enquiries and complaints"), h("p", {}, "Use a spreadsheet saved as CSV from your customer system. Your file stays on this computer: Clarion reads it here, and only the counts are sent."),
+  return h("div", { class: "grid g2" }, h("section", { class: "card" }, h("h3", {}, "Bring in enquiries and complaints"), h("p", {}, "Use a spreadsheet saved as CSV from your customer system. Your file stays on this computer: Clarion reads it here, you see what will be sent, and only the counts leave."),
     h("label", { class: "field" }, "Choose a CSV file", file), m1, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => download("enquiries-template.csv", ENQUIRY_TEMPLATE) }, "Download a template")),
-    h("p", { class: "note" }, "A month in the file replaces what's held for that month, so use whole months. A regular data link can come later, if your IT team can provide one."),
-    last ? h("p", { class: "note" }, `Last import: ${last.file}, ${fmtDate(last.at)}. ${fmt(last.rows)} rows read, ${fmt(last.rows - last.skipped)} added, ${fmt(last.skipped)} skipped because they had no date.`) : null), columns);
+    h("p", { class: "note" }, "A month in the file replaces what's held for that month, so use whole months. The month you're in is left out until it's finished. A regular data link can come later, if your IT team can provide one."),
+    last ? h("p", { class: "note" }, `Last import: ${fmtDate(last.at)}. ${fmt(last.rows)} rows read, ${fmt(last.added)} added, ${fmt(last.skipped)} left out.`) : null), columns);
 }
 
 function enquiryFigures(a, e) {
@@ -947,8 +984,8 @@ async function saidEnquiries(top, a) {
   try { e = await API.call("/api/enquiries/get", { code: a.code }); } catch (err) { if (view === App.viewId) clear(box).append(failure(err)); return; }
   if (view !== App.viewId) return;
   add(clear(box), e.canEdit ? enquiryImport(a, e) : null, e.view.ready ? enquiryFigures(a, e) : comingCard(e.canEdit ? "Nothing brought in yet. Choose a CSV file above." : "Nothing brought in yet."), websiteCard(a, e),
-    e.canEdit && e.imports.length ? h("section", { class: "card" }, h("h3", {}, "What's been brought in"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "File"), h("th", {}, "Months"), h("th", {}, "By"), h("th", {}, ""))),
-      h("tbody", {}, e.imports.map((x) => h("tr", {}, h("td", {}, x.file), h("td", {}, x.months.length === 1 ? fmtMonth(x.months[0]) : `${fmtMonth(x.months[0])} to ${fmtMonth(x.months[x.months.length - 1])}`), h("td", {}, x.by), h("td", {}, h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/enquiries/remove", { code: a.code, id: x.id }); route(); } catch (err) { toast(err.message); } } }, "Remove")))))))) : null);
+    e.canEdit && e.imports.length ? h("section", { class: "card" }, h("h3", {}, "What's been brought in"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Brought in"), h("th", {}, "Months"), h("th", {}, "By"), h("th", {}, ""))),
+      h("tbody", {}, e.imports.map((x) => h("tr", {}, h("td", {}, fmtDate(x.at)), h("td", {}, monthsText(x.months)), h("td", {}, x.by), h("td", {}, h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/enquiries/remove", { code: a.code, id: x.id }); route(); } catch (err) { toast(err.message); } } }, "Remove")))))))) : null);
 }
 
 function aboutView(page, a) {
@@ -956,7 +993,7 @@ function aboutView(page, a) {
   page.append(pageHead("Sources & method", "Where the evidence comes from, how it's read, and what to be careful about."));
   if (App.demo) page.append(sec("About this demonstration", h("p", {}, "Northbridge is fictional, and so is everything about it: its people, places, press coverage, ratings and figures. The survey replies come from a simulation, then go through the same calculations as a real survey."), h("p", {}, "The Attention and concern page is shown here ahead of being built for members. Claude isn't used in the demonstration, and nothing is saved.")));
   page.append(sec("How mood is read", h("ul", {}, ["Mood is read from six kinds of signal: surveys, street surveys, short repeated questions, public actions such as fault reports, representatives, and open talk in the press and on social media.", "Survey results set the level. The other signals can only suggest direction.", "A change is reported only when two different kinds of signal agree.", "What's loud isn't the same as what's widely felt, and perception isn't the same as condition."].map((x) => h("li", {}, x)))),
-    sec("What's being said", h("ul", {}, ["Clarion reads sources with no licensing issue by itself: GOV.UK, Parliament and FixMyStreet.", "It never reads press, broadcast or social sources. A coverage check is a simple web search that keeps only yes or no and the date, and no match doesn't mean no coverage.", "Officers find each piece for themselves and record their own assessment. Leaning and stance are their judgement.", "Audience figures are national patterns by age, overlaid on Census figures for the authority. They describe a kind of source, not one publication's readers, and hold no party data.", "Enquiries and complaints are counts only. An officer's browser reads the file, so names, addresses, emails and free text never reach Clarion. Areas with fewer than 10 contacts in a month aren't shown.", "Allowing for a source's stance halves or adds half to a piece's reach. These weights are a starting judgement to be tested in the pilot, and raw figures are always kept."].map((x) => h("li", {}, x)))),
+    sec("What's being said", h("ul", {}, ["Clarion reads sources with no licensing issue by itself: GOV.UK, Parliament and FixMyStreet.", "It never reads press, broadcast or social sources. A coverage check is a simple web search that keeps only yes or no and the date, and no match doesn't mean no coverage.", "Officers find each piece for themselves and record their own assessment. Leaning and stance are their judgement.", "Audience figures are national patterns by age, overlaid on Census figures for the authority. They describe a kind of source, not one publication's readers, and hold no party data.", "Enquiries and complaints are counts only. An officer's browser reads the file, and the officer sees what will be sent. Columns that look personal can't be used, small groups are pooled, and areas with fewer than 10 contacts in a month aren't kept by name.", "Allowing for a source's stance halves or adds half to a piece's reach. These weights are a starting judgement to be tested in the pilot, and raw figures are always kept."].map((x) => h("li", {}, x)))),
     sec("Street surveys", h("ul", {}, ["A street sample isn't random, so every result is labelled indicative.", "Results are weighted to the local population's age and sex from Census 2021.", "Proposed survey sites are a calculation on Census and deprivation figures, not an opinion, and town size stands in for footfall. Each site's replies count, as far as they can, for the share of adults it stands for.", "Groups under 30 people aren't reported.", "Written comments stay hidden until Claude has taken out names. Only the authority's own members can read them, and they're never used in a mood reading or impact note."].map((x) => h("li", {}, x)))),
     sec("Comparing authorities", h("ul", {}, ["An authority sees only one FHRG middle figure, with nobody named, once five authorities have results.", "FHRG administrators see figures and topic counts for each authority, in alphabetical order and never ranked. A difference may be a local choice, or reflect geography, funding or who was asked."].map((x) => h("li", {}, x)))));
 }
@@ -1231,7 +1268,9 @@ function download(name, text) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 const asBase64 = (file) => new Promise((done, no) => { const r = new FileReader(); r.onload = () => done(String(r.result).split(",")[1]); r.onerror = () => no(new Error("That file couldn't be read.")); r.readAsDataURL(file); });
-const asText = (file) => new Promise((done, no) => { const r = new FileReader(); r.onload = () => done(String(r.result)); r.onerror = () => no(new Error("That file couldn't be read.")); r.readAsText(file); });
+const asText = (file, encoding = "utf-8") => new Promise((done, no) => { const r = new FileReader(); r.onload = () => done(String(r.result)); r.onerror = () => no(new Error("That file couldn't be read.")); r.readAsText(file, encoding); });
+// Spreadsheets on Windows often save an older encoding, which shows up as broken characters when read the modern way
+const asTextEither = async (file) => { const text = await asText(file); return text.includes("\ufffd") ? await asText(file, "windows-1252") : text; };
 // Photos are made smaller here, because the detail isn't needed and phones take huge ones
 async function scanFile(file) {
   if (file.type === "application/pdf") return { media: file.type, data: await asBase64(file) };

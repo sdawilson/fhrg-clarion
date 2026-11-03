@@ -14,6 +14,8 @@ const TOPICS = ["Potholes and road condition", "Pavements", "Street lighting", "
 ok(t.topicFor("Road defects", TOPICS) === "Potholes and road condition" && t.topicFor("Street lights", TOPICS) === "Street lighting" && t.topicFor("Gullies", TOPICS) === "Flooding and drainage" && t.topicFor("Footway defects", TOPICS) === "Pavements", "a council's categories are sorted into the shared topics");
 ok(t.topicFor("Winter gritting routes confirmed", TOPICS) === "Winter service" && t.topicFor("Robert Plant announces tour", TOPICS) === "" && t.topicFor("parking", TOPICS) === "Parking", "and so are headlines, with anything else left out");
 ok(t.topicFor("Traffic signals", TOPICS) === "", "a category with no such shared topic isn't forced into one");
+const MORE = ["Street lighting", "Trees, verges and drainage", "Cycling and walking"];
+ok(t.topicFor("Tree works", MORE) === "Trees, verges and drainage" && t.topicFor("Verge cutting", MORE) === "Trees, verges and drainage" && t.topicFor("Recycling", MORE) === "" && t.topicFor("Cycle lanes", MORE) === "Cycling and walking", "and similar words don't get mixed up: a tree isn't a street, and recycling isn't cycling");
 
 ok(t.trendOf(130, [100, 100, 100]) === "Rising" && t.trendOf(70, [100, 100, 100]) === "Falling" && t.trendOf(110, [100, 100, 100]) === "Steady", "the latest month is compared with the three before");
 ok(t.trendOf(130, [100, undefined, 100]) === "Not enough history" && t.trendOf(130, [100]) === "Not enough history", "and it needs all three");
@@ -23,12 +25,19 @@ const month = (over = {}) => ({ categories: { "Road defects": [80, 20], "Street 
 const sent = (months, over = {}) => ({ rows: 146, skipped: 0, months, ...over });
 const imported = t.readImport(sent({ "2026-10": month() }), "2026-11");
 ok(imported.added === 146 && imported.months["2026-10"].categories["Road defects"][1] === 20, "counts are read back and added up");
+ok(imported.months["2026-10"].hiddenAreas === 1 && !("Tiny" in imported.months["2026-10"].areas) && imported.months["2026-10"].areas.Moorside === 60, "an area under 10 isn't kept by name, even if a browser sends it");
+for (const x of ["12 Acacia Avenue", "Flat 2, 14b High Street", "BN1 1AA", "Mrs Brown", "Cllr Jones", "a.person@example.com", "01234 567890"]) ok(t.looksPersonal(x), `"${x}" is recognised as personal`);
+for (const x of ["Road defects", "Street lights", "A27 Worthing Road", "24 hour parking", "20mph limits", "St Mary's Ward"]) ok(!t.looksPersonal(x), `"${x}" isn't`);
 const noted = t.readImport(sent({ "2026-10": { categories: { "Road defects": [5, 0], ["x".repeat(61)]: [5, 0], "Call 01234 567890": [5, 0], "a.person@example.com": [5, 0], __proto__x: [1, 0], "['__proto__']": [1, 0] }, areas: { "b.person@example.com": 40 }, routes: {} } }, { rows: 12 }), "2026-11");
 ok(!Object.keys(noted.months["2026-10"].categories).some((k) => /x{61}|0123|@/.test(k)) && !Object.keys(noted.months["2026-10"].areas).length, "anything long, or that looks like contact details, is left out even if it's sent");
 const refusal = (fn) => { try { fn(); return ""; } catch (e) { return e.message; } };
-ok(/future/.test(refusal(() => t.readImport(sent({ "2026-12": month() }), "2026-11"))) && /future/.test(refusal(() => t.readImport(sent({ "20-10": month() }), "2026-11"))), "a month in the future, or that can't be read, is refused");
-const free = Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`Words number ${i}`, [1, 0]]));
-ok(/too many different categories/.test(refusal(() => t.readImport(sent({ "2026-10": { categories: free, areas: {}, routes: {} } }, { rows: 80 }), "2026-11"))), "a column of free text sent as categories is refused");
+ok(/hasn't finished/.test(refusal(() => t.readImport(sent({ "2026-11": month() }), "2026-11"))) && /hasn't finished/.test(refusal(() => t.readImport(sent({ "2026-12": month() }), "2026-11"))) && /can't be read/.test(refusal(() => t.readImport(sent({ "20-10": month() }), "2026-11"))), "the month you're in, a future month, or one that can't be read, is refused");
+const names = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`Pat Lee ${i}`, [1, 0]]));
+const pooled = t.readImport(sent({ "2026-10": { categories: names(30), areas: {}, routes: { "Once only": 1, Online: 30 } } }, { rows: 30 }), "2026-11").months["2026-10"];
+ok(Object.keys(pooled.categories).join() === "Other" && pooled.categories.Other[0] === 30 && !("Once only" in pooled.routes), "a label on fewer than 3 rows is pooled, so a short column of names can't get through");
+ok(/too many different categories/.test(refusal(() => t.readImport(sent({ "2026-10": { categories: names(80), areas: {}, routes: {} } }, { rows: 80 }), "2026-11"))), "and a long one is refused");
+const repeated = Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`Words number ${i}`, [3, 0]]));
+ok(/too many different categories/.test(refusal(() => t.readImport(sent({ "2026-10": { categories: repeated, areas: {}, routes: {} } }, { rows: 10000000 }), "2026-11"))), "too many different categories are refused, whatever a browser says about the number of rows");
 ok(/nothing was brought in/.test(refusal(() => t.readImport({}, "2026-11"))), "and so is nothing at all");
 
 const held = { months: { "2026-07": month(), "2026-08": month(), "2026-09": month(), "2026-10": month({ categories: { "Road defects": [200, 40], "Street lights": [40, 0], Other: [5, 1] } }) }, matches: {}, imports: [], page: "" };
@@ -38,11 +47,13 @@ ok(top.topic === "Potholes and road condition" && top.enquiries === 200 && top.c
 ok(v.unmatched.categories.join() === "Other" && v.unmatched.enquiries === 5 && v.rows.find((x) => x.topic === "Street lighting").trend === "Steady", "and what hasn't been matched is shown separately");
 ok(v.areas.length === 2 && v.hiddenAreas === 1 && !JSON.stringify(v).includes("Tiny"), "an area with fewer than 10 contacts isn't shown");
 ok(v.routes[0].name === "Online" && v.routes[0].share === 75, "and the routes in are shown as shares");
+ok(t.enquiriesView({ months: { "2026-10": month({ routes: { Online: 90, "Low Green Office": 4 } }) }, matches: {}, imports: [], page: "" }, 100000, TOPICS).routes.map((x) => x.name).join() === "Online,Other routes", "a route with fewer than 10 contacts is pooled too");
 ok(t.enquiriesView({ ...held, matches: { Other: "Parking", "Road defects": "" } }, 100000, TOPICS).rows.some((x) => x.topic === "Parking") && !t.enquiriesView({ ...held, matches: { "Road defects": "" } }, 100000, TOPICS).rows.some((x) => x.topic.startsWith("Potholes")), "an officer's own match beats the suggestion");
 ok(t.enquiriesView({ ...held, months: {} }, 100, TOPICS).ready === false && t.enquiriesView(held, null, TOPICS).rows[0].perThousand === null, "nothing held says so, and no Census figures means no rate");
 
-ok(t.ownSite("https://www.westsussex.gov.uk/news/", {}) && t.ownSite("https://news.gov.scot/x", {}) && t.ownSite("https://kirkleestogether.co.uk/", { ownSites: ["kirkleestogether.co.uk"] }), "a council's own sites can be read");
-ok(!t.ownSite("http://www.westsussex.gov.uk/news/", {}) && !t.ownSite("https://example.com/", {}) && !t.ownSite("https://169.254.169.254/", {}) && !t.ownSite("https://localhost/", {}) && !t.ownSite("https://x.gov.uk.evil.example/", {}) && !t.ownSite("https://x.gov.uk:8443/", {}) && !t.ownSite("https://a@x.gov.uk/", {}) && !t.ownSite("not an address", {}), "and nothing else");
+const own = { ownSites: ["westsussex.gov.uk", "kirkleestogether.co.uk"] };
+ok(t.ownSite("https://www.westsussex.gov.uk/news/", own) && t.ownSite("https://westsussex.gov.uk/", own) && t.ownSite("https://kirkleestogether.co.uk/", own), "a council's own sites can be read");
+ok(!t.ownSite("http://www.westsussex.gov.uk/news/", own) && !t.ownSite("https://www.kirklees.gov.uk/", own) && !t.ownSite("https://example.com/", own) && !t.ownSite("https://169.254.169.254/", own) && !t.ownSite("https://localhost/", own) && !t.ownSite("https://westsussex.gov.uk.evil.example/", own) && !t.ownSite("https://notwestsussex.gov.uk/", own) && !t.ownSite("https://www.westsussex.gov.uk:8443/", own) && !t.ownSite("https://a@www.westsussex.gov.uk/", own) && !t.ownSite("not an address", own), "and nothing else, not even another council's");
 
 const wsx = `<nav><a href="/news/">News</a><a href="/news/email-alerts-and-newsletters/">Email alerts and eNewsletters</a></nav>
 <article><h2><a href="/news/winter-gritting-routes-confirmed-for-west-sussex/">Winter gritting routes confirmed for West Sussex</a></h2><time datetime="2026-11-03T09:00">3 November</time></article>
@@ -55,6 +66,12 @@ const lincs = `<a href="/news/article/3010/north-hykeham-relief-road-november-20
 ok(t.postsFromPage(lincs, "https://www.lincolnshire.gov.uk/news")[0].date === "2026-11-02" && t.postsFromPage(lincs, "https://www.lincolnshire.gov.uk/news")[0].title.startsWith("North Hykeham"), "whichever way a site lays them out");
 const kirk = `<a href="https://kirkleestogether.co.uk/2026/11/03/connecting-kirklees-roadworks-update-for-november-2026/">Connecting Kirklees: Roadworks update for November 2026</a><a href="https://kirkleestogether.co.uk/category/news-and-updates/">News and updates from the council</a><a href="/2026/10/12/were-winter-ready/">We're winter ready, and gritters are out</a><a href="/2026/09/17/food-hall/">Could your food business be part of the Food Hall?</a>`;
 ok(t.postsFromPage(kirk, "https://kirkleestogether.co.uk/").length === 3 && t.postsFromPage(kirk, "https://kirkleestogether.co.uk/")[0].date === "2026-11-03", "with the date taken from the address where it's there");
+const above = `<p>4 November 2026</p><a href="/news/first-item-about-the-roads/">First item about the roads</a><p>3 November 2026</p><a href="/news/second-item-about-the-roads/">Second item about the roads</a><p>2 November 2026</p><a href="/news/third-item-about-the-roads/">Third item about the roads</a>`;
+ok(t.postsFromPage(above, "https://www.westsussex.gov.uk/news/").map((x) => x.date).join() === "2026-11-04,2026-11-03,2026-11-02", "dates above the links are matched to the right post");
+const inTitle = `<a href="/news/road-closes-from-5-january-2027/">Road closes from 5 January 2027 for works</a><p>3 November 2026</p><a href="/news/another-item-on-the-roads/">Another item on the roads</a><p>2 November 2026</p><a href="/news/one-more-item-on-the-roads/">One more item on the roads</a><p>1 November 2026</p>`;
+ok(t.postsFromPage(inTitle, "https://www.westsussex.gov.uk/news/")[0].date === "2026-11-03", "and a date in a headline isn't taken for the date of the post");
+ok(t.postsFromPage(`<a href="/newsletters/sign-up-for-our-news-today/">Sign up for our news today</a>`, "https://www.westsussex.gov.uk/news").length === 0, "a page that only starts the same way isn't under the news page");
+ok(t.decode("Council&#8217;s &#x2013; &amp; more").includes("Council\u2019s \u2013 & more"), "and curly quotes in a title come through properly");
 const feed = `<rss><channel><title>News</title><item><title><![CDATA[Roadworks update &amp; closures]]></title><link>https://kirkleestogether.co.uk/2026/11/03/a/</link><pubDate>Tue, 03 Nov 2026 12:00:00 +0000</pubDate></item><item><title>No link here</title></item></channel></rss>`;
 ok(t.postsFromFeed(feed).length === 1 && t.postsFromFeed(feed)[0].title === "Roadworks update & closures" && t.postsFromFeed(feed)[0].date === "2026-11-03", "and a site's feed is read if it has one");
 
@@ -79,32 +96,32 @@ ok((await api("/api/enquiries/get", { code: WSX }, other)).status === 403, "and 
 r = await api("/api/enquiries/get", { code: WSX }, member);
 ok(r.view.ready === false && !r.canEdit && r.website.page === "https://www.westsussex.gov.uk/news/", "a member can read it, and the council's news page is already set");
 ok((await api("/api/enquiries/import", { code: WSX, rows: 1, months: { [M1]: month() } }, member)).status === 403, "a member can't bring anything in");
-r = await api("/api/enquiries/import", { code: WSX, file: "october.csv", rows: 146, skipped: 2, months: { [M1]: month() } }, lead);
+r = await api("/api/enquiries/import", { code: WSX, rows: 146, skipped: 2, months: { [M1]: month() } }, lead);
 ok(r.import.added === 146 && r.import.months.join() === M1, "a lead can");
 r = await api("/api/enquiries/get", { code: WSX }, member);
-ok(r.view.ready && r.view.latest === M1 && r.imports[0].file === "october.csv" && r.view.rows.length > 0, "and the figures show");
-await api("/api/enquiries/import", { code: WSX, file: "again.csv", rows: 146, months: { [M1]: month() } }, lead);
+ok(r.view.ready && r.view.latest === M1 && r.imports[0].months.join() === M1 && r.view.rows.length > 0, "and the figures show");
+await api("/api/enquiries/import", { code: WSX, rows: 146, months: { [M1]: month() } }, lead);
 r = await api("/api/enquiries/get", { code: WSX }, lead);
 const potholes = r.view.rows.find((x) => /Pothole/.test(x.topic));
-ok(potholes.enquiries === 80 && r.imports.length === 1 && r.imports[0].file === "again.csv", "bringing in the same month again replaces it, rather than counting twice");
-await api("/api/enquiries/import", { code: WSX, file: "september.csv", rows: 146, months: { [M2]: month() } }, lead);
+ok(potholes.enquiries === 80 && r.imports.length === 1, "bringing in the same month again replaces it, rather than counting twice");
+await api("/api/enquiries/import", { code: WSX, rows: 146, months: { [M2]: month() } }, lead);
 r = await api("/api/enquiries/get", { code: WSX }, lead);
 ok(r.view.monthsHeld === 2 && r.imports.length === 2, "another month is added");
 ok((await api("/api/enquiries/get", { code: KIRK }, other)).view.ready === false, "and another authority sees none of it");
 const stored = getText(files("").find((k) => k.endsWith(`${WSX}/enquiries.json`)));
-ok(JSON.parse(stored).months[M1].areas.Tiny === 9, "small areas are kept as counts, but aren't shown");
+ok(!stored.includes("Tiny") && JSON.parse(stored).months[M1].hiddenAreas === 1, "small areas aren't stored by name");
 ok((await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Made up" }, lead)).status === 400, "a category can only go to a real topic");
 ok((await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Parking" }, member)).status === 403, "by a lead");
 await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Parking" }, lead);
 r = await api("/api/enquiries/get", { code: WSX }, lead);
 ok(r.view.rows.some((x) => x.topic === "Parking" && x.categories.join() === "Other") && !r.view.unmatched.categories.includes("Other"), "and that's kept");
 ok((await api("/api/enquiries/remove", { code: WSX, id: "nope" }, lead)).status === 404 && (await api("/api/enquiries/remove", { code: WSX, id: r.imports[0].id }, member)).status === 403, "only a real import can be removed, by a lead");
-await api("/api/enquiries/remove", { code: WSX, id: r.imports.find((x) => x.file === "september.csv").id }, lead);
+await api("/api/enquiries/remove", { code: WSX, id: r.imports.find((x) => x.months.includes(M2)).id }, lead);
 r = await api("/api/enquiries/get", { code: WSX }, lead);
 ok(r.view.monthsHeld === 1 && r.imports.length === 1, "taking an import out removes its month");
 
 ok(r.website.read === false && r.website.posts.length === 0, "a news page that can't be read says so");
-ok((await api("/api/enquiries/page", { code: WSX, url: "https://example.com/news" }, lead)).status === 400 && (await api("/api/enquiries/page", { code: WSX, url: "http://169.254.169.254/latest" }, lead)).status === 400, "only the council's own site can be set");
+ok((await api("/api/enquiries/page", { code: WSX, url: "https://example.com/news" }, lead)).status === 400 && (await api("/api/enquiries/page", { code: WSX, url: "http://169.254.169.254/latest" }, lead)).status === 400 && (await api("/api/enquiries/page", { code: WSX, url: "https://kirkleestogether.co.uk/" }, lead)).status === 400, "only the council's own site can be set, not another's");
 ok((await api("/api/enquiries/page", { code: WSX, url: "https://www.westsussex.gov.uk/latest-news/" }, member)).status === 403, "by a lead");
 pages.set("https://www.westsussex.gov.uk/latest-news/", page(`<a href="/latest-news/winter-gritting-routes-confirmed-today/">Winter gritting routes confirmed today</a><p>3 November 2026</p><a href="/latest-news/road-closure-on-the-a27-next-week/">Road closure on the A27 next week</a><p>2 November 2026</p><a href="/latest-news/robert-plant-tour-announced-for-2027/">Robert Plant tour announced for 2027</a><p>1 November 2026</p><a href="/latest-news/adult-social-care-awards-announced/">Adult social care awards announced</a><p>31 October 2026</p>`));
 ok((await api("/api/enquiries/page", { code: WSX, url: "https://www.westsussex.gov.uk/latest-news/" }, lead)).status === 200, "a lead can change the page");
@@ -117,7 +134,7 @@ await api("/api/enquiries/page", { code: WSX, url: "https://www.westsussex.gov.u
 r = await api("/api/enquiries/get", { code: WSX }, lead);
 ok(r.website.read === false, "a news page that sends Clarion to another site isn't followed");
 await api("/api/enquiries/page", { code: WSX, url: "https://www.westsussex.gov.uk/latest-news/" }, lead);
-await api("/api/enquiries/import", { code: WSX, file: "start.csv", rows: 146, months: { [M2]: month() } }, lead);
+await api("/api/enquiries/import", { code: WSX, rows: 146, months: { [M2]: month() } }, lead);
 
 // ---- the page
 const html = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
@@ -154,41 +171,96 @@ let main = text(d.querySelector(".main"));
 ok((main.match(/Ignored, never sent/g) || []).length === 5 && !d.querySelector('select[aria-label="Use for Address"]') && !d.querySelector('select[aria-label="Use for Customer name"]') && !d.querySelector('select[aria-label="Use for Notes"]'), "columns that look personal can't be chosen at all");
 const sel = (name) => d.querySelector(`select[aria-label="Use for ${name}"]`);
 ok(sel("Date raised").value === "date" && sel("Service").value === "category" && sel("Ward").value === "area" && sel("Method").value === "route" && sel("Type").value === "kind", "and the others are guessed from their headings");
-sel("Service").value = ""; sel("Service").dispatchEvent(new w.Event("change"));
-button(d, "Bring in the counts").click();
+const setUse = (name, use) => { sel(name).value = use; sel(name).dispatchEvent(new w.Event("change")); };
+const checkIt = () => button(d, "Check what will be sent").click();
+setUse("Service", "");
+checkIt();
 await see(d, /which column is the date, and which is the category/);
-sel("Service").value = "category"; sel("Service").dispatchEvent(new w.Event("change"));
-sel("Ward").value = "category"; sel("Ward").dispatchEvent(new w.Event("change"));
-button(d, "Bring in the counts").click();
+setUse("Service", "category"); setUse("Method", "category");
+checkIt();
 await see(d, /Choose one column only for category/);
-sel("Ward").value = "area"; sel("Ward").dispatchEvent(new w.Event("change"));
+setUse("Method", "route"); setUse("Service", ""); setUse("Ward", "category");
+checkIt();
+await see(d, /"Ward" looks like a place/);
+ok(!/Send these counts/.test(text(d.querySelector(".main"))), "a ward can't be used as a category, where small numbers would show");
+setUse("Ward", "area"); setUse("Service", "category");
 const before = w.sentBodies.length;
-const go = button(d, "Bring in the counts");
+checkIt();
+await see(d, /Send these counts/);
+main = text(d.querySelector(".main"));
+ok(/Only this leaves your computer/.test(main) && /Categories: Road defects, Street lights/.test(main) && /Ways in: Online, Phone/.test(main) && w.sentBodies.length === before, "the officer sees what will be sent before anything goes");
+const go = button(d, "Send these counts");
 go.click(); go.click();
-await see(d, /Last import: october\.csv/);
+await see(d, /61 rows read/);
 const bodies = w.sentBodies.slice(before).filter((x) => x.includes("months"));
 ok(bodies.length === 1, "a double click brings the file in once");
-ok(!/Jane|Smith|Acacia|example\.com|0123456|rude/.test(bodies.join("")), "and nothing personal leaves the browser: only counts are sent");
+ok(!/Jane|Smith|Acacia|example\.com|0123456|rude|october\.csv/.test(bodies.join("")), "and nothing personal leaves the browser: only counts are sent, not even the file's name");
 main = text(d.querySelector(".main"));
-ok(/61 rows read, 60 added, 1 skipped because they had no date/.test(main), "the page says what was read and what was skipped");
+ok(/61 rows read, 60 added, 1 left out/.test(main), "the page says what was read and what was left out");
 const held2 = JSON.parse(getText(files("").find((k) => k.endsWith(`${WSX}/enquiries.json`))));
 ok(held2.months[M1].categories["Road defects"][0] + held2.months[M1].categories["Road defects"][1] === 40 && held2.months[M1].categories["Street lights"][1] > 0 && held2.months[M1].areas.Moorside === 30 && held2.months[M1].routes.Online === 30, "the counts are right, with complaints told apart");
-ok(!/Jane|Acacia|rude/.test(JSON.stringify(held2)), "and nothing personal is stored");
+ok(!/Jane|Acacia|rude|october\.csv/.test(JSON.stringify(held2)), "and nothing personal is stored");
 ok(/What people contacted you about/.test(main) && /Road defects/.test(main) && /Not enough history/.test(main) && /What's been brought in/.test(main), "the figures appear, by topic");
 ok(/Where from/.test(main) && /How people got in touch/.test(main) && /Online: 50%/.test(main), "with where people are and how they got in touch");
 ok(/Winter gritting routes confirmed today/.test(main) && d.querySelector('a[href="https://www.westsussex.gov.uk/latest-news/winter-gritting-routes-confirmed-today/"]'), "and the council's own news");
 const topicBox = d.querySelector('select[aria-label="Topic for Road defects"]');
 ok(topicBox && /Pothole/.test(topicBox.value), "a lead can see each category's topic, to change it");
 
+const cols = (name, content) => { choose(w, d.querySelector('input[type="file"]'), name, content); };
+const today = `15/${M1.slice(5)}/${M1.slice(0, 4)}`;
+// headings that are personal, however they're worded
+cols("headings.csv", `Date raised,Service user name,Service notes,Requester,Subject,Ward name,Service description,Reported by\n${today},a,b,c,d,Moorside,Road defects,e\n`);
+await see(d, /Ward name/);
+await until(() => !d.querySelector('select[aria-label="Use for Ward"]'), "the new columns");
+ok((text(d.querySelector(".main")).match(/Ignored, never sent/g) || []).length === 5 && d.querySelector('select[aria-label="Use for Ward name"]') && d.querySelector('select[aria-label="Use for Service description"]') && !d.querySelector('select[aria-label="Use for Service user name"]') && !d.querySelector('select[aria-label="Use for Requester"]'), "personal headings are locked however they're worded, and only plain ones are let through");
+// a column of names chosen by hand: nothing rare gets out, and the officer can see that
+const rows = ["Date raised,Who,Ward"];
+for (let i = 0; i < 20; i++) rows.push(`${today},Pat Lee ${i},Moorside`);
+cols("who.csv", rows.join("\n"));
+await until(() => d.querySelector('select[aria-label="Use for Who"]'), "the Who column");
+setUse("Who", "category");
+checkIt();
+await see(d, /Send these counts/);
+ok(/Categories: Other/.test(text(d.querySelector(".main"))) && !/Pat Lee/.test(text(d.querySelector("#preview, .main"))), "a column of names chosen by hand is pooled, so no name gets out in a small file");
+// rows that have slipped, American dates, the month we're in, and an older encoding
+cols("slipped.csv", `Date raised,Service,Ward\n${today},Road defects,Moorside\n${today},Road defects,Moorside\n${today},Road defects,Moorside\n${today},Smith, Jane,Moorside\n`);
+await until(() => /from 4 rows/.test(text(d.querySelector(".main"))), "the slipped file");
+checkIt();
+await see(d, /Send these counts/);
+ok(/1 rows are left out/.test(text(d.querySelector(".main"))) && !/Jane/.test(text(d.querySelector(".main"))), "a row with a stray comma is left out, rather than slipping a name into a column");
+cols("us.csv", `Date raised,Service\n10/31/2026,Road defects\n10/05/2026,Road defects\n`);
+await until(() => /from 2 rows/.test(text(d.querySelector(".main"))), "the American file");
+checkIt();
+await see(d, /the month first/);
+const now = new Date().toISOString().slice(0, 7);
+cols("now.csv", `Date raised,Service\n15/${now.slice(5)}/${now.slice(0, 4)},Road defects\n01/${now.slice(5)}/${now.slice(0, 4)},Road defects\n01/${now.slice(5)}/${now.slice(0, 4)},Road defects\n`);
+await until(() => /from 3 rows/.test(text(d.querySelector(".main"))), "the file of this month");
+checkIt();
+await see(d, /No finished months/);
+const old = [...new TextEncoder().encode(`Date raised,Service\n${today},St Mary`), 0x92, ...new TextEncoder().encode(`s Road\n${today},St Mary`), 0x92, ...new TextEncoder().encode(`s Road\n${today},St Mary`), 0x92, ...new TextEncoder().encode("s Road\n")];
+Object.defineProperty(d.querySelector('input[type="file"]'), "files", { value: [new w.File([new w.Uint8Array(old)], "old.csv", { type: "text/csv" })], configurable: true });
+d.querySelector('input[type="file"]').dispatchEvent(new w.Event("change"));
+await until(() => d.querySelector('select[aria-label="Use for Service"]') && !/No finished months/.test(text(d.querySelector(".main"))), "the older file");
+setUse("Service", "category");
+checkIt();
+await see(d, /Send these counts/);
+ok(/St Mary\u2019s Road/.test(text(d.querySelector(".main"))), "a file saved in an older encoding keeps its apostrophes");
+
 // free text chosen by hand is stopped in the browser
 const wordy = ["Date raised,Service,Ward"];
-for (let i = 0; i < 80; i++) wordy.push(`01/${M1.slice(5)}/${M1.slice(0, 4)},Mrs Brown at number ${i} rang us,Moorside`);
-choose(w, d.querySelector('input[type="file"]'), "wordy.csv", wordy.join("\n"));
-await see(d, /Bring in the counts from 80 rows/);
+for (let i = 0; i < 80; i++) wordy.push(`${today},Mrs Brown at number ${i} rang us,Moorside`);
+cols("wordy.csv", wordy.join("\n"));
+await see(d, /what will be sent from 80 rows/);
 const sentBefore = w.sentBodies.length;
-button(d, "Bring in the counts").click();
+checkIt();
+await see(d, /look like addresses or contact details/);
+const varied = ["Date raised,Service,Ward"];
+for (let i = 0; i < 80; i++) varied.push(`${today},They told us about thing ${i},Moorside`);
+cols("varied.csv", varied.join("\n"));
+await until(() => !/look like addresses/.test(text(d.querySelector(".main"))), "the next file");
+checkIt();
 await see(d, /looks like free text/);
-ok(!w.sentBodies.slice(sentBefore).some((x) => x.includes("Brown")), "a column of free text is stopped before anything is sent");
+ok(!w.sentBodies.slice(sentBefore).some((x) => x.includes("Brown") || x.includes("thing")), "a column of free text is stopped before anything is sent");
 
 dom = await open(member, `#said/${WSX}/enquiries`); d = dom.window.document;
 await see(d, /What people contacted you about/);

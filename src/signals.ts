@@ -33,7 +33,8 @@ async function read<T>(source: string, url: string, fn: () => Promise<T>): Promi
 export type FixMyStreet = { reports: number; from: string; to: string; perDay: number | null; categories: { name: string; count: number }[]; busiestSquare: number };
 
 const RATE_MIN_DAYS = 7;
-export const decode = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").trim();
+const codePoint = (n: number) => (n > 31 && n <= 0x10ffff ? String.fromCodePoint(n) : " ");
+export const decode = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&#(\d{1,7});/g, (_, n) => codePoint(Number(n))).replace(/&#x([0-9a-f]{1,6});/gi, (_, n) => codePoint(parseInt(n, 16))).trim();
 export const tag = (block: string, name: string) => { const m = block.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, "i")); return m ? decode(m[1]) : ""; };
 
 // Reads the feed's latest reports. The feed shows only the most recent few, which is a sample, not a total,

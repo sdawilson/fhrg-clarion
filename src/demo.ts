@@ -165,11 +165,11 @@ const DEMO_CHECK = { ready: true, why: "", from: COUNTY_DAY(14), to: COUNTY_DAY(
 // Northbridge's enquiries, as an officer's browser would send them, run through the real calculations
 const enquiryMonth = (pothole: number, pavement: number, flood: number, light: number): Month => ({
   categories: { "Road defects": [Math.round(pothole * 0.9), Math.round(pothole * 0.1)], "Footway defects": [Math.round(pavement * 0.9), Math.round(pavement * 0.1)], Gullies: [Math.round(flood * 0.93), Math.round(flood * 0.07)], "Street lights": [Math.round(light * 0.95), Math.round(light * 0.05)], Other: [612, 48] },
-  areas: { Moorside: Math.round(pothole / 4), "Dale End": Math.round(pothole / 5), "Bridge Ward": Math.round(pothole / 6), "High Fell": Math.round(pothole / 9), "Low Green": 7 }, routes: { Online: 2500, Phone: 1200, Email: 500 },
+  areas: { Moorside: Math.round(pothole / 4), "Dale End": Math.round(pothole / 5), "Bridge Ward": Math.round(pothole / 6), "High Fell": Math.round(pothole / 9) }, hiddenAreas: 1, routes: { Online: 2500, Phone: 1200, Email: 500 },
 });
 function demoEnquiries(topics: string[]) {
   const months = { "2026-07": enquiryMonth(1500, 680, 300, 330), "2026-08": enquiryMonth(1450, 690, 310, 340), "2026-09": enquiryMonth(1480, 670, 330, 345), "2026-10": enquiryMonth(1976, 685, 537, 340) };
-  const note = { id: "d1", file: "enquiries-october.csv", months: Object.keys(months), rows: 21000, added: 20986, skipped: 14, at: WHEN, by: "Demo officer" };
+  const note = { id: "d1", months: Object.keys(months), rows: 21000, added: 20986, skipped: 14, at: WHEN, by: "Demo officer" };
   return {
     canEdit: true, adults: ADULTS, topics, view: enquiriesView({ months, matches: {}, imports: [note], page: "" }, ADULTS, topics), imports: [note],
     website: { page: "", read: true, posts: [{ title: "Winter gritting routes confirmed", url: "", date: "2026-10-28", topic: "Winter service" }, { title: "Moor Lane resurfacing starts next month", url: "", date: "2026-10-21", topic: "Potholes" }] },
