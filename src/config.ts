@@ -22,7 +22,7 @@
 //              starting new work once a month's estimated Claude spend reaches this),
 //              WEB_SEARCH_MAX (default 4: searches in each step of reading an announcement, of which there
 //              are at most 5), DATA_QUERIES_MAX (default 8: library queries per impact note),
-//              DAILY_JOBS_MAX (default 20: readings and notes per authority per day; site administrators
+//              DAILY_JOBS_MAX (default 20: readings, notes and briefings per authority per day; site administrators
 //              aren't limited), SEARCHES_A_MONTH (default 2000: coverage checks for all authorities together; keep
 //              it within the Brave Search plan), TOOLKIT_STORAGE_ZONE (the Climate Toolkit's storage zone),
 //              TOOLKIT_ROOT_FOLDER (default climate-toolkit), TOOLKIT_STORAGE_HOST (default storage.bunnycdn.com), DEMO (on, the default, or off: the Northbridge

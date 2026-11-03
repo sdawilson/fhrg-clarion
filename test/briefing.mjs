@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import zlib from "node:zlib";
 import { JSDOM } from "jsdom";
-import { addUser, claude, files, getText, until } from "./sim.mjs";
+import { addUser, claude, files, getText, putText, until } from "./sim.mjs";
 const { handleRequest } = await import("./.build/app.mjs");
 const t = await import("./.build/internals.mjs");
 
@@ -31,139 +31,229 @@ await addUser(1, "lead@westsussex.gov.uk", "Lee Lead", 30, "lead");
 await addUser(2, "member@westsussex.gov.uk", "Mo Member", 30, "member");
 await addUser(3, "kit@kirklees.gov.uk", "Kit Officer", 20, "lead");
 await addUser(4, "boss@fhrg.test", "Bo Boss", 99, "member", 1);
+await addUser(5, "ivy@westsussex.gov.uk", "Ivy Admin", 30, "member", 1);
+await addUser(6, "nameless@westsussex.gov.uk", "", 30, "lead");
 const api = async (path, body, token) => { const res = await handleRequest(new Request(`https://clarion.test${path}`, { method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-session-token": token } : {}) }, body: JSON.stringify(body) })); return Object.assign(await res.json(), { status: res.status }); };
 const login = async (email) => (await api("/api/login", { email, password: "pw" })).token;
-const lead = await login("lead@westsussex.gov.uk"), member = await login("member@westsussex.gov.uk"), kit = await login("kit@kirklees.gov.uk"), boss = await login("boss@fhrg.test");
+const lead = await login("lead@westsussex.gov.uk"), member = await login("member@westsussex.gov.uk"), kit = await login("kit@kirklees.gov.uk"), boss = await login("boss@fhrg.test"), ivy = await login("ivy@westsussex.gov.uk"), nameless = await login("nameless@westsussex.gov.uk");
 
-const DRAFT = { summary: "Satisfaction has fallen.\nPotholes come first.", how_residents_feel: "Less satisfied, on the survey.", why_it_matters_here: "New money raises hopes.", likely_questions: [{ question: "Are roads worse?", answer: "The survey says so." }, { question: "When?", answer: "Not yet known." }], factual_lines: ["Line one.", "Line two."] };
+const DRAFT = { summary: "Satisfaction has fallen.\nPotholes come first.", how_residents_feel: "Less satisfied, on the survey.", why_it_matters_here: "New money raises hopes.", likely_questions: [{ question: "Are roads worse?", answer: "ANSWER-ONE from the survey." }, { question: "When?", answer: "ANSWER-TWO not yet known." }], factual_lines: ["LINE-ONE of two.", "LINE-TWO of two."] };
 claude.script.submit_briefing = (body) => ({ id: "m", type: "message", role: "assistant", model: "x", stop_reason: "tool_use", stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 }, content: [{ type: "tool_use", id: "t1", name: "submit_briefing", input: body.tools[0].input_schema.properties.factual_lines ? DRAFT : { ...DRAFT, likely_questions: DRAFT.likely_questions.map(({ question }) => ({ question })), factual_lines: undefined } }] });
-
-await api("/api/facts/notes", { code: WSX, notes: "PRIVATE-NOTE about a named cabinet member" }, lead);
-ok((await api("/api/briefing/start", { code: WSX }, member)).status === 403, "a member who isn't a lead can't write a briefing");
 const write = async (token = lead, code = WSX) => {
   const r = await api("/api/briefing/start", { code }, token);
   await until(async () => (await api("/api/briefing/get", { code, id: r.briefing.id }, token)).briefing?.status !== "working", "the briefing to finish");
   return (await api("/api/briefing/get", { code, id: r.briefing.id }, token)).briefing;
 };
+const form = (x, more = {}) => ({ code: WSX, id: x.id, updated: x.updated, hidden: false, title: x.title, summary: x.summary, feel: x.feel, matters: x.matters, questions: x.questions, lines: x.lines, ...more });
+const stored = (x) => JSON.parse(getText(files(`clarion/authorities/${WSX}/briefings/`).find((f) => f.includes(x.id))));
+
+// ---- what Claude is given, with real material held
+await api("/api/facts/notes", { code: WSX, notes: "PRIVATE-NOTE about a named cabinet member" }, lead);
+await api("/api/facts/survey", { code: WSX, year: 2026, measure: "Roads", score: 44, outOf: 100, responses: 800, source: "Council survey" }, lead);
+const reading = (await api("/api/reading/start", { code: WSX }, lead)).reading;
+await until(async () => (await api("/api/reading/get", { code: WSX, id: reading.id }, lead)).reading?.status !== "working", "the reading");
+const heard = (await api("/api/authority", { code: WSX }, lead)).evidence.signals;
+ok(heard.questions.data.length > 0 && heard.petitions.data.length > 0, "there are MPs' questions and petitions to keep out");
+ok((await api("/api/briefing/start", { code: WSX }, member)).status === 403, "a member who isn't a lead can't write a briefing");
 let before = claude.calls.length;
 const one = await write();
 const call = claude.calls[before];
 ok(one.status === "ready" && one.summary.startsWith("Satisfaction") && one.questions.length === 2 && one.lines.length === 2, "Claude drafts a briefing");
-ok(!call.prompt.includes("PRIVATE-NOTE") && !JSON.stringify(call.body.tools).includes("web_"), "from no officer's notes, and with no web access");
-ok(!/early_signs|headline/.test(call.prompt), "and not from a reading's words, which may echo those notes, or early signs");
-ok(/Section 2 of the Local Government Act 1986/.test(call.sys) && /data, not instructions/.test(call.prompt), "told to stay neutral, and that what it's given is data");
-ok(one.sources.some((x) => /Evidence read on \d+ \w+ 20\d\d/.test(x)) && one.sources.some((x) => /reference library/.test(x)), "the list of sources is written by code, with the date read");
-ok(!("claude" in one) && !one.approvedBy, "and it starts as a draft");
+ok(!call.prompt.includes("PRIVATE-NOTE") && !call.prompt.includes("Lee Lead"), "from no officer's notes or name");
+ok(!heard.questions.data.some((q) => call.prompt.includes(q.text) || call.prompt.includes(q.member)) && !heard.petitions.data.some((x) => call.prompt.includes(x.title)), "no MP's words or name, and no petition's title");
+ok(!call.prompt.includes("Residents rate road condition poorly") && !/concern_rank|Look into it early|Act, and be seen to/.test(call.prompt), "no reading's words, and no early signs or advice");
+ok(/"road_petitions":\{"count":\d/.test(call.prompt) && /"mps_written_questions_about_roads":[1-9]/.test(call.prompt) && /"latest_mood_reading":\{"date":"[\d-]+","direction":"[^"]+","confidence":"[^"]+"\}/.test(call.prompt) && /Council survey/.test(call.prompt), "but counts, surveys and the reading's direction do go in");
+ok(!JSON.stringify(call.body.tools).includes("web_"), "and it has no web access");
+ok(/Section 2 of the Local Government Act 1986/.test(call.sys) && /data, not instructions/.test(call.prompt), "it's told to stay neutral, and that what it's given is data");
+ok(one.sources.includes("Council survey, 2026") && one.sources.some((x) => /Evidence read on \d+ \w+ 20\d\d/.test(x)) && one.sources.some((x) => /reference library/.test(x)) && one.sources.some((x) => /mood reading of \d+ \w+ 20\d\d/.test(x)), "the list of sources is written by code, with the date read");
+ok(!one.approvedBy, "and it starts as a draft");
 
-ok((await api("/api/briefing/get", { code: WSX, id: one.id }, kit)).status === 403, "another authority can't read it");
+// ---- who can do what
+const routes = [["get", { id: one.id }], ["save", form(one)], ["approve", form(one)], ["copy", { id: one.id }], ["remove", { id: one.id }], ["word", { id: one.id }], ["start", {}], ["list", {}], ["election", { on: true }]];
+for (const [route, body] of routes) {
+  ok((await api(`/api/briefing/${route}`, { ...body, code: WSX }, kit)).status === 403, `another authority's lead is refused: ${route}`);
+  ok((await api(`/api/briefing/${route}`, { ...body, code: WSX })).status === 401, `and anyone signed out: ${route}`);
+}
 ok((await api("/api/briefing/get", { code: WSX, id: "../../facts" }, lead)).status === 404, "a made-up id is refused");
 ok((await api("/api/briefing/list", { code: WSX }, member)).briefings[0].id === one.id, "members of the authority see it listed");
+ok((await api("/api/briefing/get", { code: WSX, id: one.id }, boss)).briefing?.summary === one.summary, "and so can a site administrator from outside");
 
 let r = await api("/api/briefing/word", { code: WSX, id: one.id }, lead);
 ok(r.status === 409 && !r.file, "a draft can't be taken out");
-r = await api("/api/briefing/save", { code: WSX, id: one.id, ...one, summary: "Changed by an officer.", lines: ["A", "", "B"], questions: [{ question: "Q?", answer: "A." }, { question: "", answer: "gone" }] }, lead);
+r = await api("/api/briefing/save", form(one, { summary: "Changed by an officer.", lines: ["A", "", "B"], questions: [{ question: "Q?", answer: "A." }, { question: "", answer: "gone" }] }), lead);
 ok(r.briefing.summary === "Changed by an officer." && r.briefing.lines.length === 2 && r.briefing.questions.length === 1, "an officer's changes are saved, and empty rows dropped");
-ok((await api("/api/briefing/save", { code: WSX, id: one.id, summary: "Member" }, member)).status === 403, "a member can't change it");
+const saved = r.briefing;
+ok((await api("/api/briefing/save", form(saved, { summary: "Member" }), member)).status === 403, "a member can't change it");
+r = await api("/api/briefing/save", form(one, { summary: "From an older page" }), lead);
+ok(r.status === 409 && /changed since/.test(r.error) && stored(one).summary === "Changed by an officer.", "saving from an older page doesn't overwrite a newer edit");
 
-r = await api("/api/briefing/approve", { code: WSX, id: one.id }, boss);
+r = await api("/api/briefing/approve", form(saved), boss);
 ok(r.status === 403 && /named officer/.test(r.error), "a site administrator from outside can't release it");
-ok((await api("/api/briefing/approve", { code: WSX, id: one.id }, member)).status === 403, "nor can a member who isn't a lead");
-const blank = await write();
-await api("/api/briefing/save", { code: WSX, id: blank.id, ...blank, summary: "  " }, lead);
-ok(/summary/.test((await api("/api/briefing/approve", { code: WSX, id: blank.id }, lead)).error), "an empty briefing can't be released");
-r = await api("/api/briefing/approve", { code: WSX, id: one.id }, lead);
-ok(r.briefing.approvedBy === "Lee Lead" && /^20\d\d-\d\d-\d\d$/.test(r.briefing.approvedOn), "a lead of the authority releases it, under their name");
-ok((await api("/api/briefing/save", { code: WSX, id: one.id, summary: "Later" }, lead)).status === 409 && (await api("/api/briefing/remove", { code: WSX, id: one.id }, lead)).status === 409, "what's released stays as it was, and on record");
+ok((await api("/api/briefing/approve", form(saved), ivy)).status === 403, "nor can a site administrator at the authority who isn't a lead");
+ok((await api("/api/briefing/approve", form(saved), member)).status === 403, "nor a member who isn't a lead");
+r = await api("/api/briefing/approve", form(saved), nameless);
+ok(r.status === 403 && /no name/.test(r.error), "nor a lead with no name on their account");
+ok(/summary/.test((await api("/api/briefing/approve", form(saved, { summary: "  " }), lead)).error) && stored(one).summary === "Changed by an officer.", "an empty briefing can't be released");
+
+const seen = (await api("/api/briefing/save", form(saved, { summary: "As the lead read it." }), lead)).briefing;
+await api("/api/briefing/save", form(seen, { summary: "Slipped in by someone else." }), boss);
+r = await api("/api/briefing/approve", form(seen), lead);
+ok(r.status === 409 && !stored(one).approvedBy, "nobody can release a version they haven't seen");
+const latest = (await api("/api/briefing/get", { code: WSX, id: one.id }, lead)).briefing;
+r = await api("/api/briefing/approve", form(latest, { summary: "What the lead released." }), lead);
+ok(r.briefing.approvedBy === "Lee Lead" && /^20\d\d-\d\d-\d\d$/.test(r.briefing.approvedOn) && r.briefing.summary === "What the lead released.", "a lead of the authority releases what's on their page, under their name");
+const out = r.briefing;
+ok((await api("/api/briefing/save", form(out, { summary: "Later" }), lead)).status === 409 && (await api("/api/briefing/approve", form(out), lead)).status === 409 && (await api("/api/briefing/remove", { code: WSX, id: one.id }, lead)).status === 409, "what's released stays as it was, and on record");
+
+const raced = await write();
+const [gone, kept] = await Promise.all([api("/api/briefing/remove", { code: WSX, id: raced.id }, lead), api("/api/briefing/approve", form(raced), lead)]);
+ok((kept.briefing?.approvedBy && gone.status === 409 && stored(raced).approvedBy) || (gone.ok && !files(`clarion/authorities/${WSX}/briefings/`).some((f) => f.includes(raced.id))), "deleting and releasing at once can't lose a released briefing");
 
 r = await api("/api/briefing/word", { code: WSX, id: one.id }, member);
-z = unzip(Buffer.from(r.file, "base64"));
-let doc = z["word/document.xml"].text;
+const words = (reply) => unzip(Buffer.from(reply.file, "base64"))["word/document.xml"].text;
+let doc = words(r);
 ok(/^west-sussex.*\.docx$/.test(r.name), "it comes out as a Word file");
-ok(doc.includes("Released by Lee Lead on") && doc.includes("Changed by an officer.") && doc.includes("Factual lines") && doc.includes("Evidence read on"), "with who released it, what it says and its sources");
+ok(doc.includes("Released by Lee Lead on") && doc.includes("What the lead released.") && doc.includes("Evidence read on") && doc.includes("Factual lines"), "with who released it, what it says and its sources");
 
 r = await api("/api/briefing/copy", { code: WSX, id: one.id }, lead);
-ok(r.briefing.id !== one.id && !r.briefing.approvedBy && r.briefing.summary === "Changed by an officer." && r.briefing.by === "Lee Lead", "a new draft can start from it");
+ok(r.briefing.id !== one.id && !r.briefing.approvedBy && r.briefing.summary === "What the lead released." && r.briefing.by === "Lee Lead", "a new draft can start from it");
 const copy = r.briefing;
 r = await api("/api/briefing/remove", { code: WSX, id: copy.id }, lead);
 ok(r.ok && !(await api("/api/briefing/list", { code: WSX }, lead)).briefings.some((x) => x.id === copy.id), "and a draft can be deleted");
 
 // ---- the election setting
 ok((await api("/api/briefing/election", { code: WSX, on: true }, member)).status === 403, "a member can't set the election setting");
-const draft = await write();
+ok((await api("/api/briefing/election", { code: WSX, on: true }, boss)).status === 403, "nor a site administrator from outside");
+ok((await api("/api/briefing/election", { code: WSX, on: true }, ivy)).status === 403, "nor one at the authority who isn't a lead");
+ok((await api("/api/briefing/election", { code: WSX }, lead)).status === 400, "and it has to be told on or off");
+const draft = await write(), oldForm = await write();
+const beforeDoc = await write();
+await api("/api/briefing/approve", form(beforeDoc), lead);
 const survey = (await api("/api/survey/new", { code: WSX, title: "Autumn", purpose: "How people feel." }, lead)).survey;
 await api("/api/survey/save", { code: WSX, id: survey.id, title: "Autumn", purpose: "How people feel.", collector: "West Sussex", sites: "High Street" }, lead);
 const opened = (await api("/api/survey/status", { code: WSX, id: survey.id, status: "open" }, lead)).survey;
+const answer = { client: "c1", site: "High Street", secs: 60, answers: { c1: "Fairly satisfied" } };
 ok(opened?.status === "open" && (await api("/api/s/get", { access: opened.access })).survey?.title === "Autumn", "before it's on, a survey opens and tablets can reach it");
 r = await api("/api/briefing/election", { code: WSX, on: true }, lead);
 ok(r.election.on && r.election.by === "Lee Lead", "a lead turns the election setting on");
 
 r = await api("/api/briefing/get", { code: WSX, id: draft.id }, lead);
 ok(r.briefing.lines.length === 0 && r.briefing.questions.every((q) => q.answer === "") && r.briefing.questions.length === 2 && /Pre-election/.test(r.briefing.electionNote), "older briefings lose their lines and suggested answers on screen");
-r = await api("/api/briefing/word", { code: WSX, id: one.id }, lead);
-doc = unzip(Buffer.from(r.file, "base64"))["word/document.xml"].text;
-ok(!doc.includes("Factual lines") && doc.includes("Pre-election period"), "and in a Word copy, even one released before");
+const during = r.briefing;
+doc = words(await api("/api/briefing/word", { code: WSX, id: beforeDoc.id }, lead));
+ok(!doc.includes("Factual lines") && !doc.includes("LINE-ONE") && !doc.includes("ANSWER-ONE") && doc.includes("Are roads worse?") && doc.includes("Pre-election period"), "and in a Word copy, even one released before");
+r = await api("/api/briefing/copy", { code: WSX, id: beforeDoc.id }, lead);
+ok(r.briefing.lines.length === 0 && stored(r.briefing).lines.length === 0 && stored(r.briefing).questions.every((q) => q.answer === ""), "and in a copy, for good");
 
-r = await api("/api/briefing/save", { code: WSX, id: draft.id, title: "Edited", summary: "During", feel: "F", matters: "M", questions: [{ question: "Are they worse?", answer: "Sneaked in" }], lines: ["Sneaked in"] }, lead);
-const held = JSON.parse(await getText(files(`clarion/authorities/${WSX}/briefings/`).find((f) => f.includes(draft.id))));
-ok(r.briefing.lines.length === 0 && held.lines.length === 2 && held.questions[0].answer === "The survey says so." && held.questions[0].question === "Are they worse?", "an edit during the period can't add lines, and doesn't lose the hidden ones");
+r = await api("/api/briefing/save", form(oldForm, { summary: "From before the period", lines: ["Sneaked in"] }), lead);
+ok(r.status === 409 && /setting has changed/.test(r.error), "a page opened before the period can't save into it");
+r = await api("/api/briefing/save", form(during, { hidden: true, title: "Edited", summary: "During", questions: [{ question: "Are roads worse?", answer: "Sneaked in" }, { question: "A different question?", answer: "Sneaked in" }], lines: ["Sneaked in"] }), lead);
+let held = stored(draft);
+ok(r.briefing.lines.length === 0 && held.lines.length === 2 && held.questions[0].answer === "ANSWER-ONE from the survey." && held.summary === "During", "an edit during the period can't add lines, and doesn't lose the hidden ones");
+ok(held.questions[1].question === "A different question?" && held.questions[1].answer === "", "but an answer doesn't stay with a question that's been rewritten");
 
 let tool;
-const seen = claude.script.submit_briefing;
-claude.script.submit_briefing = (body) => { tool = body.tools[0]; return seen(body); };
+const scripted = claude.script.submit_briefing;
+claude.script.submit_briefing = (body) => { tool = body.tools[0]; return scripted(body); };
 before = claude.calls.length;
-const during = await write();
-ok(!tool.input_schema.properties.factual_lines && !tool.input_schema.properties.likely_questions.items.properties.answer && /pre-election/.test(claude.calls[before].prompt) && during.lines.length === 0, "a new briefing asks Claude for neither");
+const newDuring = await write();
+ok(!tool.input_schema.properties.factual_lines && !tool.input_schema.properties.likely_questions.items.properties.answer && /pre-election/.test(claude.calls[before].prompt) && newDuring.lines.length === 0, "a new briefing asks Claude for neither");
 
-await api("/api/briefing/approve", { code: WSX, id: draft.id }, lead);
+const pageDuring = (await api("/api/briefing/get", { code: WSX, id: draft.id }, lead)).briefing;
+await api("/api/briefing/election", { code: WSX, on: false }, lead);
+r = await api("/api/briefing/save", form(pageDuring, { hidden: true, summary: "After", questions: pageDuring.questions, lines: [] }), lead);
+held = stored(draft);
+ok(r.status === 409 && held.lines.length === 2 && held.questions[0].answer === "ANSWER-ONE from the survey.", "a page opened during the period can't wipe the hidden text after it");
+await api("/api/briefing/election", { code: WSX, on: true }, lead);
+await api("/api/briefing/approve", form(pageDuring, { hidden: true }), lead);
 await api("/api/briefing/election", { code: WSX, on: false }, lead);
 r = await api("/api/briefing/get", { code: WSX, id: draft.id }, lead);
 ok(r.briefing.lines.length === 0 && r.briefing.questions.every((q) => q.answer === ""), "lines hidden when one was released don't come back afterwards");
-r = await api("/api/briefing/get", { code: WSX, id: one.id }, lead);
+r = await api("/api/briefing/get", { code: WSX, id: beforeDoc.id }, lead);
 ok(r.briefing.lines.length === 2, "and one released before the period is whole again after it");
 
-// surveys
+// fieldwork
 await api("/api/briefing/election", { code: WSX, on: true }, lead);
-const form = { client: "c1", site: "High Street", secs: 60, answers: { c1: "Fairly satisfied" } };
-r = await api("/api/s/get", { access: opened.access });
-ok(r.status === 409 && /paused/.test(r.error), "tablets can't open a survey during the period");
-r = await api("/api/s/submit", { access: opened.access, forms: [form] });
-ok(r.status === 409 && /paused/.test(r.error), "or send forms, so they stay on the tablet");
-await api("/api/survey/status", { code: WSX, id: survey.id, status: "draft" }, lead);
+ok((await api("/api/briefing/list", { code: KIRK }, kit)).election.on === false, "another authority's setting is left alone");
+for (const [path, body, what] of [["/api/s/get", { access: opened.access }, "open a survey on a tablet"], ["/api/s/submit", { access: opened.access, forms: [answer] }, "send forms from a tablet"],
+  ["/api/survey/answers", { code: WSX, id: survey.id, forms: [{ form: "1", answers: { c1: "Fairly satisfied" } }] }, "type in paper forms"], ["/api/survey/csv", { code: WSX, id: survey.id, csv: "form,c1\n1,Fairly satisfied\n" }, "upload a file of forms"],
+  ["/api/survey/scan", { code: WSX, id: survey.id, files: [] }, "read a scan"], ["/api/survey/status", { code: WSX, id: survey.id, status: "draft" }, "take a survey back to a draft, which would strand tablets' forms"]]) {
+  r = await api(path, body, path.startsWith("/api/s/") ? undefined : lead);
+  ok(r.status === 409 && /paused/.test(r.error), `during the period nobody can ${what}`);
+}
+ok(!files(`clarion/authorities/${WSX}/surveys/${survey.id}`).length || !(getText(files(`clarion/authorities/${WSX}/surveys/${survey.id}`)[0]) || "").includes("c1"), "so no answers arrive");
+await api("/api/survey/status", { code: WSX, id: survey.id, status: "closed" }, lead);
 r = await api("/api/survey/status", { code: WSX, id: survey.id, status: "open" }, lead);
 ok(r.status === 409 && /paused/.test(r.error), "and a survey can't be opened");
-ok((await api("/api/briefing/list", { code: KIRK }, kit)).election.on === false, "another authority's setting is left alone");
 ok((await api("/api/survey/list", { code: WSX }, member)).paused === true && (await api("/api/survey/get", { code: WSX, id: survey.id }, lead)).paused === true, "and the survey pages say so");
-await api("/api/briefing/election", { code: WSX, on: false }, lead);
-r = await api("/api/survey/status", { code: WSX, id: survey.id, status: "open" }, lead);
-ok(r.survey?.status === "open" && (await api("/api/s/get", { access: r.survey.access })).survey, "turned off, surveys carry on");
+
+// the limit
+const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+for (let i = 0; i < 20; i++) putText(`clarion/authorities/${KIRK}/briefings/${today}0000${String(i).padStart(5, "0")}-0000000${(i % 10)}.json`, "{}");
+r = await api("/api/briefing/start", { code: KIRK }, kit);
+ok(r.status === 429 && /briefings/.test(r.error), "briefings count towards an authority's daily limit");
 
 // ---- the pages
-const html = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-async function open(token, hash, path = "") {
-  const dom = new JSDOM(html, {
-    url: `https://clarion.test/${path}${hash}`, runScripts: "dangerously", pretendToBeVisual: true,
+const html = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8"), tabletHtml = fs.readFileSync(new URL("../public/survey.html", import.meta.url), "utf8");
+function browser(page, address, setup) {
+  return new JSDOM(page, {
+    url: `https://clarion.test/${address}`, runScripts: "dangerously", pretendToBeVisual: true,
     beforeParse(w) {
-      w.localStorage.setItem("clarion_token", token);
+      setup?.(w);
       w.scrollTo = () => {};
-      w.print = () => { w.printed = true; };
+      w.print = () => { w.printed = w.document.querySelector(".main")?.textContent ?? ""; };
       w.URL.createObjectURL = (blob) => { w.saved = blob; return "blob:x"; };
       w.URL.revokeObjectURL = () => {};
       w.fetch = async (url, opts = {}) => { const res = await handleRequest(new Request(new URL(url, "https://clarion.test").href, opts)); const text = await res.text(); return { ok: res.ok, status: res.status, json: async () => JSON.parse(text) }; };
     },
-  });
-  await until(() => dom.window.document.querySelector(".main .page > *"), "the page to start");
-  return dom.window.document;
+  }).window.document;
+}
+async function open(token, hash, path = "") {
+  const d = browser(html, `${path}${hash}`, (w) => w.localStorage.setItem("clarion_token", token));
+  await until(() => d.querySelector(".main .page > *"), "the page to start");
+  return d;
 }
 const text = (el) => el.textContent.replace(/\s+/g, " ");
 const see = (d, pattern) => until(() => pattern.test(text(d.querySelector(".main"))), `the page to show ${pattern}`);
 const button = (d, words) => [...d.querySelectorAll("button")].find((b) => b.textContent.trim() === words);
-const fill = (el, value) => { el.value = value; };
 
-let d = await open(lead, `#briefings/${WSX}`);
+// surveys while the setting is on, on the officer's page and the tablet
+let d = await open(lead, `#survey/${WSX}/${survey.id}/collect`);
+await see(d, /Answers so far/);
+let main = text(d.querySelector(".main"));
+ok(/Street surveys are paused/.test(main) && !/Prepare forms to print/.test(main) && !button(d, "Back to draft") && !d.querySelector('.main input[aria-label="Form number"]'), "the survey page offers no way of adding forms during the period");
+d = await open(lead, `#print/${WSX}/${survey.id}/1/10`);
+await see(d, /Street surveys are paused/);
+ok(!d.querySelector(".sheet"), "and forms can't be printed");
+d = await open(lead, `#surveys/${WSX}`);
+await see(d, /Street surveys are paused/);
+ok(/Surveys so far/.test(text(d.querySelector(".main"))), "and the list of surveys says so");
+
+await api("/api/briefing/election", { code: WSX, on: false }, lead);
+const reopened = (await api("/api/survey/status", { code: WSX, id: survey.id, status: "open" }, lead)).survey;
+ok(reopened?.status === "open", "turned off, a survey can open again");
+await api("/api/briefing/election", { code: WSX, on: true }, lead);
+const waiting = [{ client: "tablet-1", site: "High Street", secs: 60, answers: { c1: "Fairly satisfied" } }];
+const tablet = browser(tabletHtml, `s/${reopened.access}`, (w) => { w.SEND_EVERY_MS = 25; w.localStorage.setItem(`clarion_queue_${reopened.access}`, JSON.stringify(waiting)); });
+await until(() => /This survey is paused/.test(text(tablet.getElementById("app"))), "the tablet to say it's paused");
+ok(/1 form is still on this tablet/.test(text(tablet.getElementById("app"))) && /at least once a week/.test(text(tablet.getElementById("app"))), "a tablet keeps its forms through a pause, and says so");
+const onTablet = () => tablet.defaultView.localStorage.getItem(`clarion_queue_${reopened.access}`);
+ok(onTablet().includes("tablet-1"), "and they're still there");
+await api("/api/briefing/election", { code: WSX, on: false }, lead);
+[...tablet.querySelectorAll("button")].find((b) => b.textContent === "Try again").click();
+await until(() => /Ready for the next person/.test(text(tablet.getElementById("app"))), "the tablet to carry on");
+await until(() => onTablet() === "[]", "the form to send");
+ok((await api("/api/survey/get", { code: WSX, id: survey.id }, lead)).results.total === 1, "and they send when the pause ends");
+
+// briefings
+d = await open(lead, `#briefings/${WSX}`);
 await see(d, /Briefings so far/);
-ok(button(d, "Write a briefing") && button(d, "Turn this on") && /Released/.test(text(d.querySelector(".main"))) && /Draft/.test(text(d.querySelector(".main"))), "a lead sees the list, and can write one and set the election setting");
-const rail = [...d.querySelectorAll(".rail .nav button")].map((b) => b.textContent);
-ok(rail.includes("Councillor briefings"), "it has its place in the menu");
+main = text(d.querySelector(".main"));
+ok(button(d, "Write a briefing") && button(d, "Turn this on") && /Released/.test(main) && /Draft/.test(main), "a lead sees the list, and can write one and set the election setting");
+ok([...d.querySelectorAll(".rail .nav button")].some((b) => b.textContent === "Councillor briefings"), "it has its place in the menu");
+d = await open(boss, `#briefings/${WSX}`);
+await see(d, /Briefings so far/);
+ok(button(d, "Write a briefing") && !button(d, "Turn this on"), "a site administrator can write one, but the setting is the authority's");
 d = await open(member, `#briefings/${WSX}`);
 await see(d, /Briefings so far/);
 ok(!button(d, "Write a briefing") && !button(d, "Turn this on"), "a member can only read");
@@ -172,49 +262,91 @@ const page = await write();
 d = await open(lead, `#briefing/${WSX}/${page.id}`);
 await see(d, /Release this briefing/);
 const boxes = [...d.querySelectorAll(".main textarea")];
-ok(boxes.length >= 7 && boxes[0].value.startsWith("Satisfaction") && d.querySelector(".main input").value.includes("councillor briefing"), "a draft opens ready to edit");
+ok(boxes.length === 7 && boxes[0].value.startsWith("Satisfaction") && d.querySelector(".main input").value.includes("councillor briefing"), "a draft opens ready to edit");
 ok(!button(d, "Take as Word") && !button(d, "Print or save as PDF"), "and it can't be taken out yet");
+ok(/Draft, not released/.test(d.querySelector(".print-only").textContent), "and printing it from the browser says it's a draft");
 button(d, "Add a line").click();
-ok([...d.querySelectorAll(".main textarea")].length === boxes.length + 1, "lines can be added");
+ok(d.querySelectorAll(".main textarea").length === boxes.length + 1, "lines can be added");
 button(d, "Add a line").click(); button(d, "Add a line").click(); button(d, "Add a line").click();
 ok(button(d, "Add a line").disabled, "up to the most that will be kept");
-fill(d.querySelectorAll(".main textarea")[0], "Edited on the page.");
+d.querySelectorAll(".main textarea")[0].value = "Edited on the page.";
+button(d, "Save changes").click();
+await see(d, /Saved\./);
+d.querySelectorAll(".main textarea")[0].value = "Edited again on the page.";
+button(d, "Save changes").click();
+await until(async () => stored(page).summary === "Edited again on the page.", "the second save");
+await api("/api/briefing/save", form({ ...stored(page), summary: "A colleague's change." }), lead);
+button(d, "Release this briefing").click();
+await see(d, /has changed since this page was opened/);
+ok(!/Saved\./.test(text(d.querySelector(".main"))) && !stored(page).approvedBy, "a stale page says so, and releases nothing");
+d = await open(lead, `#briefing/${WSX}/${page.id}`);
+await see(d, /Release this briefing/);
+d.querySelectorAll(".main textarea")[0].value = "Released from the page.";
 button(d, "Release this briefing").click();
 await see(d, /Released by Lee Lead/);
 const released = (await api("/api/briefing/get", { code: WSX, id: page.id }, lead)).briefing;
-ok(released.summary === "Edited on the page." && released.lines.length === 2, "releasing saves what's on the page first");
+ok(released.summary === "Released from the page." && released.lines.length === 2, "releasing keeps what's on the page");
 ok(button(d, "Take as Word") && button(d, "Print or save as PDF") && !d.querySelector(".main textarea"), "and a released briefing reads as a document");
 button(d, "Take as Word").click();
 await until(() => d.defaultView.saved, "the file to be saved");
 ok(d.defaultView.saved.type.includes("wordprocessingml"), "Word is saved as a Word file");
 button(d, "Print or save as PDF").click();
-ok(d.defaultView.printed, "PDF goes through printing");
+await until(() => d.defaultView.printed, "the page to print");
+ok(d.defaultView.printed.includes("LINE-ONE"), "PDF goes through printing");
+d.defaultView.printed = null;
+await api("/api/briefing/election", { code: WSX, on: true }, lead);
+button(d, "Print or save as PDF").click();
+await until(() => d.defaultView.printed, "the page to print again");
+ok(!d.defaultView.printed.includes("LINE-ONE") && !d.defaultView.printed.includes("ANSWER-ONE"), "a page left open prints without lines once the setting is on");
+await api("/api/briefing/election", { code: WSX, on: false }, lead);
+d = await open(lead, `#briefing/${WSX}/${page.id}`);
+await see(d, /Start a new draft from this/);
+button(d, "Start a new draft from this").click();
 button(d, "Start a new draft from this").click();
 await see(d, /Save changes/);
 ok(!text(d.querySelector(".main")).includes("Released by"), "a new draft opens for editing");
+ok((await api("/api/briefing/list", { code: WSX }, lead)).briefings.filter((x) => x.title === page.title && !x.approvedBy && x.id !== page.id).length >= 1 && stored(page).approvedBy, "and the released one stays as it was");
+
+claude.fail = 400;
+const failed = (await api("/api/briefing/start", { code: WSX }, lead)).briefing;
+await until(async () => (await api("/api/briefing/get", { code: WSX, id: failed.id }, lead)).briefing.status === "failed", "the briefing to fail");
+claude.fail = null;
+d = await open(lead, `#briefing/${WSX}/${failed.id}`);
+await see(d, /Delete this draft/);
+button(d, "Delete this draft").click();
+await until(() => /Briefings so far/.test(text(d.querySelector(".main"))), "the list again");
+ok(!files(`clarion/authorities/${WSX}/briefings/`).some((f) => f.includes(failed.id)), "a draft that stopped can be deleted");
 
 await api("/api/briefing/election", { code: WSX, on: true }, lead);
 d = await open(lead, `#briefing/${WSX}/${(await write()).id}`);
 await see(d, /hidden, and won't be in what's released/);
 ok(!button(d, "Add a line") && !button(d, "Add a question") && !text(d.querySelector(".main")).includes("Factual answer"), "during the period the form asks for neither lines nor answers");
-d = await open(lead, `#surveys/${WSX}`);
-await see(d, /Street surveys are paused/);
-ok(true, "and the survey list says surveys are paused");
 await api("/api/briefing/election", { code: WSX, on: false }, lead);
 
 // the demonstration
+const pack = t.buildPack(), packed = (x) => unzip(Buffer.from(x.file, "base64"))["word/document.xml"].text;
+ok(packed(pack.briefingWord).includes("Northbridge") && packed(pack.briefingWord).includes("Factual lines") && !packed(pack.briefingWordElection).includes("Factual lines"), "the demonstration's Word files are real, made by the same code");
 d = await open("", "#briefings/NORTHBRIDGE", "demo");
 await see(d, /Briefings so far/);
-ok(/northbridge/i.test(text(d.querySelector(".main"))), "the demonstration has a briefing");
-const before2 = claude.calls.length;
+ok(/northbridge/i.test(d.querySelector(".main .note-row a").textContent), "the demonstration has a briefing");
+const beforeDemo = claude.calls.length;
+button(d, "Turn this on").click();
+await see(d, /Pre-election period/);
 d.querySelector(".main .note-row a").click();
-await until(() => /#briefing\//.test(d.location.hash), "the briefing to open");
+d.defaultView.location.hash = d.querySelector(".main .note-row a").getAttribute("href");
 await see(d, /Release this briefing/);
 button(d, "Release this briefing").click();
 await see(d, /Released by Demo officer/);
+d.defaultView.location.hash = "#briefings/NORTHBRIDGE";
+await see(d, /Turn this off/);
+button(d, "Turn this off").click();
+await see(d, /Turned off/);
+d.defaultView.location.hash = d.querySelector(".main .note-row a").getAttribute("href");
+await see(d, /Take as Word/);
+ok(!/Factual lines/.test(text(d.querySelector(".main"))), "released during the period, the demonstration's lines stay out");
 button(d, "Take as Word").click();
 await until(() => d.defaultView.saved, "the demonstration's file");
-ok(/Released by Demo officer/.test(text(d.querySelector(".main"))) && claude.calls.length === before2, "and goes through release with no call to Claude");
+ok(d.defaultView.saved.size === Buffer.from(pack.briefingWordElection.file, "base64").length && claude.calls.length === beforeDemo, "its Word file matches, and Claude isn't called");
 
 console.log(failures ? `\n${failures} failed` : "\nAll passed");
 process.exit(failures ? 1 : 0);

@@ -23,8 +23,8 @@
 //   POST /api/briefing/list        {code}: councillor briefings, and the election setting
 //   POST /api/briefing/get         {code, id}
 //   POST /api/briefing/start       {code}: draft one (runs in the background)
-//   POST /api/briefing/save        {code, id, title, summary, feel, matters, questions, lines}: an officer's changes
-//   POST /api/briefing/approve     {code, id}: a named officer of the authority releases it, which fixes it
+//   POST /api/briefing/save        {code, id, updated, hidden, title, summary, feel, matters, questions, lines}: an officer's changes
+//   POST /api/briefing/approve     as save: a lead of the authority releases what's on their page, which fixes it
 //   POST /api/briefing/copy        {code, id}: a new draft from one
 //   POST /api/briefing/remove      {code, id}: only a draft
 //   POST /api/briefing/word        {code, id}: a released briefing as a Word file
@@ -340,6 +340,12 @@ async function surveyEditor(c: Config, request: Request, limit = 2000): Promise<
   return { me, p, b, s: await surveyFor(c, p, b.id) };
 }
 
+// Fieldwork stops while the election setting is on. Paper waits as tablets do, because forms can't be told apart by when
+// they were filled in. Sorting and checking what's held carries on, as it adds nothing
+async function notPaused(c: Config, code: string): Promise<void> {
+  if ((await loadElection(c, code)).on) throw new FriendlyError(PAUSED, 409);
+}
+
 const briefingPage = (me: Member, p: Pilot, x: Briefing, election: Election) => json({ briefing: forReader(x, election), canEdit: canEdit(me, p), canApprove: canApprove(me, p), election });
 
 async function handleBriefingList(c: Config, request: Request): Promise<Response> {
@@ -347,7 +353,7 @@ async function handleBriefingList(c: Config, request: Request): Promise<Response
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
   const [all, election] = await Promise.all([listBriefings(c, p.code), loadElection(c, p.code)]);
-  return json({ briefings: all.map(({ id, status, stage, created, by, title, approvedBy, approvedOn }) => ({ id, status, stage, created, by, title, approvedBy, approvedOn })), canEdit: canEdit(me, p), election });
+  return json({ briefings: all.map(({ id, status, stage, created, by, title, approvedBy, approvedOn }) => ({ id, status, stage, created, by, title, approvedBy, approvedOn })), canEdit: canEdit(me, p), canApprove: canApprove(me, p), election });
 }
 
 async function briefingFor(c: Config, request: Request): Promise<{ me: Member; p: Pilot; x: Briefing; election: Election }> {
@@ -401,12 +407,9 @@ async function handleSurveySave(c: Config, request: Request): Promise<Response> 
 
 async function handleSurveyStatus(c: Config, request: Request): Promise<Response> {
   const { me, b, s } = await surveyEditor(c, request);
-  if (b.status === "open") {
-    if ((await loadElection(c, s.code)).on) throw new FriendlyError(PAUSED, 409);
-    return json({ survey: await openSurvey(c, me, s) });
-  }
+  if (b.status === "open") { await notPaused(c, s.code); return json({ survey: await openSurvey(c, me, s) }); }
   if (b.status === "closed") return json({ survey: await closeSurvey(c, s) });
-  if (b.status === "draft") return json({ survey: await backToDraft(c, s) });
+  if (b.status === "draft") { await notPaused(c, s.code); return json({ survey: await backToDraft(c, s) }); } // its forms may be waiting on tablets
   throw new FriendlyError("That isn't a survey status.");
 }
 
@@ -420,12 +423,14 @@ async function handleSurveyHelpGet(c: Config, request: Request): Promise<Respons
 async function handleSurveyAnswers(c: Config, request: Request): Promise<Response> {
   const { b, s } = await surveyEditor(c, request, 400_000);
   if (s.status === "draft") throw new FriendlyError("Open the survey before adding answers.");
+  await notPaused(c, s.code);
   return json(await addAnswers(c, s, Array.isArray(b.forms) ? b.forms.slice(0, 200) : [], b.via === "scan" ? "scan" : "paper"));
 }
 
 async function handleSurveyCsv(c: Config, request: Request): Promise<Response> {
   const { b, s } = await surveyEditor(c, request, 1_500_000);
   if (s.status === "draft") throw new FriendlyError("Open the survey before adding answers.");
+  await notPaused(c, s.code);
   const forms = readCsv(String(b.csv ?? ""));
   if (forms.length > 5000) throw new FriendlyError("A file can hold up to 5,000 forms.");
   return json(await addAnswers(c, s, forms, "csv"));
@@ -488,7 +493,7 @@ async function surveyFromCode(c: Config, request: Request, value: unknown, forms
   if (sent.n + forms > MAX_FORMS) throw new FriendlyError("Too many forms at once. Please wait a few minutes.", 429);
   sent.n += forms;
   if (s.status !== "open") throw new FriendlyError("This survey isn't open.", 409);
-  if ((await loadElection(c, s.code)).on) throw new FriendlyError(PAUSED, 409);
+  await notPaused(c, s.code);
   return s;
 }
 
@@ -547,11 +552,11 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/briefing/get": { const { me, p, x, election } = await briefingFor(c, request); return briefingPage(me, p, x, election); }
         case "/api/briefing/start": { const { me, p } = await editor(c, request, 1000); return json({ briefing: await startBriefing(c, me, p) }); }
         case "/api/briefing/save": return await handleBriefingChange(c, request, (_me, p, b, election) => saveBriefing(c, p, b, election));
-        case "/api/briefing/approve": return await handleBriefingChange(c, request, (me, p, b, election) => approveBriefing(c, me, p, b.id, election));
+        case "/api/briefing/approve": return await handleBriefingChange(c, request, (me, p, b, election) => approveBriefing(c, me, p, b, election));
         case "/api/briefing/copy": return await handleBriefingChange(c, request, (me, p, b, election) => copyBriefing(c, me, p, b.id, election));
         case "/api/briefing/remove": { const { p, b } = await editor(c, request, 1000); await removeBriefing(c, p, b.id); return json({ ok: true }); }
         case "/api/briefing/word": { const { x, election } = await briefingFor(c, request); return json(wordCopy(x, election)); }
-        case "/api/briefing/election": { const { me, p, b } = await editor(c, request, 1000); return json({ election: await setElection(c, me, p, b.on === true) }); }
+        case "/api/briefing/election": { const me = await signedIn(c, request); const b = await readJsonBody(request, 1000); return json({ election: await setElection(c, me, pilotFor(me, b.code), b.on) }); }
         case "/api/facts/survey": return await handleFactsSurvey(c, request);
         case "/api/facts/notes": return await handleFactsNotes(c, request);
         case "/api/attention": return await handleAttention(c, request);
@@ -582,7 +587,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/survey/sites": { const { p } = await editor(c, request, 1000); return json(await loadSites(c, p)); }
         case "/api/survey/suggest": { const { me, p, s } = await surveyEditor(c, request); return json({ job: await startSuggest(c, me, p, s) }); }
         case "/api/survey/wording": { const { me, p, s } = await surveyEditor(c, request); return json({ job: await startWording(c, me, p, s) }); }
-        case "/api/survey/scan": { const { me, p, b, s } = await surveyEditor(c, request, MAX_SCAN_CHARS + 1000); return json({ job: await startScan(c, me, p, s, b.files) }); }
+        case "/api/survey/scan": { const { me, p, b, s } = await surveyEditor(c, request, MAX_SCAN_CHARS + 1000); await notPaused(c, s.code); return json({ job: await startScan(c, me, p, s, b.files) }); }
         case "/api/survey/sort": { const { me, p, s } = await surveyEditor(c, request); return json({ job: await startSorting(c, me, p, s) }); }
         case "/api/survey/help": return await handleSurveyHelpGet(c, request);
         case "/api/survey/answers": return await handleSurveyAnswers(c, request);

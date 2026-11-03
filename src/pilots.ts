@@ -99,4 +99,7 @@ export const canSee = (me: Member, p: Pilot) => pilotsFor(me).includes(p);
 // administrator can see.
 export const isMember = (me: Member, p: Pilot) => normAuthority(p.name) === normAuthority(me.authority);
 // Officers' own survey results and notes: their authority's leads, and site administrators
+export const sameAuthority = (name: string, p: Pilot) => name.trim().toLowerCase() === p.websiteName.toLowerCase();
+/** A lead who really belongs to this authority: not a site administrator, and matched exactly rather than loosely. */
+export const isOwnLead = (me: Member, p: Pilot) => me.role === "lead" && !!me.authorityId && sameAuthority(me.authority, p);
 export const canEdit = (me: Member, p: Pilot) => me.siteAdmin || (me.role === "lead" && canSee(me, p));

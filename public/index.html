@@ -290,6 +290,8 @@ table.answers { table-layout: fixed; }
   .sheet:last-child { break-after: auto; }
   .sheet-back { break-before: page; margin-top: 0; }
 }
+.print-only { display: none; }
+@media print { .print-only { display: block; font-weight: 700; } }
 .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--navy-deep); color: #fff; padding: 8px 14px; border-radius: 8px; z-index: 60; }
 @media print {
   .rail, .topbar, .no-print { display: none !important; }
@@ -368,6 +370,7 @@ const Demo = {
   pack: null, job: null,
   survey(id) { if (!Demo.pack.surveys[id]) throw new Error("That survey wasn't found."); return Demo.pack.surveys[id]; },
   election: { on: false, by: "", at: "" }, brief: null,
+  saveBriefing(b) { Demo.briefing(); const { title, summary, feel, matters, questions, lines } = b; Object.assign(Demo.brief, Demo.election.on ? { title, summary, feel, matters } : { title, summary, feel, matters, questions, lines }); },
   briefing() {
     const b = Demo.brief ??= JSON.parse(JSON.stringify(Demo.pack.briefing)), on = Demo.election.on;
     return { briefing: on ? { ...b, lines: [], questions: b.questions.map((q) => ({ ...q, answer: "" })), electionNote: Demo.pack.electionNote } : { ...b, electionNote: "" }, canEdit: true, canApprove: true, election: Demo.election };
@@ -393,12 +396,12 @@ const Demo = {
       case "/api/attention": return P.attention;
       case "/api/announcements": return { announcements: P.announcements };
       case "/api/note/list": return { notes: P.noteList };
-      case "/api/briefing/list": return { briefings: [Demo.briefing().briefing], canEdit: true, election: Demo.election };
+      case "/api/briefing/list": return { briefings: [Demo.briefing().briefing], canEdit: true, canApprove: true, election: Demo.election };
       case "/api/briefing/get": return Demo.briefing();
       case "/api/briefing/start": case "/api/briefing/copy": Demo.brief = null; return Demo.briefing();
-      case "/api/briefing/save": { Demo.briefing(); const { title, summary, feel, matters, questions, lines } = b; Object.assign(Demo.brief, Demo.election.on ? { title, summary, feel, matters } : { title, summary, feel, matters, questions, lines }); return Demo.briefing(); }
-      case "/api/briefing/approve": { const { briefing } = Demo.briefing(); Demo.brief = { ...briefing, approvedBy: "Demo officer", approvedOn: new Date().toISOString().slice(0, 10) }; return Demo.briefing(); }
-      case "/api/briefing/word": return Demo.election.on ? P.briefingWordElection : P.briefingWord;
+      case "/api/briefing/save": Demo.saveBriefing(b); return Demo.briefing();
+      case "/api/briefing/approve": { Demo.saveBriefing(b); const { briefing } = Demo.briefing(); Demo.brief = { ...briefing, approvedBy: "Demo officer", approvedOn: new Date().toISOString().slice(0, 10) }; return Demo.briefing(); }
+      case "/api/briefing/word": return Demo.brief.lines.length && !Demo.election.on ? P.briefingWord : P.briefingWordElection;
       case "/api/briefing/election": Demo.election = { on: b.on, by: "Demo viewer", at: new Date().toISOString() }; return { election: Demo.election };
       case "/api/note/get": return { note: P.note };
       case "/api/reading/get": return { reading: P.authority.reading };
@@ -1072,7 +1075,7 @@ function aboutView(page, a) {
     sec("What's being said", h("ul", {}, ["Clarion reads sources with no licensing issue by itself: GOV.UK, Parliament and FixMyStreet.", "It never reads press, broadcast or social sources. A coverage check is a simple web search that keeps only yes or no and the date, and no match doesn't mean no coverage.", "Officers find each piece for themselves and record their own assessment. Leaning and stance are their judgement.", "Audience figures are national patterns by age, overlaid on Census figures for the authority. They describe a kind of source, not one publication's readers, and hold no party data.", "Enquiries and complaints are counts only. An officer's browser reads the file, and the officer sees what will be sent. Columns that look personal can't be used, small groups are pooled, and areas with fewer than 10 contacts in a month aren't kept by name.", "Allowing for a source's stance halves or adds half to a piece's reach. These weights are a starting judgement to be tested in the pilot, and raw figures are always kept."].map((x) => h("li", {}, x)))),
     sec("Attention and concern", h("ul", {}, ["Attention is a topic's assessed pieces in the last four weeks, then their reach after allowing for the source.", "Concern is a topic's share of street survey comments and of enquiries, averaged over whichever are held. Street surveys count for a year, and enquiries for three months.", "Ranks are compared, because a press count and a survey share aren't on one scale.", "An early sign is in the upper half for concern and the lower half for attention. It's a pointer for officers to check, not a finding."].map((x) => h("li", {}, x)))),
     sec("Works and weather", h("ul", {}, ["An authority's lead can turn on the link to its Climate Toolkit records, and can turn it off again at any time, which removes what's held.", "Clarion keeps only weekly job totals by function and source, ward totals and weather events, with no street names or job details.", "Weather events use the Climate Toolkit's own rules for gales, heavy rain, cold, freeze and thaw, and heatwaves.", "These help explain a change in mood. Only jobs reported by the public can count as a kind of signal."].map((x) => h("li", {}, x)))),
-    sec("Councillor briefings", h("ul", {}, ["Clarion drafts a briefing from figures and topic counts. An officer edits it, and a named officer of the authority releases it, which records their name and fixes that version.", "Only a released briefing can be taken out of Clarion, as Word or PDF, and sent through the council's own channels. Councillors don't need an account.", "Officers' notes and residents' words aren't used, and the list of sources is written by Clarion, not by the AI.", "During a pre-election period, an authority's lead turns on a setting that takes lines to take and suggested answers out of every briefing, and pauses street surveys."].map((x) => h("li", {}, x)))),
+    sec("Councillor briefings", h("ul", {}, ["Clarion drafts a briefing from figures and topic counts. An officer edits it, and a named officer of the authority releases it, which records their name and fixes that version.", "Only a released briefing can be taken out of Clarion, as Word or PDF, and sent through the council's own channels. Councillors don't need an account.", "Officers' notes, and anyone's words, aren't used. Petitions and MPs' questions go in as counts, so no MP is named. The list of sources is written by Clarion, not by the AI.", "During a pre-election period, an authority's lead turns on a setting that takes lines to take and suggested answers out of every briefing, and pauses street surveys, on paper as well as on tablets."].map((x) => h("li", {}, x)))),
     sec("Street surveys", h("ul", {}, ["A street sample isn't random, so every result is labelled indicative.", "Results are weighted to the local population's age and sex from Census 2021.", "Proposed survey sites are a calculation on Census and deprivation figures, not an opinion, and town size stands in for footfall. Each site's replies count, as far as they can, for the share of adults it stands for.", "Groups under 30 people aren't reported.", "Written comments stay hidden until Claude has taken out names. Only the authority's own members can read them, and they're never used in a mood reading or impact note."].map((x) => h("li", {}, x)))),
     sec("Comparing authorities", h("ul", {}, ["An authority sees only one FHRG middle figure, with nobody named, once five authorities have results.", "FHRG administrators see figures and topic counts for each authority, in alphabetical order and never ranked. A difference may be a local choice, or reflect geography, funding or who was asked."].map((x) => h("li", {}, x)))));
 }
@@ -1333,8 +1336,15 @@ function noteBody(a, n) {
 }
 
 // ---------------------------------------------------------------- councillor briefings
-const pausedNote = () => h("div", { class: "callout warn" }, h("strong", {}, "Pre-election period. "), "Street surveys are paused. Forms on tablets stay there until the setting is turned off, on the Councillor briefings page.");
+const pausedNote = () => h("div", { class: "callout warn" }, h("strong", {}, "Pre-election period. "), "Street surveys are paused, so no forms can be printed or added. Forms on tablets stay there, and paper forms wait, until your lead turns the setting off on the Councillor briefings page.");
 const paragraphs = (text) => String(text || "").split(/\n+/).filter(Boolean).map((t) => h("p", {}, t));
+// Runs a button's action once at a time, however often it's clicked
+const once = (fn, fail) => async (ev) => {
+  const btn = ev.currentTarget;
+  btn.disabled = true;
+  try { await fn(); } catch (e) { fail(e); }
+  btn.disabled = false;
+};
 async function briefingsView(page, a) {
   page.append(pageHead(`${a.name}: councillor briefings`, "A plain summary for cabinet members and scrutiny. Councillors don't need an account: an officer releases a briefing, then sends it through the council's own channels."));
   const body = h("div", { class: "stack gap" }, loading("Loading briefings…"));
@@ -1346,11 +1356,15 @@ async function briefingsView(page, a) {
   const pill = (x) => (x.status === "working" ? h("span", { class: "pill" }, x.stage) : x.status === "failed" ? h("span", { class: "pill bad" }, "Stopped") : x.approvedBy ? h("span", { class: "pill ok" }, "Released") : h("span", { class: "pill warn" }, "Draft"));
   const newCard = () => {
     const msg = h("div", {});
-    const go = h("button", { class: "btn primary", type: "button", onclick: async () => {
-      go.disabled = true; clear(msg);
-      try { location.hash = `#briefing/${a.code}/${(await API.call("/api/briefing/start", { code: a.code })).briefing.id}`; } catch (e) { go.disabled = false; msg.append(failure(e)); }
-    } }, "Write a briefing");
-    return h("section", { class: "card" }, h("h2", {}, "New briefing"), h("p", {}, "Clarion drafts this from the figures it holds: surveys, assessed coverage as topic counts, enquiries, fault reports and published data. Officers' notes, and what residents wrote, aren't used."), msg, h("div", { class: "row" }, go));
+    return h("section", { class: "card" }, h("h2", {}, "New briefing"), h("p", {}, "Clarion drafts this from the figures it holds: surveys, assessed coverage as topic counts, enquiries, fault reports, counts of petitions and MPs' questions, and published data. Officers' notes, and anyone's words, aren't used."), msg,
+      h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: once(async () => { clear(msg); location.hash = `#briefing/${a.code}/${(await API.call("/api/briefing/start", { code: a.code })).briefing.id}`; }, (e) => msg.append(failure(e))) }, "Write a briefing")));
+  };
+  const electionCard = () => {
+    const msg = h("div", {});
+    return h("section", { class: "card" }, h("h2", {}, "Pre-election setting"),
+      h("p", {}, "Section 2 of the Local Government Act 1986 bars publicity that seems designed to affect support for a party. Your monitoring officer will say when to turn this on. It takes lines to take and suggested answers out of every briefing, new or old, and pauses street surveys, on paper as well as on tablets."),
+      d.election.at ? h("p", { class: "note" }, `Turned ${d.election.on ? "on" : "off"} by ${d.election.by} on ${fmtDate(d.election.at)}.`) : null, msg,
+      h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: once(async () => { clear(msg); d.election = (await API.call("/api/briefing/election", { code: a.code, on: !d.election.on })).election; draw(); }, (e) => msg.append(failure(e))) }, d.election.on ? "Turn this off" : "Turn this on")));
   };
   const draw = () => add(clear(body),
     d.election.on ? h("div", { class: "callout warn" }, h("strong", {}, "Pre-election period. "), "Lines to take and suggested answers are left out of every briefing, and street surveys are paused.") : null,
@@ -1358,20 +1372,11 @@ async function briefingsView(page, a) {
     h("section", { class: "card" }, h("h2", {}, "Briefings so far"), d.briefings.length ? d.briefings.map((x) => h("div", { class: "note-row" },
       h("div", { class: "row" }, h("a", { href: `#briefing/${a.code}/${x.id}` }, x.title), pill(x)),
       h("div", { class: "note" }, x.approvedBy ? `Released on ${fmtDate(x.approvedOn)} by ${x.approvedBy}.` : `Drafted on ${fmtDate(x.created)} for ${x.by}.`))) : h("p", { class: "muted" }, "No briefings yet.")),
-    d.canEdit ? electionCard() : null);
-  const electionCard = () => {
-    const msg = h("div", {});
-    return h("section", { class: "card" }, h("h2", {}, "Pre-election setting"),
-      h("p", {}, "Section 2 of the Local Government Act 1986 bars publicity that seems designed to affect support for a party. Your monitoring officer will say when to turn this on. It takes lines to take and suggested answers out of every briefing, new or old, and pauses street surveys."),
-      d.election.at ? h("p", { class: "note" }, `Turned ${d.election.on ? "on" : "off"} by ${d.election.by} on ${fmtDate(d.election.at)}.`) : null, msg,
-      h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
-        clear(msg);
-        try { d.election = (await API.call("/api/briefing/election", { code: a.code, on: !d.election.on })).election; draw(); } catch (e) { msg.append(failure(e)); }
-      } }, d.election.on ? "Turn this off" : "Turn this on")));
-  };
+    d.canApprove ? electionCard() : null);
   draw();
 }
 
+const removeDraft = (a, b, bad) => (App.demo ? null : h("button", { class: "btn ghost", type: "button", onclick: once(async () => { clear(bad); await API.call("/api/briefing/remove", { code: a.code, id: b.id }); location.hash = `#briefings/${a.code}`; }, (e) => bad.append(failure(e))) }, "Delete this draft"));
 async function briefingView(page, a, id) {
   const body = h("div", { class: "stack gap" }, loading("Loading the briefing…"));
   page.append(body);
@@ -1379,7 +1384,7 @@ async function briefingView(page, a, id) {
   const ask = async () => { d = await API.call("/api/briefing/get", { code: a.code, id }); return d.briefing; };
   const show = (b) => {
     if (b.status === "working") return add(clear(body), h("h1", {}, b.title), progress(b.stage));
-    if (b.status === "failed") return add(clear(body), h("h1", {}, b.title), failure({ message: b.error || "This briefing didn't finish." }));
+    if (b.status === "failed") { const bad = h("div", {}); return add(clear(body), h("h1", {}, b.title), failure({ message: b.error || "This briefing didn't finish." }), bad, d.canEdit ? h("div", { class: "row" }, removeDraft(a, b, bad)) : null); }
     const open = (next) => { d = next; show(next.briefing); };
     return add(clear(body), d.canEdit && !b.approvedBy ? briefingForm(a, d, open) : briefingRead(a, d, open));
   };
@@ -1397,18 +1402,19 @@ function saveBlob(name, blob) {
 }
 const WORD_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 function briefingRead(a, d, open) {
-  const b = d.briefing, released = !!b.approvedBy, msg = h("div", { class: "no-print" });
-  const word = async () => {
+  const b = d.briefing, released = !!b.approvedBy, msg = h("div", { class: "no-print" }), fail = (e) => msg.append(failure(e));
+  const word = once(async () => {
     clear(msg);
-    try { const r = await API.call("/api/briefing/word", { code: a.code, id: b.id }); saveBlob(r.name, new Blob([Uint8Array.from(atob(r.file), (x) => x.charCodeAt(0))], { type: WORD_TYPE })); } catch (e) { msg.append(failure(e)); }
-  };
-  const again = async () => {
-    clear(msg);
-    try { const r = await API.call("/api/briefing/copy", { code: a.code, id: b.id }); if (location.hash.endsWith(r.briefing.id)) open(r); else location.hash = `#briefing/${a.code}/${r.briefing.id}`; } catch (e) { msg.append(failure(e)); }
-  };
+    const r = await API.call("/api/briefing/word", { code: a.code, id: b.id });
+    saveBlob(r.name, new Blob([Uint8Array.from(atob(r.file), (x) => x.charCodeAt(0))], { type: WORD_TYPE }));
+    if (App.demo) toast("In the demonstration, this is a sample file, without any changes you made.");
+  }, fail);
+  // read again first, as the election setting may have changed since this page was opened
+  const print = once(async () => { clear(msg); open(await API.call("/api/briefing/get", { code: a.code, id: b.id })); window.print(); }, fail);
+  const again = once(async () => { clear(msg); const r = await API.call("/api/briefing/copy", { code: a.code, id: b.id }); if (location.hash.endsWith(r.briefing.id)) open(r); else location.hash = `#briefing/${a.code}/${r.briefing.id}`; }, fail);
   return [
     h("div", { class: "page-head" }, h("div", {}, h("span", { class: "eyebrow" }, `Councillor briefing for ${a.name}`), h("h1", {}, b.title), h("p", {}, released ? `Released by ${b.approvedBy} on ${fmtDate(b.approvedOn)}.` : "Draft, not released.")),
-      released ? h("div", { class: "row no-print" }, h("button", { class: "btn", type: "button", onclick: word }, "Take as Word"), h("button", { class: "btn", type: "button", onclick: () => window.print() }, "Print or save as PDF"), d.canEdit ? h("button", { class: "btn ghost", type: "button", onclick: again }, "Start a new draft from this") : null) : null),
+      released ? h("div", { class: "row no-print" }, h("button", { class: "btn", type: "button", onclick: word }, "Take as Word"), h("button", { class: "btn", type: "button", onclick: print }, "Print or save as PDF"), d.canEdit ? h("button", { class: "btn ghost", type: "button", onclick: again }, "Start a new draft from this") : null) : null),
     msg, b.electionNote ? h("div", { class: "callout warn" }, b.electionNote) : null,
     released ? null : h("div", { class: "callout warn" }, "This is a draft. It shouldn't be shared until a named officer has released it."),
     h("section", { class: "card prose" }, h("h2", {}, "Summary"), paragraphs(b.summary)),
@@ -1438,22 +1444,21 @@ function briefingForm(a, d, open) {
     lines.append(row); room();
   };
   b.questions.forEach(addQ); b.lines.forEach(addL);
-  const values = () => ({ code: a.code, id: b.id, title: title.value, summary: summary.value, feel: feel.value, matters: matters.value,
+  const values = () => ({ code: a.code, id: b.id, updated: b.updated, hidden: on, title: title.value, summary: summary.value, feel: feel.value, matters: matters.value,
     questions: [...questions.children].map((row) => ({ question: row.querySelector("input").value, answer: row.querySelector("textarea")?.value ?? "" })), lines: [...lines.querySelectorAll("textarea")].map((x) => x.value) });
-  const save = async () => { clear(bad); return await API.call("/api/briefing/save", values()); };
+  const fail = (e) => bad.append(failure(e));
+  const save = once(async () => { clear(bad); said(msg, ""); b.updated = (await API.call("/api/briefing/save", values())).briefing.updated; said(msg, App.demo ? "In the demonstration, nothing is saved." : "Saved."); }, fail);
+  const release = once(async () => { clear(bad); said(msg, ""); open(await API.call("/api/briefing/approve", values())); }, fail);
   return [
-    h("div", { class: "page-head" }, h("div", {}, h("span", { class: "eyebrow" }, `Councillor briefing for ${a.name}`), h("h1", {}, "Draft"), h("p", {}, `Drafted on ${fmtDate(b.created)} for ${b.by}. Check every line: it may be disclosed, so it should read as if published.`))),
+    h("div", { class: "page-head" }, h("div", {}, h("span", { class: "eyebrow" }, `Councillor briefing for ${a.name}`), h("h1", {}, "Draft"), h("p", {}, `Drafted on ${fmtDate(b.created)} for ${b.by}. Check every line: it may be disclosed, so it should read as if published.`), h("p", { class: "print-only" }, "Draft, not released."))),
     on ? h("div", { class: "callout warn" }, "Pre-election period: lines to take and suggested answers are hidden, and won't be in what's released.") : null,
     h("section", { class: "card stack" }, h("label", { class: "field" }, "Title", title), h("label", { class: "field" }, "Summary", summary), h("label", { class: "field" }, "How residents feel", feel), h("label", { class: "field" }, "Why it matters here", matters)),
     h("section", { class: "card stack" }, h("h2", {}, "Likely questions"), questions, on ? null : h("div", { class: "row" }, moreQ)),
     on ? null : h("section", { class: "card stack" }, h("h2", {}, "Factual lines"), lines, h("div", { class: "row" }, moreL)),
     sourcesCard(b),
     h("section", { class: "card stack" }, h("h2", {}, "Release"), bad,
-      d.canApprove ? h("p", {}, "Releasing records your name and the date, and fixes this version. You can then take it as Word or PDF.") : h("p", { class: "note" }, `Only a lead at ${a.name} can release this.`), msg,
-      h("div", { class: "row" },
-        h("button", { class: "btn", type: "button", onclick: async () => { try { await save(); said(msg, App.demo ? "In the demonstration, nothing is saved." : "Saved."); } catch (e) { bad.append(failure(e)); } } }, "Save changes"),
-        d.canApprove ? h("button", { class: "btn primary", type: "button", onclick: async () => { try { await save(); open(await API.call("/api/briefing/approve", { code: a.code, id: b.id })); } catch (e) { bad.append(failure(e)); } } }, "Release this briefing") : null,
-        App.demo ? null : h("button", { class: "btn ghost", type: "button", onclick: async () => { try { clear(bad); await API.call("/api/briefing/remove", { code: a.code, id: b.id }); location.hash = `#briefings/${a.code}`; } catch (e) { bad.append(failure(e)); } } }, "Delete this draft"))),
+      d.canApprove ? h("p", {}, "Releasing records your name and the date, and fixes this version as it stands on this page. You can then take it as Word or PDF.") : h("p", { class: "note" }, `Only a lead at ${a.name} can release this.`), msg,
+      h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: save }, "Save changes"), d.canApprove ? h("button", { class: "btn primary", type: "button", onclick: release }, "Release this briefing") : null, removeDraft(a, b, bad))),
   ];
 }
 
@@ -1868,7 +1873,7 @@ function collectPart(top, a, d) {
   const setStatus = async (status, msg) => { try { await API.call("/api/survey/status", { code: a.code, id: s.id, status }); route(); } catch (e) { said(msg, e.message, "err"); } };
   const printed = s.printedTo || 0;
   const first = h("input", { type: "number", min: 1, value: String(printed + 1) }), last = h("input", { type: "number", min: 1, value: String(printed + Math.min(s.plan.target, 500)) }), m = saveNote();
-  top.append(h("section", { class: "card" }, h("h2", {}, "Paper forms"), h("p", {}, "Each form gets its own number, so forms can't be entered twice."), printed ? h("p", { class: "note" }, `Forms up to ${fmt(printed)} have been prepared so far. New ones carry on from there, so numbers aren't used twice.`) : null,
+  if (!d.paused) top.append(h("section", { class: "card" }, h("h2", {}, "Paper forms"), h("p", {}, "Each form gets its own number, so forms can't be entered twice."), printed ? h("p", { class: "note" }, `Forms up to ${fmt(printed)} have been prepared so far. New ones carry on from there, so numbers aren't used twice.`) : null,
     h("div", { class: "form-grid" }, h("label", { class: "field" }, "First form number", first), h("label", { class: "field" }, "Last form number", last)), m,
     h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
       const from = Number(first.value), to = Number(last.value);
@@ -1877,14 +1882,15 @@ function collectPart(top, a, d) {
     } }, "Prepare forms to print"))));
   const url = `${location.origin}/s/${s.access}`, m2 = saveNote();
   const open = h("section", { class: "card" }, h("h2", {}, "Tablets"));
-  if (s.status === "draft") open.append(h("p", {}, "Opening the survey fixes its questions and gives interviewers a link. Nobody on the team needs an account."), h("p", { class: "note" }, `It's set to say it's run by ${s.collector}. Check that's right before any real fieldwork.`), m2, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => setStatus("open", m2) }, "Open the survey")));
-  if (s.status === "open") open.append(h("p", {}, "Open this link on each tablet. It carries on without a signal, and sends the forms when it can."), h("div", { class: "link-box" }, url), h("p", { class: "note" }, `Interviewers can also go to ${location.origin}/s and type the code ${s.access}. Anyone with the code can add answers while the survey is open, so keep it to the team.`), m2,
+  if (d.paused) open.append(h("p", {}, "Tablets can't open this survey or send forms until the pause ends. Forms stay on each tablet, so open the link on each one at least once a week, as some tablets clear what's held for sites they haven't visited."));
+  else if (s.status === "draft") open.append(h("p", {}, "Opening the survey fixes its questions and gives interviewers a link. Nobody on the team needs an account."), h("p", { class: "note" }, `It's set to say it's run by ${s.collector}. Check that's right before any real fieldwork.`), m2, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => setStatus("open", m2) }, "Open the survey")));
+  else if (s.status === "open") open.append(h("p", {}, "Open this link on each tablet. It carries on without a signal, and sends the forms when it can."), h("div", { class: "link-box" }, url), h("p", { class: "note" }, `Interviewers can also go to ${location.origin}/s and type the code ${s.access}. Anyone with the code can add answers while the survey is open, so keep it to the team.`), m2,
     h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("closed", m2) }, "Close the survey"), d.results.total ? null : h("button", { class: "btn ghost", type: "button", onclick: () => setStatus("draft", m2) }, "Back to draft")));
-  if (s.status === "closed") open.append(h("p", {}, "The survey is closed, so the tablet link has stopped working. You can still add paper forms."), m2, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("open", m2) }, "Open it again")));
+  else if (s.status === "closed") open.append(h("p", {}, "The survey is closed, so the tablet link has stopped working. You can still add paper forms."), m2, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("open", m2) }, "Open it again")));
   top.append(open);
   if (s.status === "draft") return;
   top.append(h("section", { class: "card" }, h("h2", {}, "Answers so far"), h("div", { class: "stats" }, [["On tablets", "tablet"], ["Typed in", "paper"], ["From scans", "scan"], ["From files", "csv"]].map(([label, key]) => h("div", { class: "stat" }, h("span", { class: "label" }, label), h("span", { class: "value" }, fmt(d.results.bySource[key] || 0)))))));
-  top.append(entryCard(a, d), scanCard(a, d), csvCard(a, d));
+  if (!d.paused) top.append(entryCard(a, d), scanCard(a, d), csvCard(a, d));
 }
 function entryCard(a, d) {
   const s = d.survey;
@@ -2038,6 +2044,7 @@ async function printView(page, a, id, from, to) {
   let d;
   try { d = await API.call("/api/survey/get", { code: a.code, id }); } catch (e) { if (view === App.viewId) clear(top).append(failure(e)); return; }
   if (view !== App.viewId) return;
+  if (d.paused) return add(clear(top), pausedNote());
   const s = d.survey;
   const first = Number.isInteger(from) && from > 0 ? from : 1, last = Number.isInteger(to) && to >= first ? Math.min(to, first + 999) : first;
   clear(top).append(h("div", { class: "page-head no-print" }, h("div", {}, h("h1", {}, "Forms to print"), h("p", {}, `Forms ${first} to ${last}, for ${s.title}. Print double-sided on A4.`)),
