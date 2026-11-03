@@ -3,6 +3,10 @@
 // Survey replies come from a seeded simulation and go through the same calculations as a real survey, so the
 // demonstration can't drift from how Clarion works. Links are left blank, so nothing points at a made-up site.
 
+import {
+  FUNCTIONS, LEANINGS, PROMINENCE, RATE_MEASURES, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, summarise as summariseCoverage, withWeights,
+  type Assessment, type Rate, type Source,
+} from "./coverage";
 import { packFrom, standFor, type SitesPack } from "./sites";
 import { ABOUT, ACCESS_CHECKS, CORE, answersCsv, cellKey, summarise, surveyPage, type Answer, type Census, type Question, type Site, type Survey } from "./surveys";
 import { cached } from "./util";
@@ -121,6 +125,56 @@ const COVERAGE: [string, number, string][] = [
   ["Speed limits", 16, "Press, MPs' questions"], ["Parking", 12, "Press"], ["Pavements", 6, "Street survey, fault reports"], ["Flooding on minor roads", 4, "Street survey"],
 ];
 
+// The sources Northbridge follows, and what its officers made of the coverage. Run through the real calculations.
+const COUNTY_DAY = (daysAgo: number) => new Date(Date.parse(WHEN) - daysAgo * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const source = (id: string, name: string, type: Source["type"], domain: string, reach: number | null, reachUnit: string, reachBand: string, reachFrom: string, leaning: string, stance: string, campaign: string[]): Source =>
+  ({ id, name, type, domain, reach, reachUnit, reachBand, reachFrom, leaning, stance, campaign, added: "2026-09-01", by: "Demo officer" });
+const SOURCES: Source[] = [
+  source("s1", "The Northbridge Courier", "Local Newspaper", "northbridgecourier.example", 18400, "copies", "", "ABC certificate", "Centre right", "Usually critical", ["Potholes"]),
+  source("s2", "Dale Valley Gazette", "Local Newspaper", "dalevalleygazette.example", null, "", "", "", "None shown", "Usually supportive", []),
+  source("s3", "Northbridge Radio", "Local Radio", "northbridgeradio.example", 41000, "listeners", "", "Station figures", "None shown", "Balanced", []),
+  source("s4", "Regional TV news", "Local Television", "", null, "", "Medium", "Officer's estimate", "None shown", "Balanced", []),
+  source("s5", "Moorside Community News", "Local Newsletter", "", 2400, "copies", "", "Editor's figure", "None shown", "Balanced", ["Flooding on minor roads"]),
+  source("s6", "Northbridge Residents' Forum", "Social Media", "", null, "", "Medium", "Officer's estimate", "Not known", "Usually critical", ["Street lighting"]),
+];
+const piece = (i: number, src: string, daysAgo: number, summary: string, topic: string, relevance: string, tone: string, prominence: string, functions: string[]): Assessment => {
+  const reach = SOURCES.find((s) => s.id === src)?.reach ?? null;
+  return { id: `p${i}`, source: src, date: COUNTY_DAY(daysAgo), summary, topic, relevance, tone, prominence, functions, reach, by: "Demo officer", at: WHEN };
+};
+const PIECES: Assessment[] = [
+  piece(1, "s1", 3, "Front-page item on the Relief Road closure running into November", "Relief Road closure", "High", "Critical", "Front page or lead", ["nm"]),
+  piece(2, "s3", 5, "Morning bulletin on diversions and traffic through the town", "Relief Road closure", "High", "Neutral", "Inside page", ["nm"]),
+  piece(3, "s2", 6, "Report on the £4.2m repair plan, quoting the cabinet member", "Potholes", "High", "Supportive", "Inside page", ["cw"]),
+  piece(4, "s1", 8, "Repeat repairs on Bridge Street, with a call for answers", "Potholes", "High", "Critical", "Inside page", ["cw", "cl"]),
+  piece(5, "s6", 10, "Long thread on street lights going off at midnight", "Street lighting", "Some", "Critical", "Passing mention", ["sl"]),
+  piece(6, "s4", 12, "Regional news item on the road closure", "Relief Road closure", "Some", "Neutral", "Passing mention", ["nm"]),
+  piece(7, "s5", 15, "Note on blocked gullies after the wet weekend", "Flooding on minor roads", "Some", "Neutral", "Inside page", ["dr"]),
+  piece(8, "s2", 19, "Praise for the speed of repairs after the storm", "Potholes", "Some", "Supportive", "Inside page", ["cw"]),
+  piece(9, "s1", 24, "Editorial on the state of the county's roads", "Potholes", "High", "Critical", "Inside page", ["cw"]),
+  piece(10, "s3", 33, "Interview on the winter gritting plan", "Winter service", "Some", "Neutral", "Inside page", ["ws"]),
+];
+// Published national rates, the same ones the data library holds, with no links
+const DEMO_RATES: Rate[] = ([[0,16,19,7.6],[0,20,24,9],[0,25,29,9.9],[0,30,34,12.3],[0,35,39,14.4],[0,40,44,18.4],[0,45,49,19.7],[0,50,54,21.7],[0,55,59,23.8],[0,60,64,27.4],[0,65,69,31.3],[0,70,74,35.6],[0,75,79,39.3],[0,80,84,41.4],[0,85,null,39.7],[1,16,19,20.8],[1,20,24,31.7],[1,25,29,34.9],[1,30,34,41.8],[1,35,39,41],[1,40,44,40.6],[1,45,49,46],[1,50,54,48],[1,55,59,45.8],[1,60,64,46.6],[1,65,69,44.4],[1,70,74,39.6],[1,75,79,32.6],[1,80,84,30.8],[1,85,null,16],[2,16,19,9.8],[2,20,24,11.7],[2,25,29,14],[2,30,34,15.4],[2,35,39,18.7],[2,40,44,22.3],[2,45,49,26],[2,50,54,27.5],[2,55,59,30.8],[2,60,64,36],[2,65,69,41.4],[2,70,74,47.9],[2,75,79,54.2],[2,80,84,56.2],[2,85,null,53.7],[9,17,20,32.5],[9,21,29,60.7],[9,30,39,72.1],[9,40,49,80.6],[9,50,59,83.7],[9,60,69,83.8],[9,70,null,74.3],[10,16,24,70.8],[10,25,34,71.1],[10,35,44,68.5],[10,45,54,71.4],[10,55,64,71],[10,65,74,71.9],[10,75,84,61.2],[10,85,null,35.7],[11,16,24,11.5],[11,25,34,11],[11,35,44,11.2],[11,45,54,12.3],[11,55,64,11.2],[11,65,74,7.8],[11,75,84,4.2],[11,85,null,1.7],[12,16,24,28.3],[12,25,34,37.5],[12,35,49,40.9],[12,50,64,41.5],[12,65,74,43],[12,75,null,34.3],[13,16,24,9],[13,25,34,22],[13,35,44,38],[13,45,54,33],[13,55,64,24],[13,65,null,31],[3,16,24,5],[3,25,34,9],[3,35,44,9],[3,45,54,13],[3,55,64,15],[3,65,74,14],[3,75,null,23],[4,16,24,59],[4,25,34,59],[4,35,44,52],[4,45,54,52],[4,55,64,40],[4,65,74,38],[4,75,null,26],[5,16,24,25],[5,25,34,29],[5,35,44,38],[5,45,54,39],[5,55,64,51],[5,65,74,59],[5,75,null,64],[7,16,24,18],[7,25,34,17],[7,35,44,27],[7,45,54,26],[7,55,64,28],[7,65,74,31],[7,75,null,33]] as [number, number, number | null, number][]).map(([m, age_from, age_to, value]) => ({ measure: RATE_MEASURES[m], age_from, age_to, value, publisher: "", year: "2025" }));
+const DEMO_CHECK = { ready: true, why: "", from: COUNTY_DAY(14), to: COUNTY_DAY(0), left: 196, checks: [
+  { source: "s1", name: "The Northbridge Courier", keyword: "potholes", result: "Found", date: COUNTY_DAY(3) },
+  { source: "s1", name: "The Northbridge Courier", keyword: "Moor Lane", result: "Found, no date", date: "" },
+  { source: "s2", name: "Dale Valley Gazette", keyword: "potholes", result: "No match", date: "" },
+  { source: "s3", name: "Northbridge Radio", keyword: "potholes", result: "No match", date: "" },
+] };
+function demoCoverage(census: Census) {
+  const rows = withWeights(PIECES, SOURCES), today = COUNTY_DAY(0);
+  return {
+    ready: true, canEdit: true, today, searchReady: true, adults: ADULTS, sources: SOURCES, rows, summary: summariseCoverage(rows, today),
+    topics: [...new Set([...COVERAGE.map((x) => x[0]), ...PIECES.map((x) => x.topic)])], functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachUnitFor: REACH_UNIT_FOR, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
+    audiences: Object.fromEntries(SOURCE_TYPES.map((t) => [t, audienceFor(t, census, DEMO_RATES)])),
+    automatic: [
+      { name: "GOV.UK: DfT and National Highways", type: "Government announcement", last: "2026-10-29" }, { name: "Parliament: MPs' written questions", type: "Parliament", last: "2026-10-09" },
+      { name: "Parliament: petitions", type: "Parliament", last: "", note: "1 on road topics" }, { name: "FixMyStreet public reports", type: "Public reports", last: "2026-10-30" },
+    ],
+    latest: [{ title: "£4.2m extra for pothole repairs", url: "", date: "2026-10-06", summary: "" }],
+  };
+}
+
 function replies(): Answer[] {
   const r = randomiser(20261030);
   const q = (id: string) => [...CORE, ...LOCALS, ...ABOUT].find((x) => x.id === id) as Question;
@@ -221,16 +275,7 @@ export function buildPack() {
       { text: "How would you rate the condition of the pavements near where you live?", kind: "choice", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], reason: "Quiet: is it wider than it looks?", topic: "Pavements", basedOn: ["Fault reports"], why: "Few press items, but fault reports are rising." },
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
-    media: {
-      ready: true, period: "Last 4 weeks", total: COVERAGE.reduce((n, x) => n + x[1], 0), previous: 133, topics: COVERAGE.map(([topic, items]) => ({ topic, items })),
-      items: [
-        { date: "2026-10-29", source: "The Northbridge Courier", title: "Relief Road closure extended into November", topic: "Relief Road closure" },
-        { date: "2026-10-27", source: "Regional Roads Review", title: "Council sets out £4.2m pothole plan", topic: "Potholes" },
-        { date: "2026-10-24", source: "The Northbridge Courier", title: "Campaigners call for street lights to stay on", topic: "Street lighting" },
-        { date: "2026-10-21", source: "Dale Valley Gazette", title: "Residents' anger at repeat repairs on Bridge Street", topic: "Potholes" },
-        { date: "2026-10-17", source: "Northbridge Radio", title: "Traffic chaos as diversions begin", topic: "Roadworks information" },
-      ],
-    },
+    coverage: demoCoverage(census), coverageCheck: DEMO_CHECK,
     attention: { ready: true, topics, earlySigns: topics.filter((x) => x.early).map((x) => ({ topic: x.topic, concern: x.concern, attention: x.attention, why: x.topic === "Pavements" ? "Fault reports are up by a quarter." : "Named by people on the same few roads." })) },
   };
 }

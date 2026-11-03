@@ -299,8 +299,8 @@ const SORT_TOOL = strictTool({
 
 const FALLBACK_TOPICS = ["Potholes and road condition", "Pavements", "Street lighting", "Traffic and congestion", "Roadworks", "Road safety", "Parking", "Cycling and walking", "Funding and policy", "Trees, verges and drainage"];
 
-// The website's shared topics, so street surveys and Media Watch sort things the same way
-async function sharedTopics(c: Config): Promise<string[]> {
+// The website's shared topics, so street surveys and press assessments sort things the same way
+export async function sharedTopics(c: Config): Promise<string[]> {
   try {
     const names = await cached("news-topics", DAY_MS, async () => (await websiteQ(c, "SELECT name FROM news_topics ORDER BY sort, name")).map((r: Record<string, unknown>) => cleanText(r.name, 80)).filter(Boolean));
     return names.length ? names : FALLBACK_TOPICS;

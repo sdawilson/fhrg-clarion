@@ -211,6 +211,17 @@ table.heat { border-collapse: separate; border-spacing: 2px; font-size: 0.84rem;
 .site-head p { margin: 2px 0 0; }
 .site-num { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 0.9rem; }
 .site-name { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; }
+.plates { display: flex; flex-wrap: wrap; gap: 6px; }
+.plates button { min-height: 34px; padding: 4px 11px; border: 1.5px solid var(--line-2); border-radius: 999px; background: var(--surface); color: var(--ink-2); font: inherit; font-size: 0.86rem; cursor: pointer; }
+.plates button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); }
+.aud-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 10px; align-items: center; font-size: 0.86rem; margin: 5px 0; }
+.aud-row > div { display: grid; gap: 2px; }
+.aud-row i { display: block; height: 9px; border-radius: 2px; }
+.aud-bars .this, .aud-key .this { background: var(--accent); }
+.aud-bars .all, .aud-key .all { background: var(--line-2); }
+.aud-key { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--ink-2); margin: 6px 0 0; }
+.aud-key b { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .seg-row { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-start; }
 .seg { display: inline-flex; flex-wrap: wrap; width: fit-content; border: 1.5px solid var(--accent); border-radius: var(--radius-sm); overflow: hidden; }
 .seg button { border: 0; background: var(--surface); min-height: 40px; padding: 5px 14px; cursor: pointer; color: var(--accent); font: inherit; font-weight: 600; }
@@ -358,7 +369,15 @@ const Demo = {
     switch (path) {
       case "/api/status": return P.status;
       case "/api/authority": return P.authority;
-      case "/api/media": return P.media;
+      case "/api/coverage/get": return P.coverage;
+      case "/api/coverage/summary": return { summary: P.coverage.summary };
+      case "/api/coverage/check": {
+        const words = b.keywords || [];
+        if (!words.length) throw new Error("Give one or two keywords.");
+        if (!b.sources?.length) throw new Error("Tick at least one publication.");
+        const said = P.coverageCheck.checks; // made up, and anything else that's typed finds nothing
+        return { ...P.coverageCheck, checks: b.sources.flatMap((id) => words.map((keyword) => said.find((x) => x.source === id && x.keyword.toLowerCase() === keyword.toLowerCase()) || { source: id, name: P.coverage.sources.find((x) => x.id === id).name, keyword, result: "No match", date: "" })) };
+      }
       case "/api/attention": return P.attention;
       case "/api/announcements": return { announcements: P.announcements };
       case "/api/note/list": return { notes: P.noteList };
@@ -446,7 +465,7 @@ function authScreen(message) {
 }
 
 // ---------------------------------------------------------------- shell ------
-// The address says where you are: #a/<code>, #evidence/<code>, #media/<code>, #attention/<code>, #about/<code>,
+// The address says where you are: #a/<code>, #evidence/<code>, #said/<code>/<part>, #attention/<code>, #about/<code>,
 // #notes/<code>, #note/<code>/<id>, #surveys/<code>, #survey/<code>/<id>/<part>, #print/<code>/<id>/<first>/<last>,
 // and #all for FHRG administrators.
 function route() {
@@ -455,7 +474,7 @@ function route() {
   App.viewId++;
   shell();
 }
-const NAV = [["a", "Summary", "overview"], ["media", "Media Watch", "media"], ["attention", "Attention and concern", "attention"], ["notes", "Impact notes", "notes"], ["surveys", "Street surveys", "surveys"], "sep", ["evidence", "Evidence", "evidence"], ["about", "Sources & method", "sources"]];
+const NAV = [["a", "Summary", "overview"], ["said", "What's being said", "media"], ["attention", "Attention and concern", "attention"], ["notes", "Impact notes", "notes"], ["surveys", "Street surveys", "surveys"], "sep", ["evidence", "Evidence", "evidence"], ["about", "Sources & method", "sources"]];
 const SECTION_OF = { note: "notes", survey: "surveys", print: "surveys" };
 const signOut = async () => { try { await API.call("/api/logout"); } catch (e) { /* */ } API.setToken(""); location.hash = ""; location.reload(); };
 function shell() {
@@ -498,7 +517,7 @@ function shell() {
   if (view === "survey" && id) return surveyView(page, current, id, App.route[3]);
   if (view === "print" && id) return printView(page, current, id, Number(App.route[3]), Number(App.route[4]));
   if (view === "evidence") return evidenceView(page, current);
-  if (view === "media") return mediaView(page, current);
+  if (view === "said") return saidView(page, current, id);
   if (view === "attention") return attentionView(page, current);
   if (view === "about") return aboutView(page, current);
   return summaryView(page, current);
@@ -529,22 +548,23 @@ async function summaryView(page, a) {
   const body = h("div", { class: "stack gap" }, loading("Gathering the evidence…"));
   page.append(body);
   const view = App.viewId;
-  let d, media, att;
-  try { [d, media, att] = await Promise.all([API.call("/api/authority", { code: a.code }), API.call("/api/media", { code: a.code }), API.call("/api/attention", { code: a.code })]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  let d, coverage, att;
+  try { [d, coverage, att] = await Promise.all([API.call("/api/authority", { code: a.code }), API.call("/api/coverage/summary", { code: a.code }).catch(() => null), API.call("/api/attention", { code: a.code })]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
   if (view !== App.viewId) return;
   const street = d.evidence.streets[0] ?? null; // the latest
-  const from = [street ? `${fmt(street.responses)} street survey replies` : null, media.ready ? `${fmt(media.total)} press and sector items` : null, "published data"].filter(Boolean);
+  const assessed = coverage?.summary ?? { pieces: 0, previous: 0 };
+  const from = [street ? `${fmt(street.responses)} street survey replies` : null, assessed.pieces ? `${fmt(assessed.pieces)} assessed press and media pieces` : null, "published data"].filter(Boolean);
   const latest = d.evidence.surveys.filter((s) => s.year === d.evidence.surveys[0]?.year);
   const survey = (s) => stat(s.measure, `${s.score} / ${s.outOf}`, `${s.source}${s.responses ? `, ${fmt(s.responses)} replies` : ""}`);
   const adults = stat("Adults in the authority", d.adults ? fmt(d.adults) : "–", "Census 2021, aged 16 and over");
   const tiles = street
     ? [stat("Direction of mood", d.reading?.direction || "Not yet known", d.reading?.direction ? `Reading of ${fmtDate(d.reading.created)}` : "No reading yet"), stat("Satisfied with roads and pavements", `${fmt(street.satisfied)}%`, `Street survey, ${fmt(street.responses)} replies. Indicative`),
-      media.ready ? stat("Press and sector items", fmt(media.total), `Up from ${fmt(media.previous)} in the previous 4 weeks`) : stat("Say roads have got worse", street.worse === null ? "–" : `${fmt(street.worse)}%`, "Street survey. Indicative"), att.ready ? stat("Early signs", fmt(att.earlySigns.length), "Felt by many, reported by few") : adults]
+      assessed.pieces ? stat("Pieces assessed", fmt(assessed.pieces), `${fmt(assessed.previous)} in the previous 4 weeks`) : stat("Say roads have got worse", street.worse === null ? "–" : `${fmt(street.worse)}%`, "Street survey. Indicative"), att.ready ? stat("Early signs", fmt(att.earlySigns.length), "Felt by many, reported by few") : adults]
     : [...(latest.length ? latest.slice(0, 2).map(survey) : [stat("Residents' survey", "None held", "Add one on the Evidence page")]), stat("DfT road maintenance rating", d.authority.rating.overall, `Overall, ${d.authority.rating.published}`), adults];
   clear(body).append(pageHead(`${a.name}: how people feel about their roads`, `From ${from.join(", ")} and public reports.`), h("div", { class: "grid g4" }, tiles), readingCard(a, d));
   if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
   else add(body, h("div", { class: "grid g-wide" }, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Shows what's loud, what's felt, and what nobody is reporting yet."))),
-    h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, "This needs Media Watch and one street survey."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))), roleCard()));
+    h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, "This needs press assessments and one street survey."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))), roleCard()));
   add(body, compareCard(a, d, street));
 }
 function roleCard() {
@@ -568,7 +588,7 @@ async function evidenceView(page, a) {
   if (d.canEdit) body.append(notesCard(a, d));
 }
 
-// ---------------------------------------------------------------- media watch and the comparison
+// ---------------------------------------------------------------- what's being said, and the comparison
 function attentionCard(att) {
   const n = att.topics.length, X = (rank) => 80 + ((rank - 1) * 504) / (n - 1), Y = (rank) => 75 + ((rank - 1) * 273) / (n - 1);
   const midX = (X(1) + X(n)) / 2, midY = (Y(1) + Y(n)) / 2;
@@ -606,28 +626,183 @@ async function attentionView(page, a) {
   try { att = await API.call("/api/attention", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
   if (view !== App.viewId) return;
   if (att.ready) add(clear(body), h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
-  else clear(body).append(comingCard("This needs Media Watch, which comes in the next stage of the build, and one street survey."));
+  else clear(body).append(comingCard("This compares what's being said with what people tell you. It comes in the next stage of the build, and needs press assessments and one street survey."));
 }
-async function mediaView(page, a) {
+// What's being said: what Clarion reads by itself, and what officers assess. Clarion never reads the press.
+async function saidView(page, a, part) {
   const body = h("div", { class: "stack gap" }, loading("Loading…"));
-  page.append(pageHead(`${a.name}: Media Watch`, "What's being reported about roads here."), body);
+  page.append(pageHead(`${a.name}: what's being said`, "What's being reported and raised about roads here."), body);
   const view = App.viewId;
-  let m;
-  try { m = await API.call("/api/media", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  let d;
+  try { d = await API.call("/api/coverage/get", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
   if (view !== App.viewId) return;
-  if (!m.ready) return clear(body).append(comingCard("Media Watch comes in the next stage of the build."));
-  const most = Math.max(...m.topics.map((t) => t.items));
-  add(clear(body), h("div", { class: "grid g4" }, stat("Press and sector items", fmt(m.total), m.period), stat("The 4 weeks before", fmt(m.previous), "For comparison"), stat("Most reported", m.topics[0].topic, `${fmt(m.topics[0].items)} items`)),
-    h("section", { class: "card" }, h("h3", {}, "By topic"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl answers" }, h("thead", {}, h("tr", {}, h("th", {}, "Topic"), h("th", { class: "r" }, "Items"), h("th", { class: "r" }, "Share"), h("th", { "aria-hidden": "true" }))),
-      h("tbody", {}, m.topics.map((t) => h("tr", {}, h("td", {}, t.topic), h("td", { class: "r" }, fmt(t.items)), h("td", { class: "r" }, `${fmt((t.items / m.total) * 100)}%`), h("td", { "aria-hidden": "true" }, h("div", { class: "meter" }, h("span", { style: { width: `${(t.items / most) * 100}%` } }))))))))),
-    h("section", { class: "card" }, h("h3", {}, "Latest items"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Date"), h("th", {}, "Source"), h("th", {}, "Headline"), h("th", {}, "Topic"))),
-      h("tbody", {}, m.items.map((x) => h("tr", {}, h("td", {}, fmtDate(x.date)), h("td", {}, x.source), h("td", {}, x.title), h("td", {}, x.topic))))))));
+  const parts = [["latest", "Latest"], ...(d.canEdit ? [["assess", "Search and assess"]] : []), ["sources", "Sources"]];
+  const on = parts.some((x) => x[0] === part) ? part : "latest";
+  clear(body).append(h("div", { class: "tab-row no-print", role: "tablist" }, parts.map(([key, label]) => h("button", { type: "button", "aria-selected": key === on ? "true" : "false", onclick: () => { location.hash = `#said/${a.code}/${key}`; } }, label))));
+  ({ latest: saidLatest, assess: saidAssess, sources: saidSources })[on](body, a, d);
+}
+const reachText = (n, unit, band) => (n !== null && n !== undefined ? `${fmt(n)} ${unit || ""}`.trim() : band || "");
+
+function saidLatest(top, a, d) {
+  const t = d.summary;
+  if (!d.rows.length) top.append(comingCard(d.canEdit ? "Nothing assessed yet. Add your sources, then use Search and assess." : "Nothing assessed yet."));
+  else {
+    add(top, h("div", { class: "grid g4" }, stat("Pieces assessed", fmt(t.pieces), "Last 4 weeks"), stat("The 4 weeks before", fmt(t.previous), "For comparison"), stat("Reach", fmt(t.reach), "As published"), stat("After allowing for the source", fmt(t.adjusted), "Raw and adjusted are both kept")),
+      t.topics.length ? h("section", { class: "card" }, h("h3", {}, "By topic"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Topic"), h("th", { class: "r" }, "Pieces"), h("th", { class: "r" }, "Critical"), h("th", { class: "r" }, "Supportive"), h("th", { class: "r" }, "Reach"), h("th", { class: "r" }, "Adjusted"))),
+        h("tbody", {}, t.topics.map((x) => h("tr", {}, h("td", {}, x.topic), h("td", { class: "r" }, fmt(x.pieces)), h("td", { class: "r" }, fmt(x.critical)), h("td", { class: "r" }, fmt(x.supportive)), h("td", { class: "r" }, fmt(x.reach)), h("td", { class: "r" }, fmt(x.adjusted)))))))) : null,
+      h("section", { class: "card" }, h("h3", {}, "Latest assessments"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Date"), h("th", {}, "Source"), h("th", {}, "Topic"), h("th", {}, "In one line"), h("th", {}, "Tone"), h("th", { class: "r" }, "Reach"), h("th", { class: "r" }, "Adjusted"), d.canEdit ? h("th", {}, "") : null)),
+        h("tbody", {}, d.rows.slice(0, 30).map((x) => h("tr", {}, h("td", {}, fmtDate(x.date)), h("td", {}, x.sourceName), h("td", {}, x.topic), h("td", {}, x.summary), h("td", {}, x.tone), h("td", { class: "r" }, reachText(x.reach, x.reachUnit, x.reachBand)), h("td", { class: "r", title: x.why || null }, x.adjusted === null ? (x.factor === 1 ? "" : `× ${x.factor}`) : fmt(x.adjusted)),
+          d.canEdit ? h("td", {}, h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/coverage/unassess", { code: a.code, id: x.id }); route(); } catch (e) { toast(e.message); } } }, "Remove")) : null))))),
+        h("p", { class: "note" }, "Reach is what the source publishes, not how many people saw this piece. Assessments are your officers' judgement.")));
+  }
+  if (d.latest.length) top.append(h("section", { class: "card" }, h("h3", {}, "Latest announcements"), h("p", { class: "note" }, "Read automatically from GOV.UK."), h("div", { class: "stack" }, d.latest.map((x) => h("div", {}, h("span", { class: "note" }, `${fmtDate(x.date)}: `), link(x.url, x.title))))));
+}
+
+function audienceCard(d, type) {
+  const box = h("section", { class: "card" }, h("h3", {}, "Who this reaches"));
+  const aud = d.audiences[type];
+  if (!aud) return add(box, h("p", { class: "note" }, "The audience figures can't be read just now."));
+  const most = Math.max(...aud.audience, ...aud.adults) || 1;
+  const reachBars = (value, cls) => h("i", { class: cls, style: { width: `${(value / most) * 100}%` } });
+  add(box, aud.known ? h("p", {}, `${fmt(aud.overFiftyFive.audience)}% of this kind of audience is over 55, compared with ${fmt(aud.overFiftyFive.adults)}% of adults here.`) : null,
+    aud.note ? h("p", { class: "note" }, aud.note) : null,
+    aud.known ? [h("div", { class: "aud-bars", role: "img", "aria-label": "Share of this audience in each age group, beside all adults here" }, aud.ages.map((age, i) => h("div", { class: "aud-row" }, h("span", {}, age), h("div", {}, reachBars(aud.audience[i], "this"), reachBars(aud.adults[i], "all"))))),
+      h("div", { class: "aud-key" }, h("span", {}, h("b", { class: "this" }), "This audience"), h("span", {}, h("b", { class: "all" }), "All adults here"))] : null,
+    aud.likelihoods.length ? [h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Compared with all adults"), h("th", { class: "r" }, "Audience"), h("th", { class: "r" }, "All adults"), h("th", {}, "Reading"))),
+      h("tbody", {}, aud.likelihoods.map((x) => h("tr", { title: x.from }, h("td", {}, x.label), h("td", { class: "r" }, fmt(x.audience)), h("td", { class: "r" }, fmt(x.adults)), h("td", {}, x.reading)))))),
+    h("p", { class: "note" }, "An estimate from national patterns by age, not a measure of these readers. Compare the direction, not the numbers. Sources: Ofcom Local News and Media Survey 2026 (© Ofcom), Community and Engagement Survey, National Travel Survey, Active Lives Survey, and Scottish Social Attitudes for contacting a council, the closest available.")] : null);
+  return box;
+}
+
+function weightCard(source, tone, topic, reach) {
+  const box = h("section", { class: "card" }, h("h3", {}, "Allowing for the source"));
+  if (!source) return add(box, h("p", { class: "note" }, "Choose a source to see this."));
+  const f = source.stance === "Usually critical" ? ({ Critical: 0.5, Supportive: 1.5 })[tone] : source.stance === "Usually supportive" ? ({ Critical: 1.5, Supportive: 0.5 })[tone] : undefined;
+  const factor = f || (source.campaign.includes(topic) ? 0.5 : 1);
+  const why = f ? `${source.stance}, ${tone.toLowerCase()} piece` : factor !== 1 ? "Campaigning on this topic" : "No adjustment";
+  const typed = String(reach ?? "").replace(/[,\s]/g, ""); // left blank, a piece takes the source's reach
+  const n = typed ? Number(typed) : source.reach ?? NaN, known = Number.isFinite(n) && n >= 0;
+  add(box, h("div", { class: "grid g3" }, stat("Raw reach", known ? fmt(Math.round(n)) : "Not given", "As published"), stat("Allowance", `× ${factor}`, why), stat("Adjusted reach", known ? fmt(Math.round(Math.round(n) * factor)) : "Not given", "Both are kept")),
+    h("p", { class: "note" }, "A piece against a source's usual line tells you more, so a friendly paper turning critical counts for more. A piece on a topic the source is campaigning on counts half, as a campaign can make a topic seem bigger than it is. Stance and campaign are never both applied to one piece. These weights are a starting judgement, to be tested in the pilot."));
+  return box;
+}
+
+function saidAssess(top, a, d) {
+  const usable = d.sources.filter((x) => x.domain);
+  if (!d.sources.length) { top.append(comingCard("Add your sources first, on the Sources tab.")); return; }
+  const form = { source: d.sources[0].id, date: d.today, topic: d.topics[0] || "", reach: d.sources[0].reach ?? "", summary: "", relevance: "", tone: "", prominence: "", functions: [] };
+  const sideBox = h("div", { class: "stack gap" });
+  const srcOf = () => d.sources.find((x) => x.id === form.source);
+  const drawSide = () => { const x = srcOf(); clear(sideBox).append(audienceCard(d, x.type), weightCard(x, form.tone, form.topic, form.reach === null ? "" : form.reach)); };
+
+  // 1. check for coverage
+  const results = h("div", { class: "stack" }), m1 = saveNote();
+  const keywords = h("input", { maxlength: 80, placeholder: "potholes, Moor Lane", "aria-label": "Keywords" });
+  const days = h("select", { "aria-label": "Period" }, [[14, "Last 14 days"], [7, "Last 7 days"], [30, "Last 30 days"]].map(([v, t]) => h("option", { value: String(v) }, t)));
+  const ticks = usable.map((x) => { const box = h("input", { type: "checkbox", checked: true, value: x.id }); return { box, row: h("label", { class: "check" }, box, x.name) }; });
+  async function runCheck(ev) {
+    const list = keywords.value.split(",").map((k) => k.trim()).filter(Boolean), chosen = ticks.filter((x) => x.box.checked).map((x) => x.box.value);
+    ev.target.disabled = true; said(m1, "Checking…", "");
+    try {
+      const r = await API.call("/api/coverage/check", { code: a.code, keywords: list, sources: chosen, days: Number(days.value) });
+      if (!r.ready) { said(m1, r.why, "err"); return; }
+      said(m1, "", "");
+      add(clear(results), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Publication"), h("th", {}, "Keyword"), h("th", {}, "Result"), h("th", {}, "Date"), h("th", {}, ""))),
+        h("tbody", {}, r.checks.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.keyword), h("td", {}, h("span", { class: x.result === "Found" ? "pill serious" : "pill" }, x.result)), h("td", {}, x.date ? fmtDate(x.date) : ""), h("td", {}, /^Found/.test(x.result) ? h("button", { class: "btn small", type: "button", onclick: () => { pickSource(x.source, x.date); summary.focus(); } }, "Assess") : null)))))),
+        r.checks.some((x) => x.result === "Not checked") ? h("p", { class: "note" }, "\"Not checked\" means the search service didn't answer, so Clarion stopped asking. Try again later.") : null,
+        h("p", { class: "note" }, `Clarion keeps only yes or no and the date: no headlines, extracts or links. "No match" doesn't mean no coverage, because paywalled and print-only pieces often won't show up. Your authority has ${fmt(r.left)} searches left today.`));
+    } catch (e) { said(m1, e.message, "err"); } finally { ev.target.disabled = false; }
+  }
+  top.append(h("section", { class: "card" }, h("h2", {}, "1. Check for coverage"), h("p", { class: "note" }, "A simple web search. Clarion doesn't open any article."),
+    !d.searchReady ? h("p", { class: "note" }, "The search service isn't set up yet, so find pieces yourself and record them below.") : !usable.length ? h("p", { class: "note" }, "Add a web address to a source to check it here.") : [
+      h("div", { class: "form-grid" }, h("label", { class: "field" }, "Keywords (one or two, with a comma between)", keywords), h("label", { class: "field" }, "Period", days)),
+      h("div", { class: "row" }, ticks.map((x) => x.row)), m1, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: runCheck }, "Check")), results]));
+
+  // 2. record an assessment
+  const m2 = saveNote();
+  const pick = h("select", { "aria-label": "Source", onchange: () => { pickSource(pick.value); } }, d.sources.map((x) => h("option", { value: x.id }, x.name)));
+  const date = h("input", { type: "date", value: form.date, max: d.today, oninput: () => { form.date = date.value; } });
+  const topic = h("select", { "aria-label": "Topic", onchange: () => { form.topic = topic.value; drawSide(); } }, d.topics.map((t) => h("option", { value: t }, t)));
+  const reach = h("input", { inputmode: "numeric", value: form.reach === null ? "" : String(form.reach), oninput: () => { form.reach = reach.value; drawSide(); } });
+  const summary = h("input", { "aria-label": "In one line, what was it about?", oninput: () => { form.summary = summary.value; } }); // no maxlength: it would quietly keep the start of a pasted article
+  const sourceReach = () => { form.reach = srcOf().reach ?? ""; reach.value = form.reach === "" ? "" : String(form.reach); };
+  function pickSource(id, when) {
+    form.source = id; pick.value = id;
+    if (when) { form.date = when; date.value = when; }
+    sourceReach();
+    drawSide();
+  }
+  const choice = (label, key, list) => {
+    const row = h("div", { class: "seg" });
+    const draw = () => clear(row).append(...list.map((v) => h("button", { type: "button", "aria-pressed": String(form[key] === v), onclick: () => { form[key] = v; draw(); drawSide(); } }, v)));
+    draw();
+    return { el: h("div", { class: "field" }, label, row), draw };
+  };
+  const rel = choice("How relevant is it to the topic?", "relevance", d.relevance), tone = choice("Tone towards the council", "tone", d.tones), prom = choice("How prominent was it?", "prominence", d.prominence);
+  const plates = h("div", { class: "plates" });
+  const drawPlates = () => clear(plates).append(...d.functions.map(([id, name]) => h("button", { type: "button", "aria-pressed": String(form.functions.includes(id)), onclick: () => { form.functions = form.functions.includes(id) ? form.functions.filter((x) => x !== id) : [...form.functions, id]; drawPlates(); } }, name)));
+  drawPlates();
+  let saving = false;
+  async function saveIt(done) {
+    if (saving) return;
+    if (form.summary.trim().length > 200) { said(m2, "Keep it to one line in your own words: up to 200 letters. Please don't paste the article.", "err"); return; }
+    saving = true;
+    try {
+      await API.call("/api/coverage/assess", { code: a.code, ...form });
+      if (done) { location.hash = `#said/${a.code}/latest`; return; }
+      Object.assign(form, { summary: "", relevance: "", tone: "", prominence: "", functions: [] });
+      summary.value = ""; sourceReach(); rel.draw(); tone.draw(); prom.draw(); drawPlates(); drawSide();
+      said(m2, "Saved. On to the next one.");
+    } catch (e) { said(m2, e.message, "err"); } finally { saving = false; }
+  }
+  top.append(h("div", { class: "grid g2" }, h("section", { class: "card" }, h("h2", {}, "2. Record your assessment"), h("p", { class: "note" }, "Read the piece in your own copy or subscription. Clarion never sees it."),
+    h("div", { class: "form-grid" }, h("label", { class: "field" }, "Source", pick), h("label", { class: "field" }, "Date it appeared", date), h("label", { class: "field" }, "Topic", topic), h("label", { class: "field" }, "Reach this time", reach, h("span", { class: "hint" }, "From the source. Change it if this piece went further"))),
+    h("label", { class: "field" }, "In one line, what was it about?", summary, h("span", { class: "hint" }, "Your own words. Please don't paste the article, and leave out residents' names.")),
+    rel.el, tone.el, prom.el, h("div", { class: "field" }, "Which functions does it affect?", plates),
+    m2, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => saveIt(false) }, "Save and next"), h("button", { class: "btn", type: "button", onclick: () => saveIt(true) }, "Save and finish"))), sideBox));
+  drawSide();
+}
+
+function saidSources(top, a, d) {
+  const held = new Set(d.rows.map((x) => x.source));
+  top.append(h("section", { class: "card" }, h("h2", {}, "Checked automatically"), h("p", { class: "note" }, "Sources with no licensing issue. Clarion reads these by itself."), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Source"), h("th", {}, "Type"), h("th", {}, "Last found"))),
+    h("tbody", {}, d.automatic.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.type), h("td", {}, x.last ? fmtDate(x.last) : x.note || "Nothing recent"))))))));
+  const edit = (s) => drawForm(s);
+  const stancePill = (x) => h("span", { class: x === "Usually critical" ? "pill serious" : x === "Usually supportive" ? "pill good" : "pill" }, x);
+  top.append(h("section", { class: "card" }, h("h2", {}, "Assessed by your officers"), h("p", { class: "note" }, "Clarion never reads these. It can check whether a keyword turns up for a publication with a web address, and your officer does the rest."),
+    d.sources.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Source"), h("th", {}, "Type"), h("th", {}, "Search"), h("th", { class: "r" }, "Reach"), h("th", {}, "Reach from"), h("th", {}, "Political leaning"), h("th", {}, "Usual stance on the council"), h("th", {}, "Campaigning on"), d.canEdit ? h("th", {}, "") : null)),
+      h("tbody", {}, d.sources.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.type), h("td", {}, x.domain || "No"), h("td", { class: "r" }, reachText(x.reach, x.reachUnit, x.reachBand) || (d.canEdit ? h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Add reach") : "")), h("td", {}, x.reachFrom), h("td", {}, x.leaning), h("td", {}, stancePill(x.stance)), h("td", {}, x.campaign.join(", ") || "None"),
+        d.canEdit ? h("td", {}, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Change"), held.has(x.id) ? null : h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/coverage/unsource", { code: a.code, id: x.id }); route(); } catch (e) { toast(e.message); } } }, "Remove"))) : null))))) : h("div", { class: "empty" }, "No sources yet."),
+    h("p", { class: "note" }, "Leaning and stance are your officers' judgement, and could be asked for under freedom of information. Once a source has 10 assessments, its record shows how often it's been critical, so the judgement can be checked.")));
+  const record = d.sources.flatMap((x) => { const list = d.rows.filter((r) => r.source === x.id); return list.length >= 10 ? [h("li", {}, `${x.name}: ${fmt(list.filter((r) => r.tone === "Critical").length)} critical and ${fmt(list.filter((r) => r.tone === "Supportive").length)} supportive, of ${fmt(list.length)} pieces.`)] : []; });
+  if (record.length) top.append(h("section", { class: "card" }, h("h3", {}, "Each source's record"), h("ul", {}, record)));
+  const formBox = h("section", { class: "card" });
+  function drawForm(was) {
+    const f = { ...(was || {}) }, picks = {};
+    let unitChosen = !!f.reachUnit;
+    const input = (key, label, attrs, hint) => { const el = h("input", { value: f[key] === null || f[key] === undefined ? "" : String(f[key]), ...attrs, oninput: () => { f[key] = el.value; } }); return h("label", { class: "field" }, label, el, hint ? h("span", { class: "hint" }, hint) : null); };
+    const select = (key, label, list, blank, then) => { const el = picks[key] = h("select", { "aria-label": label, onchange: () => { f[key] = el.value; then?.(); } }, blank ? h("option", { value: "" }, blank) : null, list.map((v) => h("option", { value: v }, v))); el.value = f[key] || (blank ? "" : list[0]); f[key] = el.value; return h("label", { class: "field" }, label, el); };
+    const unitFollows = () => { if (!unitChosen) f.reachUnit = picks.reachUnit.value = d.reachUnitFor[f.type]; }; // radio is listeners, and so on, until an officer says otherwise
+    const m = saveNote();
+    const campaign = d.topics.map((t) => { const box = h("input", { type: "checkbox", value: t, checked: (f.campaign || []).includes(t) }); return { box, row: h("label", { class: "check" }, box, t) }; });
+    clear(formBox).append(h("h3", {}, was ? `Change ${was.name}` : "Add a source"),
+      h("div", { class: "form-grid" }, input("name", "Name", { maxlength: 100 }), select("type", "Type", d.types, null, unitFollows), input("domain", "Web address, if it has its own site", { maxlength: 120, placeholder: "northbridgecourier.example" }, "Clarion checks the whole site for keywords. Leave this blank for a page on Facebook or the BBC"),
+        input("reach", "Reach, if you have a figure", { inputmode: "numeric" }, "An ABC certificate, station figures or members"), select("reachUnit", "Reach is counted in", d.reachUnits, null, () => { unitChosen = true; }), select("reachBand", "Or your estimate", d.reachBands, "Not needed"), input("reachFrom", "Where the reach comes from", { maxlength: 80, placeholder: "ABC certificate, June 2026" }),
+        select("leaning", "Political leaning", d.leanings), select("stance", "Usual stance on the council", d.stances)),
+      h("div", { class: "field" }, "Campaigning on", h("div", { class: "row" }, campaign.map((x) => x.row))),
+      m, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: async () => { try { await API.call("/api/coverage/source", { code: a.code, ...f, campaign: campaign.filter((x) => x.box.checked).map((x) => x.box.value) }); route(); } catch (e) { said(m, e.message, "err"); } } }, was ? "Save the change" : "Add this source"), was ? h("button", { class: "btn ghost", type: "button", onclick: () => drawForm(null) }, "Cancel") : null));
+    unitFollows();
+    if (was) formBox.scrollIntoView?.({ block: "nearest" });
+  }
+  if (d.canEdit) { drawForm(null); top.append(formBox); }
+  top.append(h("section", { class: "card" }, h("div", { class: "row" }, h("h3", {}, "Automatic press searches"), h("span", { class: "pill" }, "Off")), h("p", {}, "For an authority whose NLA licence covers it, Clarion could search and read articles by itself. Standard NLA licences appear to rule out text mining and AI use, so this stays off until NLA confirms which licence covers it.")));
 }
 function aboutView(page, a) {
   const sec = (title, ...kids) => h("section", { class: "card prose" }, h("h2", {}, title), ...kids);
   page.append(pageHead("Sources & method", "Where the evidence comes from, how it's read, and what to be careful about."));
-  if (App.demo) page.append(sec("About this demonstration", h("p", {}, "Northbridge is fictional, and so is everything about it: its people, places, press coverage, ratings and figures. The survey replies come from a simulation, then go through the same calculations as a real survey."), h("p", {}, "Media Watch and the Attention and concern page are shown here ahead of being built for members. Claude isn't used in the demonstration, and nothing is saved.")));
+  if (App.demo) page.append(sec("About this demonstration", h("p", {}, "Northbridge is fictional, and so is everything about it: its people, places, press coverage, ratings and figures. The survey replies come from a simulation, then go through the same calculations as a real survey."), h("p", {}, "The Attention and concern page is shown here ahead of being built for members. Claude isn't used in the demonstration, and nothing is saved.")));
   page.append(sec("How mood is read", h("ul", {}, ["Mood is read from six kinds of signal: surveys, street surveys, short repeated questions, public actions such as fault reports, representatives, and open talk in the press and on social media.", "Survey results set the level. The other signals can only suggest direction.", "A change is reported only when two different kinds of signal agree.", "What's loud isn't the same as what's widely felt, and perception isn't the same as condition."].map((x) => h("li", {}, x)))),
+    sec("What's being said", h("ul", {}, ["Clarion reads sources with no licensing issue by itself: GOV.UK, Parliament and FixMyStreet.", "It never reads press, broadcast or social sources. A coverage check is a simple web search that keeps only yes or no and the date, and no match doesn't mean no coverage.", "Officers find each piece for themselves and record their own assessment. Leaning and stance are their judgement.", "Audience figures are national patterns by age, overlaid on Census figures for the authority. They describe a kind of source, not one publication's readers, and hold no party data.", "Allowing for a source's stance halves or adds half to a piece's reach. These weights are a starting judgement to be tested in the pilot, and raw figures are always kept."].map((x) => h("li", {}, x)))),
     sec("Street surveys", h("ul", {}, ["A street sample isn't random, so every result is labelled indicative.", "Results are weighted to the local population's age and sex from Census 2021.", "Proposed survey sites are a calculation on Census and deprivation figures, not an opinion, and town size stands in for footfall. Each site's replies count, as far as they can, for the share of adults it stands for.", "Groups under 30 people aren't reported.", "Written comments stay hidden until Claude has taken out names. Only the authority's own members can read them, and they're never used in a mood reading or impact note."].map((x) => h("li", {}, x)))),
     sec("Comparing authorities", h("ul", {}, ["An authority sees only one FHRG middle figure, with nobody named, once five authorities have results.", "FHRG administrators see figures and topic counts for each authority, in alphabetical order and never ranked. A difference may be a local choice, or reflect geography, funding or who was asked."].map((x) => h("li", {}, x)))));
 }
@@ -653,8 +828,8 @@ async function adminView(page) {
       h("tbody", {}, d.topics.map((x) => h("tr", {}, h("th", {}, x.topic), x.regions.map((n, i) => h("td", { class: shade(n, d.regions[i].authorities) }, n))))))),
       h("div", { class: "heat-legend" }, h("span", {}, "Fewer authorities"), [0, 2, 4, 5].map((i) => h("i", { class: `h-s${i}` })), h("span", {}, "More authorities"))] : h("p", { class: "muted" }, "This fills in once authorities have sorted their street survey comments.")),
     h("div", { class: "grid g2" },
-      h("section", { class: "card" }, h("h3", {}, "Early signs in more than one authority"), h("div", { class: "empty" }, "This needs Media Watch, which comes in the next stage of the build.")),
-      h("section", { class: "card" }, h("h3", {}, "News that reached people"), h("div", { class: "empty" }, "This needs Media Watch, which comes in the next stage of the build."))),
+      h("section", { class: "card" }, h("h3", {}, "Early signs in more than one authority"), h("div", { class: "empty" }, "This comes with the comparison, in the next stage of the build.")),
+      h("section", { class: "card" }, h("h3", {}, "News that reached people"), h("div", { class: "empty" }, "This comes with the comparison, in the next stage of the build."))),
     h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Core questions by authority"), h("p", {}, "In alphabetical order, not ranked. A difference may reflect local choices, geography or who was asked. For FHRG administrators only."))),
       h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Authority"), h("th", { class: "r" }, "Replies"), h("th", { class: "r" }, "Satisfied"), h("th", { class: "r" }, "Say worse"), h("th", {}, "Direction of mood"), h("th", {}, "Latest survey"))),
         h("tbody", {}, d.authorities.map((x) => h("tr", {}, h("td", {}, h("a", { href: `#a/${x.code}` }, x.name)), h("td", { class: "r" }, x.street ? fmt(x.street.responses) : "–"), h("td", { class: "r" }, x.street ? `${fmt(x.street.satisfied)}%` : "–"), h("td", { class: "r" }, x.street?.worse == null ? "–" : `${fmt(x.street.worse)}%`), h("td", {}, directionPill(x.direction)), h("td", {}, x.street ? fmtDate(x.street.ran) : "No survey yet"))))))),

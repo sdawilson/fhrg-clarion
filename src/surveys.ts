@@ -53,7 +53,7 @@ export const ABOUT: Question[] = [
   { id: "a3", part: "about", kind: "choice", text: "How do you mostly get around?", options: ["Car or van", "Bus or train", "Walking or wheelchair", "Cycling", "Something else"] },
   { id: "a4", part: "about", kind: "choice", text: "Do you have a health condition or disability that affects how you get around?", options: ["Yes", "No", "Prefer not to say"] },
 ];
-const AGES = [["16 to 24", 16, 24], ["25 to 34", 25, 34], ["35 to 44", 35, 44], ["45 to 54", 45, 54], ["55 to 64", 55, 64], ["65 to 74", 65, 74], ["75 or over", 75, 200]] as const;
+export const AGES: [string, number, number][] = [["16 to 24", 16, 24], ["25 to 34", 25, 34], ["35 to 44", 35, 44], ["45 to 54", 45, 54], ["55 to 64", 55, 64], ["65 to 74", 65, 74], ["75 or over", 75, 200]] as const;
 
 export const ACCESS_CHECKS = [
   "Permission from whoever owns or manages each site",

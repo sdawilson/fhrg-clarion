@@ -10,6 +10,8 @@
 //                                              CLARION_SSO_SECRET), so members can arrive signed in
 //              FHRG_REF_KEY                  a key for the FHRG reference library (App Builder > Admin >
 //                                              Reference data > Keys for outside services)
+//              SEARCH_KEY                    optional; a Brave Search API key, for checking whether a keyword turns
+//                                              up for a publication. Without it, officers find pieces themselves
 //   Variables: STORAGE_ZONE (required), STORAGE_HOST (default storage.bunnycdn.com),
 //              ROOT_FOLDER (default clarion), WEBSITE_URL (default https://fhrg.co.uk),
 //              SITE_ADMINS (emails, separated by commas; the website's site administrators count too),
@@ -39,6 +41,7 @@ export type Config = {
   ssoSecret: string;
   refUrl: string;
   refKey: string;
+  searchKey: string;
   monthlyCapUsd: number;
   webMax: number;
   dataMax: number;
@@ -62,7 +65,7 @@ function env(name: string, fallback = "", keepEmpty = false): string {
 }
 
 // For the start-up log: which settings arrived (names only, never values)
-const SECRET_SETTINGS = ["ANTHROPIC_API_KEY", "STORAGE_ACCESS_KEY", "WEBSITE_DATABASE_URL", "WEBSITE_DATABASE_AUTH_TOKEN", "SESSION_SECRET", "SSO_SECRET", "FHRG_REF_KEY"];
+const SECRET_SETTINGS = ["ANTHROPIC_API_KEY", "STORAGE_ACCESS_KEY", "WEBSITE_DATABASE_URL", "WEBSITE_DATABASE_AUTH_TOKEN", "SESSION_SECRET", "SSO_SECRET", "FHRG_REF_KEY", "SEARCH_KEY"];
 const VARIABLE_SETTINGS = ["STORAGE_ZONE", "STORAGE_HOST", "ROOT_FOLDER", "WEBSITE_URL", "SITE_ADMINS", "CLAUDE_MODEL", "CLAUDE_EFFORT", "FHRG_REF_URL", "DEMO", "MONTHLY_CAP_USD", "WEB_SEARCH_MAX", "DATA_QUERIES_MAX", "DAILY_JOBS_MAX"];
 
 function folder(name: string, fallback: string): string {
@@ -94,6 +97,7 @@ export function getConfig(): Config {
     ssoSecret: env("SSO_SECRET"),
     refUrl: (env("FHRG_REF_URL") || "https://builder.fhrg.co.uk").replace(/\/+$/, ""),
     refKey: env("FHRG_REF_KEY"),
+    searchKey: env("SEARCH_KEY"),
     monthlyCapUsd: num("MONTHLY_CAP_USD", 40, 1, 2000),
     webMax: num("WEB_SEARCH_MAX", 4, 1, 10),
     dataMax: num("DATA_QUERIES_MAX", 8, 1, 20),
