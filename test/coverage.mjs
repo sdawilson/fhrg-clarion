@@ -190,6 +190,17 @@ ok(search.calls.length === askedNext + 2 && r.checks.filter((x) => x.keyword ===
 search.status = 200;
 await api("/api/coverage/unsource", { code: WSX, id: second.id }, lead);
 await api("/api/coverage/unsource", { code: WSX, id: third.id }, lead);
+const countFile = files("").find((k) => /usage\/searches-\d{4}-\d{2}\.json$/.test(k));
+ok(countFile && JSON.parse(getText(countFile)).searches === search.calls.length, "the month's searches are counted in storage, so a new deployment doesn't lose them");
+process.env.SEARCHES_A_MONTH = String(search.calls.length);
+const atLimit = search.calls.length;
+r = await api("/api/coverage/check", { code: WSX, keywords: ["verges"] }, lead);
+ok(r.status === 429 && /this month's coverage checks/.test(r.error) && search.calls.length === atLimit, "once the month's searches are used, Clarion says so and asks nothing");
+ok((await api("/api/coverage/check", { code: WSX, keywords: ["cycling"] }, lead)).status === 200, "an answer already held still comes back");
+process.env.SEARCHES_A_MONTH = String(search.calls.length + 3);
+r = await api("/api/coverage/check", { code: WSX, keywords: ["verges"] }, lead);
+ok(r.status === 200 && r.left === 2, "and the figure for what's left allows for the month's limit");
+delete process.env.SEARCHES_A_MONTH;
 const already = search.calls.length;
 let bought = true;
 for (let i = 0; i < 210; i++) bought = bought && (await api("/api/coverage/check", { code: WSX, keywords: ["cycling"] }, lead)).status === 200;

@@ -6,6 +6,7 @@
 // Files, under ROOT_FOLDER:
 //   authorities/<code>/sources.json        the sources an authority follows
 //   authorities/<code>/assessments.json    its officers' assessments
+//   usage/searches-<YYYY-MM>.json          coverage checks this month, for all authorities together
 //
 // The audience estimate is national patterns by age, overlaid on the authority's Census figures. It describes a kind
 // of source, not one publication's readers. The weights for a source's stance are a starting judgement, to be tested
@@ -45,7 +46,7 @@ const PERIOD_DAYS = 28;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_KEYWORDS = 2;
 const MAX_CHECKS = 12; // searches in one go
-const CHECKS_A_DAY = 200; // searches for each authority
+const CHECKS_A_DAY = 50; // searches for each authority, so one authority can't use up the month's
 const CHECK_MS = 6 * 60 * 60 * 1000;
 const CHECK_RUN_MS = 45000; // one go stops asking after this long
 const FAILS_TO_STOP = 2; // or after this many failures in a row
@@ -66,6 +67,7 @@ export type Assessment = {
 
 const sourcesPath = (c: Config, code: string) => `${c.root}authorities/${code}/sources.json`;
 const assessmentsPath = (c: Config, code: string) => `${c.root}authorities/${code}/assessments.json`;
+const searchesPath = (c: Config) => `${c.root}usage/searches-${londonToday().slice(0, 7)}.json`;
 const newId = () => `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
 
 export async function loadSources(c: Config, code: string): Promise<Source[]> {
@@ -316,6 +318,18 @@ function countChecks(code: string, n: number): void {
   checksToday.set(key, used + n);
 }
 
+// The month's count is kept in storage, because a new deployment clears what's in memory
+async function searchesThisMonth(c: Config): Promise<number> {
+  return Number((await storageJson<{ searches?: number }>(c, searchesPath(c), {})).searches) || 0;
+}
+async function addSearches(c: Config, n: number): Promise<number> {
+  return await withLock(searchesPath(c), async () => {
+    const total = (await searchesThisMonth(c)) + n;
+    if (n) await savePretty(c, searchesPath(c), { searches: total });
+    return total;
+  });
+}
+
 export function readKeywords(v: unknown): string[] {
   const list = (Array.isArray(v) ? v : String(v ?? "").split(",")).map((k) => cleanText(k, 40).replace(/["“”]/g, "")).filter(Boolean);
   if (!list.length) throw new FriendlyError("Give one or two keywords.");
@@ -356,9 +370,10 @@ export async function checkCoverage(c: Config, p: Pilot, b: any): Promise<{ read
   const pairs = sources.flatMap((s) => keywords.map((keyword) => ({ s, keyword, key: `check|${s.domain}|${keyword.toLowerCase()}|${from}|${to}` })));
   if (pairs.length > MAX_CHECKS) throw new FriendlyError(`That's too many at once. Choose fewer publications: up to ${MAX_CHECKS} checks at a time.`);
   const needed = pairs.filter((x) => !isCached(x.key, CHECK_MS)).length; // an answer already held costs nothing
+  if (needed && (await searchesThisMonth(c)) + needed > c.searchesAMonth) throw new FriendlyError("Clarion has used this month's coverage checks. They start again on the 1st, and you can still find pieces yourself and record them below.", 429);
   countChecks(p.code, needed);
   const checks: Check[] = [], stopAt = Date.now() + CHECK_RUN_MS;
-  let fails = 0, made = 0;
+  let fails = 0, made = 0, monthTotal = 0;
   try {
     for (const { s, keyword, key } of pairs) {
       const row = { source: s.id, name: s.name, keyword };
@@ -378,6 +393,7 @@ export async function checkCoverage(c: Config, p: Pilot, b: any): Promise<{ read
     }
   } finally {
     countChecks(p.code, Math.min(0, made - needed)); // only searches really made count
+    monthTotal = await addSearches(c, made).catch((e) => { console.log(`[warn] searches not counted: ${(e as Error).message}`); return 0; });
   }
-  return { ready: true, why: "", from, to, left: checksLeft(p.code), checks };
+  return { ready: true, why: "", from, to, left: Math.max(0, Math.min(checksLeft(p.code), c.searchesAMonth - monthTotal)), checks };
 }
