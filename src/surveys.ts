@@ -452,12 +452,13 @@ const csvLine = (cells: unknown[]) => cells.map(csvCell).join(",");
 
 export const templateCsv = (s: Pick<Survey, "locals">) => `${csvLine(["form", "site", ...allQuestions(s).map((q) => q.id)])}\n`;
 
-// One row for each form used. Comments appear only once their names have been taken out.
-export function answersCsv(s: Pick<Survey, "locals">, rows: Answer[], census: Census | null): string {
+// One row for each form used. Comments appear only once their names have been taken out, and only for the
+// authority's own members.
+export function answersCsv(s: Pick<Survey, "locals">, rows: Answer[], census: Census | null, withComments: boolean): string {
   const used = rows.filter((r) => !r.excluded);
   const { weights } = weightsFor(used, census);
   const qs = allQuestions(s);
-  const line = (r: Answer) => csvLine([r.form, r.site, r.via, round(weights.get(r.n) ?? 1, 3), ...qs.map((q) => (q.kind === "text" && !r.clean?.[q.id] ? "" : r.answers[q.id] ?? ""))]);
+  const line = (r: Answer) => csvLine([r.form, r.site, r.via, round(weights.get(r.n) ?? 1, 3), ...qs.map((q) => (q.kind === "text" && (!withComments || !r.clean?.[q.id]) ? "" : r.answers[q.id] ?? ""))]);
   return `${[csvLine(["form", "site", "entered_by", "weight", ...qs.map((q) => q.id)]), ...used.map(line)].join("\n")}\n`;
 }
 

@@ -91,5 +91,8 @@ export function pilotsFor(me: Member): Pilot[] {
 }
 
 export const canSee = (me: Member, p: Pilot) => pilotsFor(me).includes(p);
+// Residents' written comments stay with the authority: only its own members read them, whatever else a site
+// administrator can see.
+export const isMember = (me: Member, p: Pilot) => normAuthority(p.name) === normAuthority(me.authority);
 // Officers' own survey results and notes: their authority's leads, and site administrators
 export const canEdit = (me: Member, p: Pilot) => me.siteAdmin || (me.role === "lead" && canSee(me, p));

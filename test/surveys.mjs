@@ -88,7 +88,7 @@ ok(flagged.filter((x) => x.form === "5").length === 1 && !flagged.some((x) => x.
 ok(flagged.some((x) => x.form === "7" && /same written answer as form 6/.test(x.why)), "the same long comment twice is flagged");
 ok(!flagged.some((x) => x.form === "8"), "a form already left out isn't");
 
-const cells = t.answersCsv({ locals: [] }, [{ n: 1, form: "1", site: "=HYPERLINK(\"http://bad\")", via: "paper", answers: { c1: "Very satisfied", c3: "=1+1", a1: "16 to 24" }, clean: { c3: true } }, { n: 2, form: "2", site: "", via: "paper", answers: { c1: "Very satisfied", c3: "Written by Jane Smith" }, clean: {} }], null);
+const cells = t.answersCsv({ locals: [] }, [{ n: 1, form: "1", site: "=HYPERLINK(\"http://bad\")", via: "paper", answers: { c1: "Very satisfied", c3: "=1+1", a1: "16 to 24" }, clean: { c3: true } }, { n: 2, form: "2", site: "", via: "paper", answers: { c1: "Very satisfied", c3: "Written by Jane Smith" }, clean: {} }], null, true);
 ok(cells.includes(`"'=HYPERLINK(""http://bad"")"`) && cells.includes("'=1+1"), "a download can't carry a spreadsheet formula");
 ok(!/Jane/.test(cells), "and leaves out comments that still have names in them");
 ok(t.templateCsv({ locals: [] }).startsWith("form,site,c1,c2,c3,c4,a1"), "the template lists each question");
@@ -113,10 +113,11 @@ await addUser(1, "lead@westsussex.gov.uk", "Lee Lead", 30, "lead");
 await addUser(2, "member@westsussex.gov.uk", "Mo Member", 30, "member");
 await addUser(3, "officer@kirklees.gov.uk", "Kay Officer", 20, "lead");
 await addUser(5, "boss@fhrg.test", "Bo Boss", 99, "member");
+await addUser(6, "insider@westsussex.gov.uk", "Ines Insider", 30, "member", 1);
 const raw = (path, body, token, headers = {}) => handleRequest(new Request("https://clarion.test" + path, { method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-session-token": token } : {}), ...headers }, body: JSON.stringify(body ?? {}) }));
 const api = async (path, body, token, headers) => { const r = await raw(path, body, token, headers); return { status: r.status, ...(await r.json()) }; };
 const login = async (email) => (await api("/api/login", { email, password: "pw" })).token;
-const lead = await login("lead@westsussex.gov.uk"), member = await login("member@westsussex.gov.uk"), kirk = await login("officer@kirklees.gov.uk"), boss = await login("boss@fhrg.test");
+const lead = await login("lead@westsussex.gov.uk"), member = await login("member@westsussex.gov.uk"), kirk = await login("officer@kirklees.gov.uk"), boss = await login("boss@fhrg.test"), insider = await login("insider@westsussex.gov.uk");
 
 let r = await api("/api/survey/new", { code: WSX, title: "Autumn roads", purpose: "How people feel about the A27 works." }, member);
 ok(r.status === 403, "a member who isn't a lead can't start a survey");
@@ -290,6 +291,16 @@ ok(got.comments.find((x) => x.n === sample[0].n).text === "A hole on [removed]" 
 ok((await api("/api/survey/comment", { code: WSX, id, n: sample[0].n, q: "c1", text: "x" }, lead)).status === 404, "only written answers can be changed like this");
 const rawLeft = getJson(`${R}authorities/${WSX}/survey-answers/${id}.json`).find((a) => a.answers.c3 && !a.clean?.c3);
 ok((await api("/api/survey/comment", { code: WSX, id, n: rawLeft.n, q: "c3" }, lead)).status === 404, "and one still waiting can't be reached");
+
+// the words stay with the authority
+const asAdmin = await api("/api/survey/get", { code: WSX, id }, boss);
+ok(asAdmin.status === 200 && asAdmin.comments.length === 0 && asAdmin.sample.length === 0 && asAdmin.ownComments === false, "a site administrator from outside the authority can't read comments");
+ok(!/\[removed\]|Park Lane|hole on/i.test(JSON.stringify(asAdmin)), "nothing of them is in what they're sent");
+ok(asAdmin.topics.length > 0 && asAdmin.results.used > 0, "though they still see results and topic counts");
+ok(!/\[removed\]|Park Lane/.test((await api("/api/survey/export", { code: WSX, id }, boss)).csv), "and a download for them leaves the comments out");
+ok(/Park Lane/.test((await api("/api/survey/export", { code: WSX, id }, lead)).csv), "while the authority's own download keeps them");
+ok((await api("/api/survey/comment", { code: WSX, id, n: sample[0].n, q: sample[0].id, text: "x" }, boss)).status === 403, "and they can't open a comment by checking it");
+ok((await api("/api/survey/get", { code: WSX, id }, insider)).comments.length > 0, "a site administrator who belongs to the authority can read its comments");
 
 // questions are fixed once open
 r = await api("/api/survey/save", { code: WSX, id, locals: [] }, lead);
