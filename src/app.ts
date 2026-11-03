@@ -27,6 +27,11 @@
 //   POST /api/coverage/assess      {code, ...assessment}: record an assessment
 //   POST /api/coverage/unassess    {code, id}: remove an assessment
 //   POST /api/coverage/check       {code, keywords, sources, days}: does a keyword turn up for these publications?
+//   POST /api/enquiries/get        {code}: what people contacted the authority about, and its own news
+//   POST /api/enquiries/import     {code, file, rows, skipped, months}: counts from a file read in the browser
+//   POST /api/enquiries/remove     {code, id}: take an import back out
+//   POST /api/enquiries/match      {code, category, topic}: sort one of the authority's categories into a topic
+//   POST /api/enquiries/page       {code, url}: the authority's news page
 //   POST /api/abc/find             {code, q}: titles in ABC's register that match what's been typed
 //   POST /api/abc/status           ABC titles held (site administrators)
 //   POST /api/abc/save             {text}: ABC's table, pasted (site administrators)
@@ -59,6 +64,7 @@
 
 import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member } from "./accounts";
 import { findTitles, saveTitles, titlesHeld } from "./abc";
+import { enquiriesView, loadEnquiries, readNews, removeImport, saveImport, saveMatch, savePage } from "./enquiries";
 import { adminOverview, benchmark } from "./admin";
 import {
   FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
@@ -161,11 +167,12 @@ async function handleCoverage(c: Config, request: Request): Promise<Response> {
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
   // The audience figures and the automatic sources are extras: a slow outside service mustn't hold up the page
-  const [sources, assessments, topics, census, rates, gov, signals] = await Promise.all([
+  const [sources, assessments, topics, census, rates, gov, signals, enquiries] = await Promise.all([
     loadSources(c, p.code), loadAssessments(c, p.code), sharedTopics(c),
     briefly(`census|${p.code}`, null, () => loadCensus(c, p.code), (x) => x === null), briefly("audience-rates", [] as Rate[], () => loadRates(c), (x) => !x.length),
-    briefly("announcements", null, () => announcements()), briefly(`signals|${p.code}`, null, () => loadSignals(p), (x) => !x.fixMyStreet.ok || !x.petitions.ok || !x.questions.ok),
+    briefly("announcements", null, () => announcements()), briefly(`signals|${p.code}`, null, () => loadSignals(p), (x) => !x.fixMyStreet.ok || !x.petitions.ok || !x.questions.ok), loadEnquiries(c, p.code),
   ]);
+  const posts = await councilNews(p, enquiries.page || p.newsPage, topics);
   const rows = withWeights(assessments, sources);
   const faults = signals?.fixMyStreet.data, petitions = signals?.petitions.data, questions = signals?.questions.data;
   const unread = "Couldn't be read just now";
@@ -178,6 +185,7 @@ async function handleCoverage(c: Config, request: Request): Promise<Response> {
       { name: "Parliament: MPs' written questions", type: "Parliament", last: questions?.[0]?.date ?? "", note: questions ? "" : unread },
       { name: "Parliament: petitions", type: "Parliament", last: "", note: !petitions ? unread : petitions.length ? `${petitions.length} on road topics` : "" },
       { name: "FixMyStreet public reports", type: "Public reports", last: faults?.to ?? "", note: faults ? "" : unread },
+      { name: "Your council's news page", type: "Council website", last: posts?.[0]?.date ?? "", note: posts ? "" : unread },
     ],
     latest: (gov ?? []).slice(0, 6),
   });
@@ -196,6 +204,21 @@ async function handleAdminOverview(c: Config, request: Request): Promise<Respons
   const me = await signedIn(c, request);
   if (!me.siteAdmin) throw new FriendlyError("Only FHRG site administrators can see this.", 403);
   return json(await adminOverview(c));
+}
+
+// The news page is an extra: it's read at most daily, and a slow site mustn't hold up the page
+const councilNews = (p: Pilot, address: string, topics: string[]) => (address ? briefly(`news|${p.code}|${address}`, null, () => readNews(p, address, topics)) : Promise.resolve(null));
+
+async function handleEnquiries(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const [held, census, topics] = await Promise.all([loadEnquiries(c, p.code), briefly(`census|${p.code}`, null, () => loadCensus(c, p.code), (x) => x === null), sharedTopics(c)]);
+  const page = held.page || p.newsPage, posts = await councilNews(p, page, topics);
+  return json({
+    canEdit: canEdit(me, p), adults: census?.adults ?? null, topics, view: enquiriesView(held, census?.adults ?? null, topics), imports: held.imports,
+    website: { page, posts: posts ?? [], read: posts !== null },
+  });
 }
 
 async function handleAbc(c: Config, request: Request, what: "find" | "status" | "save"): Promise<Response> {
@@ -470,6 +493,11 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/facts/survey": return await handleFactsSurvey(c, request);
         case "/api/facts/notes": return await handleFactsNotes(c, request);
         case "/api/attention": return await handleNotYet(c, request);
+        case "/api/enquiries/get": return await handleEnquiries(c, request);
+        case "/api/enquiries/import": { const { me, p, b } = await editor(c, request, 3000000); return json({ import: await saveImport(c, me, p, b) }); }
+        case "/api/enquiries/remove": { const { p, b } = await editor(c, request, 1000); await removeImport(c, p, b.id); return json({ ok: true }); }
+        case "/api/enquiries/match": { const { p, b } = await editor(c, request, 1000); await saveMatch(c, p, b, await sharedTopics(c)); return json({ ok: true }); }
+        case "/api/enquiries/page": { const { p, b } = await editor(c, request, 1000); await savePage(c, p, b.url); return json({ ok: true }); }
         case "/api/abc/find": return await handleAbc(c, request, "find");
         case "/api/abc/status": return await handleAbc(c, request, "status");
         case "/api/abc/save": return await handleAbc(c, request, "save");

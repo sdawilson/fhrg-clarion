@@ -7,6 +7,7 @@ import {
   FUNCTIONS, LEANINGS, PROMINENCE, RATE_MEASURES, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, summarise as summariseCoverage, withWeights,
   type Assessment, type Rate, type Source,
 } from "./coverage";
+import { enquiriesView, type Month } from "./enquiries";
 import { packFrom, standFor, type SitesPack } from "./sites";
 import { ABOUT, ACCESS_CHECKS, CORE, answersCsv, cellKey, summarise, surveyPage, type Answer, type Census, type Question, type Site, type Survey } from "./surveys";
 import { cached } from "./util";
@@ -161,6 +162,19 @@ const DEMO_CHECK = { ready: true, why: "", from: COUNTY_DAY(14), to: COUNTY_DAY(
   { source: "s2", name: "Dale Valley Gazette", keyword: "potholes", result: "No match", date: "" },
   { source: "s3", name: "Northbridge Radio", keyword: "potholes", result: "No match", date: "" },
 ] };
+// Northbridge's enquiries, as an officer's browser would send them, run through the real calculations
+const enquiryMonth = (pothole: number, pavement: number, flood: number, light: number): Month => ({
+  categories: { "Road defects": [Math.round(pothole * 0.9), Math.round(pothole * 0.1)], "Footway defects": [Math.round(pavement * 0.9), Math.round(pavement * 0.1)], Gullies: [Math.round(flood * 0.93), Math.round(flood * 0.07)], "Street lights": [Math.round(light * 0.95), Math.round(light * 0.05)], Other: [612, 48] },
+  areas: { Moorside: Math.round(pothole / 4), "Dale End": Math.round(pothole / 5), "Bridge Ward": Math.round(pothole / 6), "High Fell": Math.round(pothole / 9), "Low Green": 7 }, routes: { Online: 2500, Phone: 1200, Email: 500 },
+});
+function demoEnquiries(topics: string[]) {
+  const months = { "2026-07": enquiryMonth(1500, 680, 300, 330), "2026-08": enquiryMonth(1450, 690, 310, 340), "2026-09": enquiryMonth(1480, 670, 330, 345), "2026-10": enquiryMonth(1976, 685, 537, 340) };
+  const note = { id: "d1", file: "enquiries-october.csv", months: Object.keys(months), rows: 21000, added: 20986, skipped: 14, at: WHEN, by: "Demo officer" };
+  return {
+    canEdit: true, adults: ADULTS, topics, view: enquiriesView({ months, matches: {}, imports: [note], page: "" }, ADULTS, topics), imports: [note],
+    website: { page: "", read: true, posts: [{ title: "Winter gritting routes confirmed", url: "", date: "2026-10-28", topic: "Winter service" }, { title: "Moor Lane resurfacing starts next month", url: "", date: "2026-10-21", topic: "Potholes" }] },
+  };
+}
 function demoCoverage(census: Census) {
   const rows = withWeights(PIECES, SOURCES), today = COUNTY_DAY(0);
   return {
@@ -275,7 +289,7 @@ export function buildPack() {
       { text: "How would you rate the condition of the pavements near where you live?", kind: "choice", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], reason: "Quiet: is it wider than it looks?", topic: "Pavements", basedOn: ["Fault reports"], why: "Few press items, but fault reports are rising." },
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
-    coverage: demoCoverage(census), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
+    coverage: demoCoverage(census), enquiries: demoEnquiries([...new Set([...COVERAGE.map((x) => x[0]), ...PIECES.map((x) => x.topic)])]), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
     attention: { ready: true, topics, earlySigns: topics.filter((x) => x.early).map((x) => ({ topic: x.topic, concern: x.concern, attention: x.attention, why: x.topic === "Pavements" ? "Fault reports are up by a quarter." : "Named by people on the same few roads." })) },
   };
 }

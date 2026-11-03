@@ -95,6 +95,10 @@ ok(/nonsense\s*No match/.test(demoCheck) && /potholes\s*Found/.test(demoCheck) &
 const demoSaid = pack.coverage;
 ok(["Local Newspaper", "Local News Website", "National Newspaper", "Local Newsletter", "Social Media", "Local Television", "Local Radio"].every((x) => demoSaid.audiences[x].known) && !demoSaid.audiences["Community Event"].known, "the demonstration's audiences come from the same figures");
 ok(demoSaid.rows.every((x) => demoSaid.topics.includes(x.topic)) && demoSaid.sources.every((x) => x.campaign.every((c) => demoSaid.topics.includes(c))), "every topic in the demonstration's coverage can be chosen");
+w.location.hash = "#said/NORTHBRIDGE/enquiries";
+await see(d, /What people contacted you about/);
+const demoEnq = text(d.querySelector(".main"));
+ok(/Road defects/.test(demoEnq) && /Rising/.test(demoEnq) && /Winter gritting routes confirmed/.test(demoEnq) && !d.querySelector('.main a[href*="northbridge"]'), "the demonstration shows made-up enquiries and council news, with no links");
 w.location.hash = "#attention/NORTHBRIDGE";
 await see(d, /What's driving it/);
 w.location.hash = "#evidence/NORTHBRIDGE";
