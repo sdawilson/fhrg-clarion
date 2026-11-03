@@ -19,7 +19,7 @@ const lead = await login("lead@westsussex.gov.uk"), member = await login("member
 
 const html = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const asked = [];
-async function open(address, token) {
+async function open(address, token, broken = "") {
   const dom = new JSDOM(html, {
     url: `https://clarion.test${address}`, runScripts: "dangerously", pretendToBeVisual: true,
     beforeParse(w) {
@@ -30,13 +30,14 @@ async function open(address, token) {
       w.URL.revokeObjectURL = () => {};
       w.fetch = async (url, opts = {}) => {
         asked.push(String(url));
+        if (broken && String(url).includes(broken)) return { ok: false, status: 503, json: async () => ({}) };
         const res = await handleRequest(new Request(new URL(url, "https://clarion.test").href, opts));
         const body = await res.text();
         return { ok: res.ok, status: res.status, json: async () => JSON.parse(body) };
       };
     },
   });
-  await until(() => dom.window.document.querySelector("#app > *:not(.busy)"), "the page to start");
+  await until(() => dom.window.document.querySelector(broken ? "#app .err" : "#app > *:not(.busy)"), "the page to start");
   dom.window.eval("App.pollMs = 20");
   return dom;
 }
@@ -59,8 +60,8 @@ ok(pack.attention.topics.length === 8 && pack.attention.earlySigns.map((x) => x.
 ok(pack.media.total === 186 && pack.media.topics.reduce((n, x) => n + x.items, 0) === 186, "the coverage figures add up");
 const street = pack.authority.evidence.streets[0];
 ok(street.responses === 412 && street.satisfied > 20 && street.satisfied < 45, "the survey result feeds the summary");
-const first = await (await handleRequest(new Request("https://clarion.test/demo/data.json"))).text();
-ok(first === packText, "and the figures don't change between visits");
+ok(JSON.stringify(t.buildPack()) === packText, "and building it again gives the same figures");
+ok(page.topics.find((x) => x.topic === "Potholes").count === 10 && pack.attention.topics.find((x) => x.topic === "Potholes").replies === 10, "the comments and the comparison agree");
 
 // ---- the demonstration in the browser
 const before = store.size, spendCalls = claude.calls.length;
@@ -106,6 +107,14 @@ d.querySelectorAll('.form-grid input')[0].value = "1";
 d.querySelectorAll('.form-grid input')[1].value = "2";
 button(d, "Prepare forms to print").click();
 await until(() => d.querySelectorAll(".sheet").length === 2, "the forms");
+w.location.hash = `#survey/NORTHBRIDGE/${autumn.id}x/results`;
+await see(d, /That survey wasn't found/);
+w.location.hash = `#survey/NORTHBRIDGE/${winter.id}/results`;
+await see(d, /Indicative only/);
+w.downloaded = null;
+button(d, "Download the answers").click();
+await until(() => w.downloaded, "the empty download");
+ok(!/Very satisfied/.test(await w.downloaded.text()), "a survey with no replies has none to download");
 w.location.hash = `#survey/NORTHBRIDGE/${winter.id}/setup`;
 await see(d, /Core questions/);
 button(d, "Suggest questions").click();
@@ -118,6 +127,17 @@ await see(d, /nothing is saved and Claude isn't used here/);
 ok(store.size === before && claude.calls.length === spendCalls, "nothing is saved and Claude isn't called");
 ok(asked.every((u) => /\/demo\/data\.json|\/api\/config/.test(u)), "the demonstration asks the server for nothing else");
 ok(!files(`${R}authorities/NORTHBRIDGE`).length, "and there's no Northbridge in storage");
+
+// a signed-in member who opens the demonstration
+dom = await open("/demo", member); d = dom.window.document; w = dom.window;
+await see(d, /Northbridge: how people feel about their roads/);
+ok(d.querySelector(".demo-banner") && !/West Sussex/.test(text(d.getElementById("app"))), "a signed-in member gets the demonstration, not their own data");
+ok(w.localStorage.getItem("clarion_token") === member, "and stays signed in");
+
+// the demonstration's file can't be read
+dom = await open("/demo", boss, "/demo/data.json"); d = dom.window.document;
+await until(() => /couldn't start/.test(text(d.getElementById("app"))), "the message");
+ok(!d.querySelector(".main") && !/All authorities/.test(text(d.getElementById("app"))), "if the demonstration can't start, real figures never appear in its place");
 
 // turning it off
 process.env.DEMO = "off";
@@ -177,6 +197,10 @@ ok((await api("/api/admin/overview", {}, boss)).authorities.find((x) => x.name =
 dom = await open("/#all", member); d = dom.window.document;
 await see(d, /West Sussex: how people feel about their roads/);
 ok(!button(d, "All authorities") && !d.querySelector('select[aria-label="Open an authority"]'), "a member can't reach all authorities, even by its address");
+const both = await api("/api/admin/overview", {}, boss);
+ok(both.totals.replies === 75 && both.totals.surveys === 2, "replies are counted from every survey with results, not only the latest");
+await api("/api/survey/new", { code: "E08000034", title: "Just a draft" }, kirk);
+ok((await api("/api/admin/overview", {}, boss)).totals.using === 1, "and a draft nobody has opened doesn't count as using Clarion");
 await see(d, /35 street survey replies/);
 ok(true, "and their summary leads with their latest survey");
 
@@ -184,6 +208,7 @@ ok(true, "and their summary leads with their latest survey");
 ok(t.middleFigure(Array.from({ length: 4 }, () => ({ satisfied: 30, worse: 40 }))) === null, "fewer than five authorities gives no FHRG figure");
 const middle = t.middleFigure([20, 30, 40, 50, 60].map((satisfied) => ({ satisfied, worse: null })));
 ok(middle.satisfied === 40 && middle.worse === null && middle.authorities === 5 && !("name" in middle), "five give a middle figure, with nobody named");
+ok(t.middleFigure([{ satisfied: 20, worse: 61 }, ...[30, 40, 50, 60].map((satisfied) => ({ satisfied, worse: null }))]).worse === null, "and one authority's answer can't pass as the middle figure");
 r = await api("/api/authority", { code: WSX }, member);
 ok(r.benchmark === null && r.adults > 0, "an authority's page carries its adults, and no FHRG figure yet");
 ok((await api("/api/media", { code: WSX }, member)).ready === false && (await api("/api/media", { code: WSX }, kirk)).status === 403 && (await api("/api/attention", { code: WSX })).status === 401, "Media Watch's routes wait for it, and keep to the usual access rules");

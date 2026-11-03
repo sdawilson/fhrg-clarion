@@ -530,7 +530,7 @@ export async function streetSummaries(c: Config, code: string): Promise<StreetSu
     const summary = summarise(s, await loadAnswers(c, code, s.id), census);
     if (summary) out.push(summary);
   }
-  return out;
+  return out.sort((a, b) => b.ran.localeCompare(a.ran)); // the latest to go into the field comes first
 }
 
 // Everything a survey's page shows. `edit`: a lead or site administrator. `own`: a member of the authority, the

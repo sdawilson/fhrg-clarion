@@ -151,6 +151,8 @@ progress.bar { width: 100%; height: 6px; accent-color: var(--accent); }
 .auth-sign { width: min(560px, 100%); background: var(--navy); border-radius: 18px; padding: clamp(10px, 2.5vw, 16px); box-shadow: inset 0 0 0 6px var(--navy), inset 0 0 0 10px #fff, 0 18px 40px rgba(26, 52, 82, 0.22); }
 .auth-card { display: grid; gap: 16px; background: var(--surface); border-radius: 10px; padding: 26px 24px; margin: 6px; }
 .auth-card .fhrg-logo { width: 220px; }
+.auth-form .row .btn { white-space: normal; text-align: center; }
+@media (max-width: 520px) { .auth-form .row .btn { flex: 1 1 100%; } }
 .auth-title { font-size: 1.45rem; }
 .auth-form { gap: 8px; border-top: 2px solid var(--line); padding-top: 14px; }
 .auth-sub { font-size: 1.15rem; margin: 0; }
@@ -174,8 +176,9 @@ table.heat { border-collapse: separate; border-spacing: 2px; font-size: 0.84rem;
 .heat thead th { font-size: 0.78rem; text-align: center; vertical-align: bottom; white-space: normal; min-width: 64px; }
 .heat td { text-align: center; padding: 6px 4px; border-radius: 4px; min-width: 58px; color: var(--ink); }
 .h-s0 { background: var(--h-s0); } .h-s1 { background: var(--h-s1); } .h-s2 { background: var(--h-s2); } .h-s3 { background: var(--h-s3); }
-.h-s4 { background: var(--h-s4); color: #fff; } .h-s5 { background: var(--h-s5); color: #fff; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .h-s4, :root:not([data-theme="light"]) .h-s5 { color: #0b0f14; } }
+.h-s4 { background: var(--h-s4); } .h-s5 { background: var(--h-s5); }
+.heat td.h-s4, .heat td.h-s5 { color: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .heat td.h-s4, :root:not([data-theme="light"]) .heat td.h-s5 { color: #0b0f14; } }
 .heat-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 0.8rem; color: var(--ink-3); }
 .heat-legend i { display: inline-block; width: 22px; height: 12px; border-radius: 2px; vertical-align: middle; }
 
@@ -183,7 +186,8 @@ table.heat { border-collapse: separate; border-spacing: 2px; font-size: 0.84rem;
 .demo-banner { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; background: color-mix(in srgb, var(--warn) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line)); border-radius: var(--radius-sm); padding: 8px 14px; font-size: 0.92rem; }
 
 /* attention against concern */
-.quad { width: 100%; height: auto; display: block; }
+.quad-wrap { overflow-x: auto; }
+.quad { width: 100%; min-width: 540px; height: auto; display: block; }
 .q-zone { fill: color-mix(in srgb, var(--s2) 10%, transparent); }
 .q-line { stroke: var(--line-2); stroke-width: 1; }
 .q-dot { fill: var(--s1); stroke: var(--surface); stroke-width: 2; }
@@ -317,6 +321,7 @@ const brand = () => h("div", { class: "brand-mark" }, "Clarion");
 // Claude isn't used: where a real page would ask Claude, this gives a prepared answer.
 const Demo = {
   pack: null, job: null,
+  survey(id) { if (!Demo.pack.surveys[id]) throw new Error("That survey wasn't found."); return Demo.pack.surveys[id]; },
   prepared(kind, result) { this.job = { id: "20261030090000000-de000009", kind, status: "ready", stage: "Ready", result, done: 0, total: 0 }; return { job: this.job }; },
   async call(path, b = {}) {
     const P = Demo.pack;
@@ -330,9 +335,9 @@ const Demo = {
       case "/api/note/get": return { note: P.note };
       case "/api/reading/get": return { reading: P.authority.reading };
       case "/api/survey/list": return P.surveyList;
-      case "/api/survey/get": return { ...P.surveys[b.id], sorting: null, dropped: 0 };
-      case "/api/survey/save": return { survey: P.surveys[b.id].survey };
-      case "/api/survey/export": return P.exportFile;
+      case "/api/survey/get": return { ...Demo.survey(b.id), sorting: null, dropped: 0 };
+      case "/api/survey/save": return { survey: Demo.survey(b.id).survey };
+      case "/api/survey/export": return P.exports[b.id];
       case "/api/survey/suggest": return Demo.prepared("suggest", P.suggestions);
       case "/api/survey/wording": return Demo.prepared("wording", []);
       case "/api/survey/help": return { job: Demo.job };
@@ -354,7 +359,11 @@ async function boot() {
       App.demo = true; App.status = Demo.pack.status; API.call = Demo.call;
       window.addEventListener("hashchange", route);
       return route();
-    } catch (e) { console.warn(e); }
+    } catch (e) {
+      // never carry on here: a signed-in viewer would see real figures with nothing to say this isn't the demonstration
+      console.warn(e);
+      return clear($app).append(h("div", { class: "busy" }, brand(), h("p", { class: "err", role: "alert" }, "The demonstration couldn't start. Please try again shortly."), h("a", { class: "btn", href: "/" }, "Back to sign in")));
+    }
   }
   // Arriving from the FHRG website: /sso#t=<pass>. Tidy the address first, so the pass isn't left in the
   // browser's history. A pass that fails leaves a good session as it was.
@@ -513,7 +522,7 @@ function roleCard() {
 }
 function compareCard(a, d, street) {
   const m = d.benchmark;
-  return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "How you compare"), h("p", {}, "Only the FHRG figure, with no other authority named. It appears once five authorities have results."))),
+  return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "How you compare"), h("p", {}, App.demo ? "Only the FHRG figure, with no other authority named. This one is made up, like the rest of the demonstration." : "Only the FHRG figure, with no other authority named. It appears once five authorities have results."))),
     m ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Core question"), h("th", { class: "r" }, a.name), h("th", { class: "r" }, "FHRG middle figure"))),
       h("tbody", {}, h("tr", {}, h("td", {}, "Satisfied with roads and pavements"), h("td", { class: "r" }, street ? `${fmt(street.satisfied)}%` : "–"), h("td", { class: "r" }, `${fmt(m.satisfied)}%`)), h("tr", {}, h("td", {}, "Say roads have got worse"), h("td", { class: "r" }, street?.worse == null ? "–" : `${fmt(street.worse)}%`), h("td", { class: "r" }, m.worse === null ? "–" : `${fmt(m.worse)}%`))))) : h("p", { class: "muted" }, "Not enough authorities have results yet."));
 }
@@ -544,7 +553,7 @@ function attentionCard(att) {
   }
   chart.append(label(330, 418, "Public concern (survey rank): higher to the left", "q-axis", "middle"));
   chart.append(svg("text", { x: 20, y: 215, class: "q-axis", "text-anchor": "middle", transform: "rotate(-90 20 215)" }, "Media attention (rank): higher at the top"));
-  return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Each topic's rank in the media against its rank in the survey. Ranks, because a press count and a survey share aren't on one scale."))), chart);
+  return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Each topic's rank in the media against its rank in the survey. Ranks, because a press count and a survey share aren't on one scale."))), h("div", { class: "quad-wrap" }, chart));
 }
 function earlySignsCard(a, att) {
   return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Early signs"), h("p", {}, "What people raise that nobody is reporting yet."))),
@@ -606,7 +615,7 @@ async function adminView(page) {
     h("div", { class: "grid g4" }, stat("Authorities using Clarion", `${fmt(t.using)} of ${fmt(t.authorities)}`, `${fmt(t.withSurvey)} with street survey results`),
       stat("Satisfied with roads, middle figure", t.middle === null ? "–" : `${fmt(t.middle)}%`, t.middle === null ? "No results yet" : `Range ${fmt(t.lowest)}% to ${fmt(t.highest)}%. Indicative`),
       stat("Direction of mood", dir.length ? `${fmt(dir[0][1])} ${dir[0][0].toLowerCase()}` : "–", dir.length ? dir.slice(1).map(([k, v]) => `${fmt(v)} ${k.toLowerCase()}`).join(", ") || "All the readings so far" : "No readings yet"),
-      stat("Street survey replies", fmt(t.replies), `From ${fmt(t.surveys)} survey${t.surveys === 1 ? "" : "s"}`)));
+      stat("Street survey replies", fmt(t.replies), `From ${fmt(t.surveys)} survey${t.surveys === 1 ? "" : "s"} with results`)));
   const shade = (n, of) => `h-s${Math.round((n / (of || 1)) * 5)}`;
   body.append(h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "What people are most concerned about"), h("p", {}, "Authorities with this topic in their top three, by region. The number of authorities in each region is in brackets."))),
     d.topics.length ? [h("div", { class: "heat-wrap" }, h("table", { class: "heat" }, h("thead", {}, h("tr", {}, h("th", {}), d.regions.map((g) => h("th", {}, `${g.name} (${g.authorities})`)))),

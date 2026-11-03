@@ -14,7 +14,7 @@ const BENCHMARK_MIN = 5; // fewer, and the middle figure could give away an auth
 const TOP_TOPICS = 3;
 
 type Row = {
-  code: string; name: string; region: string; kind: string; direction: string; readingOn: string; surveys: number; street: StreetSummary | null;
+  code: string; name: string; region: string; kind: string; direction: string; readingOn: string; surveysRun: number; reported: number; replies: number; street: StreetSummary | null;
   readingsThisMonth: number; notesThisMonth: number; forecastsDue: number;
 };
 
@@ -29,7 +29,8 @@ async function authorityRow(c: Config, p: Pilot): Promise<Row> {
   const latest = readings.find((r) => r.status === "ready");
   const today = new Date().toISOString().slice(0, 10);
   return {
-    code: p.code, name: p.name, region: p.region, kind: p.kind, direction: latest?.direction ?? "", readingOn: latest?.created.slice(0, 10) ?? "", surveys: surveys.length, street: streets[0] ?? null,
+    code: p.code, name: p.name, region: p.region, kind: p.kind, direction: latest?.direction ?? "", readingOn: latest?.created.slice(0, 10) ?? "",
+    surveysRun: surveys.filter((s) => s.status !== "draft").length, reported: streets.length, replies: streets.reduce((n, x) => n + x.responses, 0), street: streets[0] ?? null,
     readingsThisMonth: readingNames.filter((n) => n.startsWith(month())).length, notesThisMonth: noteNames.filter((n) => n.startsWith(month())).length,
     forecastsDue: (Array.isArray(forecasts) ? forecasts : []).filter((f: any) => typeof f?.checkDate === "string" && f.checkDate <= today && !f.outcome).length,
   };
@@ -49,20 +50,22 @@ export async function adminOverview(c: Config) {
   return {
     authorities: rows, regions, topics, directions,
     totals: {
-      using: rows.filter((r) => r.direction || r.surveys || r.notesThisMonth).length, authorities: rows.length, withSurvey: withStreet.length, surveys: rows.reduce((n, r) => n + r.surveys, 0),
-      replies: withStreet.reduce((n, r) => n + (r.street?.responses ?? 0), 0), middle: median(satisfied), lowest: satisfied.length ? Math.min(...satisfied) : null, highest: satisfied.length ? Math.max(...satisfied) : null,
+      using: rows.filter((r) => r.direction || r.surveysRun || r.notesThisMonth).length, authorities: rows.length, withSurvey: withStreet.length, surveys: rows.reduce((n, r) => n + r.reported, 0),
+      replies: rows.reduce((n, r) => n + r.replies, 0), middle: median(satisfied), lowest: satisfied.length ? Math.min(...satisfied) : null, highest: satisfied.length ? Math.max(...satisfied) : null,
     },
     use: { readings: rows.reduce((n, r) => n + r.readingsThisMonth, 0), notes: rows.reduce((n, r) => n + r.notesThisMonth, 0), forecastsDue: rows.reduce((n, r) => n + r.forecastsDue, 0), spend: await monthSpend(c), cap: c.monthlyCapUsd },
   };
 }
 
-// What an authority sees of everyone else: one middle figure, with nobody named, once enough have results
+// What an authority sees of everyone else: one middle figure, with nobody named, once enough have results. Each
+// figure needs enough authorities of its own, or a middle figure could be one authority's result.
 export function middleFigure(latest: Pick<StreetSummary, "satisfied" | "worse">[]): { authorities: number; satisfied: number | null; worse: number | null } | null {
   if (latest.length < BENCHMARK_MIN) return null;
-  return { authorities: latest.length, satisfied: median(latest.map((x) => x.satisfied as number)), worse: median(latest.map((x) => x.worse).filter((x): x is number => typeof x === "number")) };
+  const worse = latest.map((x) => x.worse).filter((x): x is number => typeof x === "number");
+  return { authorities: latest.length, satisfied: median(latest.map((x) => x.satisfied as number)), worse: worse.length >= BENCHMARK_MIN ? median(worse) : null };
 }
 
 export const benchmark = (c: Config) => cached("benchmark", 10 * 60 * 1000, async () => {
-  const latest = (await Promise.all(PILOTS.map((p) => streetSummaries(c, p.code)))).map((x) => x[0]).filter((x): x is StreetSummary => !!x);
+  const latest = (await Promise.all(PILOTS.map((p) => streetSummaries(c, p.code)))).map((x) => x.find((y) => y.current)).filter((x): x is StreetSummary => !!x);
   return middleFigure(latest);
 });

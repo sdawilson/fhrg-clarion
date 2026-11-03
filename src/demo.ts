@@ -101,7 +101,7 @@ function replies(): Answer[] {
       c1: said("c1", [5, 24, 20, 28, 20, 3]), c2: said("c2", [12, 36, 46, 6]), c4: said("c4", [58, 14, 8, 10, 10]), l1: said("l1", [18, 34, 44, 4]), l2: said("l2", [6, 31, 38, 20, 5]),
       a1: r.pick(AGE_SHARES.map((x) => x[0]), [8, 10, 12, 16, 18, 19, 17]), a2: said("a2", [54, 44, 2]), a3: said("a3", [66, 13, 15, 3, 3]), a4: said("a4", [17, 78, 5]),
     };
-    const comment = COMMENTS[Math.floor(n / 11)];
+    const comment = COMMENTS[n / 11 - 1]; // every eleventh person left a comment
     const topics: Record<string, string> = {}, clean: Record<string, boolean> = {}, checked: Record<string, boolean> = {};
     if (n % 11 === 0 && comment) { answers.c3 = comment[1]; topics.c3 = comment[0]; clean.c3 = true; checked.c3 = n % 110 === 0; }
     out.push({ n, form: tablet ? `T${n}` : String(n), via: tablet ? "tablet" : "paper", site: SITES[Math.floor(r.next() * SITES.length)].name, at: "2026-10-20T10:00:00.000Z", secs: tablet ? 120 + Math.floor(r.next() * 180) : null, answers, topics, clean, checked });
@@ -120,7 +120,7 @@ function placeTopic(concern: number, attention: number, count: number): { early:
   return { early: felt && !loud, action: felt && loud ? "Act, and be seen to" : felt ? "Look into it early" : loud ? "Answer it, but don't over-react" : "Keep watching" };
 }
 
-function buildPack() {
+export function buildPack() {
   const rows = replies();
   const autumn = survey({
     id: "20261001090000000-de000001", title: "Autumn roads survey", purpose: "How people feel about the state of the roads, and whether the Relief Road closure and the extra pothole money have reached them.",
@@ -150,7 +150,7 @@ function buildPack() {
       title: "£4.2m extra for pothole repairs", summary: "The council has announced £4.2m for pothole repairs over two years, with a promise of faster repairs.", instrument: "Funding", announcedBy: COUNCIL, announced: "2026-10-06", amount: "£4.2m", publicMessage: "Faster repairs across Northbridge.", primaryFound: true,
       deadlines: [{ date: "2027-03-31", what: "First £2.1m to be spent" }], conditions: ["Report progress to the cabinet each quarter"], disagreements: [], named: [], sources: [{ url: "", title: "Council press release (made up)", kind: "Primary" }],
     },
-    headline: "The extra money raises expectations faster than repairs can meet them.", whyHere: "Most Northbridge residents already say roads are getting worse, so a promise of faster repairs will be judged on their own street.",
+    headline: "The extra money raises expectations faster than repairs can meet them.", whyHere: "Many Northbridge residents already say roads are getting worse, so a promise of faster repairs will be judged on their own street.",
     impacts: [{ route: "Reputation", statement: "People may judge the promise on their own street before the work reaches it.", direction: "Worse", size: "Moderate", likelihood: "Likely", confidence: "Moderate", confidenceReason: "Survey answers point this way.", when: "Next 6 months", basis: "Street survey", working: "", action: "Publish where the first repairs will be.", owner: "Communications lead", checkDate: "2027-04-01", challenge: "Stands up." }],
     cut: [], mood: { promise: "Faster repairs", localExperience: "Many say roads have got worse", gap: "Large", likelyReaction: "Not on my road", confidence: "Moderate", surveyQuestion: "Over the past year, have potholes near you been repaired faster, slower or about the same?" },
     questions: ["When will my road be repaired?"], unknowns: ["How much of the £4.2m is new money"], dataUsed: [], cost: 0,
@@ -189,7 +189,7 @@ function buildPack() {
       { text: "How much does street lighting at night matter to you?", kind: "choice", options: ["A great deal", "A fair amount", "Not very much", "Not at all", "Don't know"], why: "28 items, most about one campaign. It may be a strong view held by few." },
       { text: "How would you rate the condition of the pavements near where you live?", kind: "choice", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], why: "Few press items, but fault reports are rising." },
     ],
-    exportFile: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) },
+    exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
     media: {
       ready: true, period: "Last 4 weeks", total: COVERAGE.reduce((n, x) => n + x[1], 0), previous: 133, topics: COVERAGE.map(([topic, items]) => ({ topic, items })),
       items: [
