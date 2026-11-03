@@ -219,12 +219,16 @@ export function summarise(rows: Row[], today: string) {
 // ----- who a source reaches
 
 export type Rate = { measure: string; age_from: number | null; age_to: number | null; value: number; publisher: string; year: string };
-const AUDIENCES: Partial<Record<Source["type"], { measure: string; note: string }>> = {
-  "Local Newspaper": { measure: "Read news in a local printed newspaper in the last 12 months", note: "" },
-  "Local News Website": { measure: "Read news online from a local news publisher in the last 12 months", note: "" },
-  "National Newspaper": { measure: "Read news in a national printed newspaper in the last 12 months", note: "" },
-  "Local Television": { measure: "PROXY, not news-specific and not local: watched TV programmes live at the time of broadcast", note: "Based on all live television, the closest published figure." },
-  "Local Radio": { measure: "PROXY, not news-specific and not local: listened to live radio online through a computer, laptop, tablet or phone", note: "Based on all live radio online, the closest published figure." },
+const LOCAL_NEWS = "Local news in the last month or so"; // Ofcom's Local News and Media Survey
+// The first of these that the library holds is used
+const AUDIENCES: Partial<Record<Source["type"], { measure: string; note: string }[]>> = {
+  "Local Newspaper": [{ measure: "Read news in a local printed newspaper in the last 12 months", note: "" }],
+  "Local News Website": [{ measure: "Read news online from a local news publisher in the last 12 months", note: "" }],
+  "National Newspaper": [{ measure: "Read news in a national printed newspaper in the last 12 months", note: "" }],
+  "Local Newsletter": [{ measure: `${LOCAL_NEWS}: Printed local magazines`, note: "Based on printed local magazines, the closest published figure." }],
+  "Social Media": [{ measure: `${LOCAL_NEWS}: Social media such as Facebook, X (formerly Twitter) or Instagram, etc.`, note: "Based on local news from any social media, not one group or page." }],
+  "Local Television": [{ measure: `${LOCAL_NEWS}: Television`, note: "" }, { measure: "PROXY, not news-specific and not local: watched TV programmes live at the time of broadcast", note: "Based on all live television, the closest published figure." }],
+  "Local Radio": [{ measure: `${LOCAL_NEWS}: Radio`, note: "" }, { measure: "PROXY, not news-specific and not local: listened to live radio online through a computer, laptop, tablet or phone", note: "Based on all live radio online, the closest published figure." }],
 };
 const LIKELIHOODS = [
   { label: "Drives (holds a licence)", measure: "drive: holds a full car driving licence", from: "National Travel Survey" },
@@ -236,7 +240,7 @@ const LIKELIHOODS = [
 const SAME_WITHIN = 0.1; // closer than this to all adults, and the two can't be told apart
 const OLDEST_AGE = 90;
 
-export const RATE_MEASURES = [...Object.values(AUDIENCES).map((a) => a!.measure), ...LIKELIHOODS.map((l) => l.measure)];
+export const RATE_MEASURES = [...Object.values(AUDIENCES).flatMap((a) => a!.map((x) => x.measure)), ...LIKELIHOODS.map((l) => l.measure)];
 
 export async function loadRates(c: Config): Promise<Rate[]> {
   try {
@@ -280,14 +284,15 @@ export function audienceFor(type: Source["type"], census: Census | null, rates: 
   if (!census || !rates.length) return null;
   const people = adultsByAge(census), all = people.reduce((sum, n) => sum + n, 0) || 1;
   const adults = people.map((n) => (n / all) * 100);
-  const use = AUDIENCES[type] ? bandRates(rates, AUDIENCES[type]!.measure) : null;
+  const best = (AUDIENCES[type] ?? []).find((a) => bandRates(rates, a.measure));
+  const use = best ? bandRates(rates, best.measure) : null;
   const weighted = use ? people.map((n, i) => n * use[i]) : null;
   const total = weighted ? weighted.reduce((sum, n) => sum + n, 0) || 1 : 1;
   const audience = weighted ? weighted.map((n) => (n / total) * 100) : adults;
   const blend = (mix: number[], rate: number[]) => mix.reduce((sum, share, i) => sum + (share / 100) * rate[i], 0);
   const older = (mix: number[]) => mix.slice(4).reduce((sum, n) => sum + n, 0);
   return {
-    known: !!use, note: use ? AUDIENCES[type]!.note : "There's no published age profile for this kind of source, so this shows all adults.",
+    known: !!use, note: best ? best.note : "There's no published age profile for this kind of source, so this shows all adults.",
     ages: AGES.map(([age]) => age), audience: audience.map((n) => round(n)), adults: adults.map((n) => round(n)), overFiftyFive: { audience: Math.round(older(audience)), adults: Math.round(older(adults)) },
     likelihoods: use ? LIKELIHOODS.flatMap(({ label, measure, from }) => {
       const rate = bandRates(rates, measure);

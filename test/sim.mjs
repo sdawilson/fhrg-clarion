@@ -208,6 +208,9 @@ const rate = (measure, year, rows) => rows.forEach(([from, to, value]) => ins("a
 const FIVES = (values) => values.map((v, i) => [16 + (i ? i * 5 - 1 : 0), i === 0 ? 19 : i === values.length - 1 ? null : 19 + i * 5, v]);
 rate("Read news in a local printed newspaper in the last 12 months", "2025/26", FIVES([8, 9, 10, 12, 14, 18, 20, 22, 24, 27, 31, 36, 39, 41, 40]));
 rate("Read news in a national printed newspaper in the last 12 months", "2025/26", FIVES([10, 12, 14, 15, 19, 22, 26, 28, 31, 36, 41, 48, 54, 56, 54]));
+const SEVEN = (values) => values.map((v, i) => [16 + (i ? i * 10 - 1 : 0), i === 6 ? null : 24 + i * 10, v]);
+rate("Local news in the last month or so: Television", "2026", SEVEN([25, 29, 38, 39, 51, 59, 64]));
+rate("Local news in the last month or so: Social media such as Facebook, X (formerly Twitter) or Instagram, etc.", "2026", SEVEN([59, 59, 52, 52, 40, 38, 26]));
 rate("drive: holds a full car driving licence", "2025", [[17, 20, 32], [21, 29, 61], [30, 39, 72], [40, 49, 81], [50, 59, 84], [60, 69, 84], [70, null, 74]]);
 rate("walk: walks at least once a week, any purpose", "2023", [[16, 24, 71], [25, 34, 71], [35, 44, 69], [45, 54, 71], [55, 64, 71], [65, 74, 72], [75, 84, 61], [85, null, 36]]);
 rate("cycle: cycles at least once a week, any purpose", "2023", [[16, 24, 18], [25, 34, 17], [35, 44, 16], [45, 54, 12], [55, 64, 8], [65, 74, 5], [75, 84, 3], [85, null, 1]]);

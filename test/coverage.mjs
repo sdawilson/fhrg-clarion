@@ -44,6 +44,14 @@ ok(print.likelihoods.find((x) => x.label.startsWith("Cycles")).reading === "Lowe
 const none = t.audienceFor("Community Event", census, held);
 ok(!none.known && /no published age profile/.test(none.note) && !none.likelihoods.length, "a kind of source with no figures says so, rather than guessing");
 ok(t.audienceFor("Local Newspaper", null, held) === null && t.audienceFor("Local Newspaper", census, []) === null, "and with no Census or rates there's nothing to show");
+const ofcom = (name, values) => values.map((value, i) => ({ measure: `Local news in the last month or so: ${name}`, age_from: 16 + (i ? i * 10 - 1 : 0), age_to: i === 6 ? null : 24 + i * 10, value, year: "2026" }));
+const stand = [{ measure: "PROXY, not news-specific and not local: watched TV programmes live at the time of broadcast", age_from: 16, age_to: null, value: 50, year: "2024" }];
+const telly = t.audienceFor("Local Television", census, [...held, ...stand, ...ofcom("Television", [25, 29, 38, 39, 51, 59, 64])]);
+ok(telly.known && telly.note === "" && telly.overFiftyFive.audience > 50, "local television uses Ofcom's figures for local news");
+ok(/all live television/.test(t.audienceFor("Local Television", census, [...held, ...stand]).note), "and falls back to the stand-in, saying so, until the library has them");
+const social = t.audienceFor("Social Media", census, [...held, ...ofcom("Social media such as Facebook, X (formerly Twitter) or Instagram, etc.", [59, 59, 52, 52, 40, 38, 26])]);
+ok(social.known && social.overFiftyFive.audience < social.overFiftyFive.adults && /any social media/.test(social.note), "social media gets an age profile, younger than all adults");
+ok(/printed local magazines/.test(t.audienceFor("Local Newsletter", census, [...held, ...ofcom("Printed local magazines", [5, 9, 9, 13, 15, 14, 23])]).note), "and so does a newsletter, saying what it's based on");
 
 const row = (date, topic, tone, relevance, reach, adjusted) => ({ date, topic, tone, relevance, reach, adjusted });
 const sum = t.summariseCoverage([row("2026-10-30", "Potholes", "Critical", "High", 1000, 500), row("2026-10-20", "Potholes", "Neutral", "Some", 100, 100), row("2026-10-29", "Parking", "Critical", "None", 900, 900), row("2026-09-20", "Parking", "Neutral", "High", 50, 50), row("2026-06-01", "Parking", "Neutral", "High", 50, 50)], "2026-11-01");
@@ -87,6 +95,7 @@ ok((await api("/api/coverage/get", { code: WSX }, kirk)).status === 403, "and it
 r = await api("/api/coverage/get", { code: WSX }, member);
 ok(r.ready && !r.canEdit && !r.searchReady && r.sources.length === 0 && r.automatic.length === 4, "a member can read it, and the automatic sources are listed");
 ok(r.audiences["Local Newspaper"].known && r.audiences["Local Newspaper"].likelihoods.length === 5 && r.audiences["Local Newspaper"].likelihoods.every((x) => x.label !== "Likely to vote"), "with the audience worked out from the library");
+ok(r.audiences["Social Media"].known && r.audiences["Local Television"].known && r.audiences["Local Television"].note === "", "including Ofcom's local news figures");
 ok((await api("/api/coverage/source", { code: WSX, name: "X", type: "Local Newspaper" }, member)).status === 403, "a member can't change the sources");
 ok((await api("/api/coverage/source", { code: WSX, name: "", type: "Local Newspaper" }, lead)).status === 400 && (await api("/api/coverage/source", { code: WSX, name: "X", type: "Carrier pigeon" }, lead)).status === 400, "a source needs a name and a kind");
 
@@ -243,6 +252,7 @@ ticked.forEach((x) => { x.checked = true; });
 check.click();
 await see(d, /Found/);
 ok(/keeps only yes or no and the date/.test(text(d.querySelector(".main"))) && /doesn't mean no coverage/.test(text(d.querySelector(".main"))), "a check explains what it can't show");
+ok(!/\bnull\b/.test(text(d.querySelector(".main"))), "and nothing stray shows on the page");
 button(d, "Assess").click();
 const summary = d.querySelector('input[aria-label="In one line, what was it about?"]');
 ok(d.querySelector('input[type="date"]').value === recent.slice(0, 10), "assessing a result fills in its date");

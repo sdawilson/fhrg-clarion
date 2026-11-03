@@ -670,7 +670,7 @@ function audienceCard(d, type) {
       h("div", { class: "aud-key" }, h("span", {}, h("b", { class: "this" }), "This audience"), h("span", {}, h("b", { class: "all" }), "All adults here"))] : null,
     aud.likelihoods.length ? [h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Compared with all adults"), h("th", { class: "r" }, "Audience"), h("th", { class: "r" }, "All adults"), h("th", {}, "Reading"))),
       h("tbody", {}, aud.likelihoods.map((x) => h("tr", { title: x.from }, h("td", {}, x.label), h("td", { class: "r" }, fmt(x.audience)), h("td", { class: "r" }, fmt(x.adults)), h("td", {}, x.reading)))))),
-    h("p", { class: "note" }, "An estimate from national patterns by age, not a measure of these readers. Compare the direction, not the numbers. Sources: Community and Engagement Survey, National Travel Survey, Active Lives Survey, and Scottish Social Attitudes for contacting a council, the closest available.")] : null);
+    h("p", { class: "note" }, "An estimate from national patterns by age, not a measure of these readers. Compare the direction, not the numbers. Sources: Ofcom Local News and Media Survey 2026 (© Ofcom), Community and Engagement Survey, National Travel Survey, Active Lives Survey, and Scottish Social Attitudes for contacting a council, the closest available.")] : null);
   return box;
 }
 
@@ -707,7 +707,7 @@ function saidAssess(top, a, d) {
       const r = await API.call("/api/coverage/check", { code: a.code, keywords: list, sources: chosen, days: Number(days.value) });
       if (!r.ready) { said(m1, r.why, "err"); return; }
       said(m1, "", "");
-      clear(results).append(h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Publication"), h("th", {}, "Keyword"), h("th", {}, "Result"), h("th", {}, "Date"), h("th", {}, ""))),
+      add(clear(results), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Publication"), h("th", {}, "Keyword"), h("th", {}, "Result"), h("th", {}, "Date"), h("th", {}, ""))),
         h("tbody", {}, r.checks.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.keyword), h("td", {}, h("span", { class: x.result === "Found" ? "pill serious" : "pill" }, x.result)), h("td", {}, x.date ? fmtDate(x.date) : ""), h("td", {}, /^Found/.test(x.result) ? h("button", { class: "btn small", type: "button", onclick: () => { pickSource(x.source, x.date); summary.focus(); } }, "Assess") : null)))))),
         r.checks.some((x) => x.result === "Not checked") ? h("p", { class: "note" }, "\"Not checked\" means the search service didn't answer, so Clarion stopped asking. Try again later.") : null,
         h("p", { class: "note" }, "Clarion keeps only yes or no and the date: no headlines, extracts or links. \"No match\" doesn't mean no coverage, because paywalled and print-only pieces often won't show up."));

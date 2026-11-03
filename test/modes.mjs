@@ -85,7 +85,15 @@ ok(/Demonstration: made-up data/.test(text(d.querySelector(".rail"))) && !button
 w.location.hash = "#said/NORTHBRIDGE";
 await see(d, /Latest assessments/);
 ok(/Front-page item on the Relief Road closure/.test(text(d.querySelector(".main"))), "What's being said shows made-up assessments");
+w.location.hash = "#said/NORTHBRIDGE/assess";
+await see(d, /Record your assessment/);
+d.querySelector('input[aria-label="Keywords"]').value = "potholes, nonsense";
+[...d.querySelectorAll("button")].find((x) => x.textContent === "Check").click();
+await see(d, /No match/);
+const demoCheck = text(d.querySelector(".main"));
+ok(/nonsense\s*No match/.test(demoCheck) && /potholes\s*Found/.test(demoCheck) && !/Moor Lane/.test(demoCheck), "the demonstration's check follows what's typed");
 const demoSaid = pack.coverage;
+ok(["Local Newspaper", "Local News Website", "National Newspaper", "Local Newsletter", "Social Media", "Local Television", "Local Radio"].every((x) => demoSaid.audiences[x].known) && !demoSaid.audiences["Community Event"].known, "the demonstration's audiences come from the same figures");
 ok(demoSaid.rows.every((x) => demoSaid.topics.includes(x.topic)) && demoSaid.sources.every((x) => x.campaign.every((c) => demoSaid.topics.includes(c))), "every topic in the demonstration's coverage can be chosen");
 w.location.hash = "#attention/NORTHBRIDGE";
 await see(d, /What's driving it/);
