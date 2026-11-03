@@ -40,11 +40,30 @@ const row = (n, site) => ({ n, form: String(n), via: "paper", site, secs: null, 
 const replies = [...Array.from({ length: 30 }, (_, i) => row(i + 1, "Big")), ...Array.from({ length: 30 }, (_, i) => row(i + 31, "Small")), row(61, "By hand")];
 const sum = (w, list) => list.reduce((x, r) => x + w.get(r.n), 0);
 let w = t.weightsFor(replies, null, [{ name: "Big", when: "", interviewers: "", share: 75 }, { name: "Small", when: "", interviewers: "", share: 25 }, { name: "By hand", when: "", interviewers: "" }]);
-ok(w.bySite && w.weighted && Math.abs(sum(w.weights, replies.slice(0, 30)) / sum(w.weights, replies.slice(30, 60)) - 3) < 0.01, "each site counts for the share of adults it stands for, however many were asked there");
+ok(w.bySite && !w.weighted && Math.abs(sum(w.weights, replies.slice(0, 30)) / sum(w.weights, replies.slice(30, 60)) - 3) < 0.01, "each site counts for the share of adults it stands for, however many were asked there");
 ok(w.weights.get(61) === 1, "a site added by hand is left as it is");
 ok(!t.weightsFor(replies, null, []).bySite && !t.weightsFor(replies.slice(0, 30), null, [{ name: "Big", when: "", interviewers: "", share: 75 }, { name: "Small", when: "", interviewers: "", share: 25 }]).bySite, "no shares, or only one site heard from, means no weighting by site");
 w = t.weightsFor(replies, null, [{ name: "Big", when: "", interviewers: "", share: 99.9 }, { name: "Small", when: "", interviewers: "", share: 0.1 }]);
 ok(Math.max(...w.weights.values()) <= 5, "no one counts for more than five people");
+
+w = t.weightsFor(replies.map((r) => ({ ...r, site: r.site.toUpperCase() + " " })), null, [{ name: "Big", when: "", interviewers: "", share: 75 }, { name: "Small", when: "", interviewers: "", share: 25 }]);
+ok(w.bySite, "a site typed in different capitals still counts as that site");
+// age and sex stay balanced: the young are all at one site, and the older people mostly at the other
+const person = (n, site, a1, a2) => ({ ...row(n, site), answers: { a1, a2 } });
+const mixed = [...Array.from({ length: 40 }, (_, i) => person(i + 1, "Big", "16 to 24", "Female")), ...Array.from({ length: 10 }, (_, i) => person(i + 41, "Big", "65 to 74", "Female")), ...Array.from({ length: 10 }, (_, i) => person(i + 51, "Small", "16 to 24", "Female")), ...Array.from({ length: 40 }, (_, i) => person(i + 61, "Small", "65 to 74", "Female"))];
+const people = { cells: { "16 to 24|Female": 500, "65 to 74|Female": 500 }, adults: 1000 };
+w = t.weightsFor(mixed, people, [{ name: "Big", when: "", interviewers: "", share: 70 }, { name: "Small", when: "", interviewers: "", share: 30 }]);
+const all = sum(w.weights, mixed), young = sum(w.weights, mixed.filter((r) => r.answers.a1 === "16 to 24")), big = sum(w.weights, mixed.filter((r) => r.site === "Big"));
+ok(w.weighted && w.bySite && Math.abs(young / all - 0.5) < 0.02 && Math.abs(big / all - 0.7) < 0.02, "and both the sites and the balance of age and sex come out right");
+
+// ---- odd authorities
+const fine = (cols, rows, step) => Array.from({ length: cols * rows }, (_, i) => ({ ...grid(1, 1)[0], msoa_code: `C${i}`, place_name: `Spot ${i}`, lat: 52 + Math.floor(i / cols) * step, lng: -1 + (i % cols) * step * 1.6, aged_16_34: 1000 + (i % 7) * 200, town_code: "Bigcity" }));
+const compact = t.packFrom("Compact City", fine(6, 6, 0.012), [{ town_code: "Bigcity", town_name: "Bigcity", lat: 52.03, lng: -0.95, people: 300000 }], [], false);
+ok(compact.proposals[4]?.length === 4, "a compact city still gets a full set of sites");
+ok(Object.entries(t.packFrom("Small", grid(3, 1), [town("A", 0, 0, 12000), town("B", 2, 0, 9000)], [], false).proposals).every(([size, list]) => Number(size) === list.length), "a small authority isn't offered sizes it can't fill");
+const gaps = t.packFrom("Gaps", [...grid(4, 4), { ...grid(1, 1)[0], msoa_code: "X", lat: null, lng: null }], [town("A", 1, 1, 20000), town("A", 2, 2, 15000), town("B", 3, 3, 12000), town("C", 0, 3, 12000), town("D", 3, 0, 12000), town("E", 2, 0, 12000), town("F", 0, 0, 12000)], [], false);
+ok(gaps.hoods.length === 16, "a neighbourhood with no location is left off the map, not put at nought degrees");
+ok(gaps.towns.filter((x) => x.name === "A").length === 1, "and two places with the same name are offered once");
 
 // ---- through the API
 const WSX = "E10000032", KIRK = "E08000034";
@@ -83,10 +102,18 @@ ok(saved.plan.sites.length === 2 && saved.plan.sites[0].share === 40.5 && saved.
 ok(!("share" in saved.plan.sites[1]) && !("ages" in saved.plan.sites[1]) && !("lat" in saved.plan.sites[1]), "and impossible figures are dropped");
 ok(saved.plan.sure === 90 && saved.plan.margin === 10 && saved.plan.by === "sites" && saved.plan.perSite === 30 && saved.plan.perHour === 8, "and so are impossible settings");
 
+r = await api("/api/survey/save", { code: WSX, id, plan: { target: 21015, sites: saved.plan.sites, checks: [] } }, leadToken);
+ok(r.status === 400 && /5,000/.test(r.error), "an aim too large to hold is refused, not quietly ignored");
+
 await api("/api/survey/status", { code: WSX, id, status: "open" }, leadToken);
 const access = (await api("/api/survey/get", { code: WSX, id }, leadToken)).survey.access;
 r = await api("/api/s/get", { access });
 ok(r.survey.sites.join() === "Testhaven,Seaton" && !JSON.stringify(r).includes("40.5"), "a tablet gets the site names and nothing else about them");
+
+await api("/api/survey/status", { code: WSX, id, status: "closed" }, leadToken);
+r = await api("/api/survey/save", { code: WSX, id, plan: { target: 200, checks: [], sites: [{ name: "Elsewhere", when: "", interviewers: "", share: 90 }] } }, leadToken);
+const shut = (await api("/api/survey/get", { code: WSX, id }, leadToken)).survey;
+ok(r.status === 200 && shut.plan.sites.map((x) => x.name).join() === "Testhaven,Seaton" && shut.plan.target === 200, "a closed survey's sites are fixed, so its results can't shift");
 
 const page = await handleRequest(new Request("https://clarion.test/", { method: "GET" }));
 const csp = page.headers.get("content-security-policy");

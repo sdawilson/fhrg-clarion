@@ -117,9 +117,39 @@ button(d, "Save the plan").click();
 await until(() => [...d.querySelectorAll('[role="status"]')].filter((x) => x.textContent === "Saved.").length >= 2, "the plan to save");
 const saved = (await api("/api/survey/get", { code: WSX, id }, lead)).survey;
 ok(saved.locals.length === 2 && saved.locals[1].kind === "text" && saved.plan.sites.some((x) => x.name === "Market Square") && saved.plan.checks.length === 1, "questions and plan are saved");
+button(d, "Go back to the proposed sites").click();
+const spot = d.querySelector('.site-entry input[placeholder="The market square on a Saturday"]');
+spot.value = "Market hall"; spot.dispatchEvent(new w.Event("input"));
+choose("Margin", "±7");
+ok(d.querySelector('.site-entry input[placeholder="The market square on a Saturday"]').value === "Market hall", "what's typed against a site survives a change of level");
+choose("Margin", "±5");
+ok(aim() === 480 && /16 sites of 30/.test(plain()) && /Clarion proposes up to six sites/.test(plain()), "a level needing many sites says so");
+choose("Margin", "±10");
+choose("How sure", "99%");
+choose("Margin", "±3");
+choose("Results for", "Each constituency");
+ok(aim() > 5000 && /A survey can hold up to 5,000 replies/.test(plain()), "and an aim too large to hold is pointed out");
+[...d.querySelectorAll("tr")].find((x) => /Site survey/.test(x.textContent)).querySelector("button").click();
+const hand = [...d.querySelectorAll('.site-entry input[placeholder="Market Square, Horsham"]')].at(-1);
+ok(hand.value === "Market Square" && aim() === 150, "sites added by hand count towards the aim");
 const mapped = saved.plan.sites.filter((x) => x.share);
 ok(mapped.length === 4 && Math.abs(mapped.reduce((sum, x) => sum + x.share, 0) - 100) < 0.5 && mapped.every((x) => x.ages.reduce((sum, n) => sum + n, 0) === 30 && x.lat && x.lng), "with each site's share of adults and its age targets");
 ok(saved.plan.sure === 90 && saved.plan.margin === 10 && saved.plan.by === "sites" && saved.plan.target === 120, "and the level chosen");
+
+// a plan with two sessions in one town, typed by hand before there was a map
+const repeat = (await api("/api/survey/new", { code: WSX, title: "Two sessions" }, lead)).survey.id;
+await api("/api/survey/save", { code: WSX, id: repeat, plan: { target: 120, checks: [], by: "whole", sites: [{ name: "Testhaven", when: "Saturday", interviewers: "2" }, { name: "testhaven ", when: "Tuesday", interviewers: "1" }, { name: "The Hall", when: "", interviewers: "" }] } }, lead);
+let sessions = await open(lead, `#survey/${WSX}/${repeat}/setup`), e = sessions.window.document;
+await until(() => e.querySelector(".map-pin"), "the map");
+ok(e.querySelectorAll(".site-entry").length === 3 && e.querySelectorAll(".map-pin").length === 1, "two sessions in one town both stay, with one place on the map");
+ok(/Ask \d+ aged 16 to 34/.test(text(e.querySelector(".main"))), "and the page still works");
+[...e.querySelectorAll(".site-entry")][1].querySelector(".btn.ghost").click();
+ok(e.querySelectorAll(".site-entry").length === 2 && e.querySelectorAll(".map-pin").length === 1, "and one session can be taken off without the other");
+await api("/api/survey/status", { code: WSX, id: repeat, status: "open" }, lead);
+await api("/api/survey/status", { code: WSX, id: repeat, status: "closed" }, lead);
+sessions = await open(lead, `#survey/${WSX}/${repeat}/setup`); e = sessions.window.document;
+await until(() => /This survey is closed/.test(text(e.querySelector(".main"))), "the closed survey");
+ok(!e.querySelector(".map-pin") && !/Add a place/.test(text(e.querySelector(".main"))) && e.querySelector(".site-entry input").disabled, "a closed survey's sites can't be changed");
 
 // opening
 w.location.hash = `#survey/${WSX}/${id}/collect`;

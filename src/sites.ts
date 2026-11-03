@@ -35,8 +35,9 @@ const BIG_TOWN_SHARE = 0.6; // past this, one town is most of the authority, so 
 const OUTSIDE_KM = 6;
 
 /** A neighbourhood's share of adults, in thousandths, its position and its figures, ready for the page. */
-export type Hood = { lat: number; lng: number; share: number; rural: number; figures: number[]; town: string; label: string };
-export type Town = { name: string; lat: number; lng: number; people: number; local: number[]; proposable?: boolean };
+export type Hood = { lat: number; lng: number; share: number; adults: number; rural: number; figures: number[]; town: string; label: string };
+// A place is a named town, or a neighbourhood offered because one town is most of the authority
+export type Town = { name: string; lat: number; lng: number; people: number; local: number[]; neighbourhood?: boolean };
 export type SitesPack = {
   ready: true; name: string; adults: number; rural: number; measures: string[]; auth: number[]; spread: number[];
   hoods: number[][]; shapes: number[][][][]; towns: Town[]; proposals: Record<string, number[]>; tiles: boolean;
@@ -54,9 +55,9 @@ export function km(lng1: number, lat1: number, lng2: number, lat2: number): numb
 
 const pct = (part: unknown, whole: unknown) => (Number(whole) ? (Number(part) / Number(whole)) * 100 : 0);
 
-export function hoodFrom(r: Record<string, any>): Omit<Hood, "share"> & { adults: number } {
+export function hoodFrom(r: Record<string, any>): Omit<Hood, "share"> {
   return {
-    lat: Number(r.lat), lng: Number(r.lng), rural: Number(r.rural) ? 1 : 0, adults: Number(r.adults) || 0, town: String(r.town_code ?? ""), label: String(r.place_name || r.msoa_name || ""),
+    lat: r.lat === null ? NaN : Number(r.lat), lng: r.lng === null ? NaN : Number(r.lng), rural: Number(r.rural) ? 1 : 0, adults: Number(r.adults) || 0, town: String(r.town_code ?? ""), label: String(r.place_name || r.msoa_name || ""),
     figures: [
       pct(r.aged_16_34, r.adults), pct(r.aged_65_plus, r.adults), pct(r.households_no_car, r.households), pct(r.drive, r.workers), pct(r.walk_cycle, r.workers), pct(r.bus_train, r.workers),
       pct(r.people_most_deprived_20pct, r.imd_people),
@@ -72,7 +73,8 @@ function blend(hoods: Hood[], picks: number[]): number[] {
 /** The towns to offer: named towns, or, where one town is most of the authority, its neighbourhoods as well. */
 export function townsFrom(rows: Record<string, any>[], hoods: Hood[]): Town[] {
   const big = rows.filter((t) => Number(t.people) >= TOWN_MIN);
-  const chosen = (big.length >= MIN_TOWNS ? big : rows.filter((t) => Number(t.people) >= SMALL_TOWN_MIN)).slice(0, MAX_TOWNS);
+  const names = new Set<string>();
+  const chosen = (big.length >= MIN_TOWNS ? big : rows.filter((t) => Number(t.people) >= SMALL_TOWN_MIN)).filter((t) => { const fresh = !names.has(String(t.town_name)); names.add(String(t.town_name)); return fresh; }).slice(0, MAX_TOWNS);
   const nearest = (lng: number, lat: number) => hoods.reduce((best, h, i) => { const d = km(lng, lat, h.lng, h.lat); return d < best.d ? { d, i } : best; }, { d: Infinity, i: 0 });
   const towns: Town[] = chosen.map((t) => {
     const own = hoods.flatMap((h, i) => (h.town === String(t.town_code) ? [i] : []));
@@ -105,7 +107,7 @@ export function townsFrom(rows: Record<string, any>[], hoods: Hood[]): Town[] {
     const h = hoods[best];
     used.add(h.label);
     taken.push([h.lng, h.lat]);
-    towns.push({ name: h.label, people: Math.round(h.share), lat: h.lat, lng: h.lng, local: h.figures });
+    towns.push({ name: h.label, people: h.adults, lat: h.lat, lng: h.lng, local: h.figures, neighbourhood: true });
   }
   return towns;
 }
@@ -115,7 +117,7 @@ function proposable(towns: Town[]): number[] {
   const keep: number[] = [];
   towns.forEach((t, i) => {
     if (keep.length >= MAX_PROPOSABLE) return;
-    const satellite = t.people < SATELLITE_PEOPLE && keep.some((k) => towns[k].people >= LARGE_TOWN && km(t.lng, t.lat, towns[k].lng, towns[k].lat) < SATELLITE_KM);
+    const satellite = !t.neighbourhood && t.people < SATELLITE_PEOPLE && keep.some((k) => towns[k].people >= LARGE_TOWN && km(t.lng, t.lat, towns[k].lng, towns[k].lat) < SATELLITE_KM);
     if (!satellite && keep.every((k) => km(t.lng, t.lat, towns[k].lng, towns[k].lat) >= SPACING_KM)) keep.push(i);
   });
   return keep;
@@ -157,13 +159,16 @@ export function propose(hoods: Hood[], towns: Town[], auth: number[], spread: nu
   for (const size of SITE_COUNTS) {
     if (!pool.length) break;
     let best: number[] | null = null, bestScore = Infinity;
-    for (const rest of choose(pool.slice(1), Math.min(size, pool.length) - 1)) {
+    if (size > pool.length) break;
+    for (const rest of choose(pool.slice(1), size - 1)) {
       const picks = [pool[0], ...rest];
       const fit = fitOf(hoods, towns, auth, spread, picks, reach);
       if (fit && fit.score < bestScore) { bestScore = fit.score; best = picks; }
     }
     if (best) out[size] = best;
   }
+  // A very small authority may not have three places to choose from
+  if (!Object.keys(out).length && pool.length) out[pool.length] = pool;
   return out;
 }
 

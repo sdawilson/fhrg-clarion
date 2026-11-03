@@ -143,8 +143,9 @@ function readSite(x: any): Site {
 
 function readPlan(b: any, was: Plan): Plan {
   const target = Number(b?.target);
+  if (b?.target !== undefined && !(Number.isInteger(target) && target >= MIN_GROUP && target <= MAX_ANSWERS)) throw new FriendlyError(`Aim for between ${MIN_GROUP} and ${MAX_ANSWERS.toLocaleString("en-GB")} replies.`);
   return {
-    target: Number.isInteger(target) && target >= MIN_GROUP && target <= MAX_ANSWERS ? target : was.target,
+    target: b?.target === undefined ? was.target : target,
     sites: (Array.isArray(b?.sites) ? b.sites : []).map(readSite).filter((x: Site) => x.name).slice(0, MAX_SITES),
     checks: (Array.isArray(b?.checks) ? b.checks : []).filter((x: unknown) => ACCESS_CHECKS.includes(x as string)),
     sure: [90, 95, 99].includes(b?.sure) ? b.sure : was.sure,
@@ -160,7 +161,8 @@ function readPlan(b: any, was: Plan): Plan {
 export async function saveSurvey(c: Config, s: Survey, b: Record<string, any>): Promise<Survey> {
   return await withLock(surveyPath(c, s.code, s.id), async () => {
     const now = (await loadSurvey(c, s.code, s.id)) as Survey;
-    if (b.plan) now.plan = readPlan(b.plan, now.plan);
+    // Sites decide how replies are weighted, so a closed survey's are fixed and its results stay as they are
+    if (b.plan) now.plan = { ...readPlan(b.plan, now.plan), ...(now.status === "closed" ? { sites: now.plan.sites } : {}) };
     if (typeof b.collector === "string") now.collector = cleanText(b.collector, 160) || now.collector;
     if (Number.isInteger(b.printedTo) && b.printedTo > 0 && b.printedTo < 1e7) now.printedTo = Math.max(now.printedTo || 0, b.printedTo);
     if (now.status === "draft") {
@@ -392,22 +394,34 @@ function weightsByPeople(rows: Answer[], census: Census | null): { weights: Map<
   return { weights, weighted: true };
 }
 
-// Each site then counts for the share of adults it stands for, however many people were asked there. Sites with no
-// share, such as one added by hand, are left as they are.
+// Each site then counts for the share of adults it stands for, however many people were asked there, without
+// undoing the balance of age and sex: the two are adjusted in turn until both settle. Sites with no share, such as
+// one added by hand, are left as they are. The cap still holds, so a site with very few replies can fall short.
+const siteKey = (name: string) => name.trim().toLowerCase();
+const BALANCING_ROUNDS = 6;
 export function weightsFor(rows: Answer[], census: Census | null, sites: Site[] = []): { weights: Map<number, number>; weighted: boolean; bySite: boolean } {
   const { weights, weighted } = weightsByPeople(rows, census);
-  const shares = new Map(sites.filter((x) => x.share).map((x) => [x.name, x.share as number]));
-  const placed = rows.filter((r) => shares.has(r.site));
-  const seen = new Set(placed.map((r) => r.site));
-  if (seen.size < 2 || placed.length < MIN_GROUP) return { weights, weighted, bySite: false };
-  const wanted = [...seen].reduce((sum, name) => sum + (shares.get(name) as number), 0);
-  const total = placed.reduce((sum, r) => sum + (weights.get(r.n) as number), 0);
-  const factor = new Map([...seen].map((name) => {
-    const here = placed.filter((r) => r.site === name).reduce((sum, r) => sum + (weights.get(r.n) as number), 0);
-    return [name, (((shares.get(name) as number) / wanted) * total) / here];
-  }));
-  for (const r of placed) weights.set(r.n, Math.min(WEIGHT_CAP, (weights.get(r.n) as number) * (factor.get(r.site) as number)));
-  return { weights, weighted: true, bySite: true };
+  const shares = new Map(sites.filter((x) => x.share).map((x) => [siteKey(x.name), x.share as number]));
+  const placed = rows.filter((r) => shares.has(siteKey(r.site)));
+  const seen = [...new Set(placed.map((r) => siteKey(r.site)))];
+  if (seen.length < 2 || placed.length < MIN_GROUP) return { weights, weighted, bySite: false };
+  const wanted = seen.reduce((sum, name) => sum + (shares.get(name) as number), 0);
+  const sumOf = (list: Answer[]) => list.reduce((sum, r) => sum + (weights.get(r.n) as number), 0);
+  const groupOf = (r: Answer) => cellKey(r.answers.a1 ?? "", r.answers.a2 ?? "");
+  const groups = weighted ? [...new Set(rows.map(groupOf))].map((key) => { const list = rows.filter((r) => groupOf(r) === key); return { list, aim: sumOf(list) }; }) : [];
+  for (let round = 0; round < BALANCING_ROUNDS; round++) {
+    const total = sumOf(placed);
+    for (const name of seen) {
+      const here = placed.filter((r) => siteKey(r.site) === name), factor = (((shares.get(name) as number) / wanted) * total) / sumOf(here);
+      for (const r of here) weights.set(r.n, (weights.get(r.n) as number) * factor);
+    }
+    for (const g of groups) {
+      const factor = g.aim / (sumOf(g.list) || 1);
+      for (const r of g.list) weights.set(r.n, (weights.get(r.n) as number) * factor);
+    }
+  }
+  for (const r of rows) weights.set(r.n, Math.min(WEIGHT_CAP, weights.get(r.n) as number));
+  return { weights, weighted, bySite: true };
 }
 
 // ----- results
