@@ -50,7 +50,7 @@ export async function loadEnquiries(c: Config, code: string): Promise<Held> {
 // ----- bringing in counts
 
 /** Contact details, a postcode, a street address or a title. Not every name can be recognised, so rare labels are pooled too. */
-export const looksPersonal = (s: string) => scrubContacts(s) !== s || /\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i.test(s) || /\b\d+[a-z]?,?\s+([a-z'-]+\s+){1,3}(road|rd|street|st|avenue|ave|lane|close|drive|dr|way|crescent|place|court|gardens|terrace|grove|walk|hill|rise|mews|square)\b/i.test(s) || /\b(mr|mrs|ms|miss|mx|dr|cllr|councillor|sir|rev)\.?\s+[a-z]/i.test(s);
+export const looksPersonal = (s: string) => scrubContacts(s) !== s || /(?<!\d)\+?\d(?:[\s()./-]*\d){9,12}(?!\d)/.test(s) || /\b[a-z]{1,2}\d[a-z\d]?[\s-]*\d[a-z]{2}\b/i.test(s) || /\b\d+[a-z]?,?\s+([a-z'\u2019.-]+\s+){1,3}(road|rd|street|st|avenue|ave|lane|close|drive|dr|way|crescent|place|court|gardens|terrace|grove|walk|hill|rise|mews|square)\b/i.test(s) || /\b(mr|mrs|ms|miss|mx|dr|cllr|councillor|sir|rev)\.?\s+[a-z]/i.test(s);
 
 /** A category, area or route as sent. Anything long, or that looks like contact details, isn't a label and is left out. */
 function readLabel(v: string): string {
@@ -132,7 +132,8 @@ export async function removeImport(c: Config, p: Pilot, id: unknown): Promise<vo
     const held = await loadEnquiries(c, p.code), gone = held.imports.find((x) => x.id === id);
     if (!gone) throw new FriendlyError("That import wasn't found.", 404);
     const months = Object.fromEntries(Object.entries(held.months).filter(([m]) => !gone.months.includes(m)));
-    await savePretty(c, path(c, p.code), { ...held, months, imports: held.imports.filter((x) => x.id !== id) });
+    const stillHeld = new Set(Object.values(months).flatMap((m) => Object.keys(m.categories)));
+    await savePretty(c, path(c, p.code), { ...held, months, matches: Object.fromEntries(Object.entries(held.matches).filter(([name]) => stillHeld.has(name))), imports: held.imports.filter((x) => x.id !== id) });
   });
 }
 
@@ -142,6 +143,7 @@ export async function saveMatch(c: Config, p: Pilot, b: any, topics: string[]): 
   if (topic && !topics.includes(topic)) throw new FriendlyError("Choose a topic.");
   await withLock(path(c, p.code), async () => {
     const held = await loadEnquiries(c, p.code);
+    if (!Object.values(held.months).some((m) => Object.hasOwn(m.categories, category))) throw new FriendlyError("That category wasn't found.", 404);
     await savePretty(c, path(c, p.code), { ...held, matches: { ...held.matches, [category]: topic } });
   });
 }
@@ -186,7 +188,7 @@ const shift = (month: string, by: number) => { const d = new Date(Date.UTC(Numbe
 export function enquiriesView(held: Held, adults: number | null, topics: string[]) {
   const months = Object.keys(held.months).sort(), latest = months.at(-1) ?? "";
   if (!latest) return { ready: false as const };
-  const topicOf = (name: string) => (name in held.matches ? held.matches[name] : topicFor(name, topics));
+  const topicOf = (name: string) => (Object.hasOwn(held.matches, name) ? held.matches[name] : topicFor(name, topics));
   const total = (m: Month | undefined, keep: (name: string) => boolean) => (m ? Object.entries(m.categories).filter(([name]) => keep(name)).reduce((sum, [, v]) => sum + v[0] + v[1], 0) : undefined);
   const now = held.months[latest], names = [...new Set(months.flatMap((m) => Object.keys(held.months[m].categories)))].sort();
   const perThousand = (n: number) => (adults ? round((n / adults) * 1000) : null);
@@ -278,11 +280,10 @@ export function postsFromFeed(xml: string): Post[] {
 async function fetchOwn(address: string, p: Pilot): Promise<{ text: string; at: string }> {
   let at = address;
   for (let hop = 0; hop < 4; hop++) {
+    if (!ownSite(at, p)) throw new Error("that address isn't one of the council's own sites");
     const res = await fetchWithTimeout(at, { redirect: "manual", headers: { "User-Agent": UA, Accept: "text/html,application/rss+xml,application/xml;q=0.9,*/*;q=0.8" } }, 12000);
     if (res.status >= 300 && res.status < 400) {
-      const next = new URL(res.headers.get("location") ?? "", at).href;
-      if (!ownSite(next, p)) throw new Error("the news page moves to a site that isn't the council's own");
-      at = next;
+      at = new URL(res.headers.get("location") ?? "", at).href; // checked at the top of the loop
       continue;
     }
     if (!res.ok) throw new Error(`${new URL(at).hostname} answered ${res.status}`);

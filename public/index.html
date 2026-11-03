@@ -551,7 +551,7 @@ async function summaryView(page, a) {
   page.append(body);
   const view = App.viewId;
   let d, coverage, att;
-  try { [d, coverage, att] = await Promise.all([API.call("/api/authority", { code: a.code }), API.call("/api/coverage/summary", { code: a.code }).catch(() => null), API.call("/api/attention", { code: a.code })]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { [d, coverage, att] = await Promise.all([API.call("/api/authority", { code: a.code }), API.call("/api/coverage/summary", { code: a.code }).catch(() => null), API.call("/api/attention", { code: a.code }).catch(() => ({ ready: false, needs: "" }))]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
   if (view !== App.viewId) return;
   const street = d.evidence.streets[0] ?? null; // the latest
   const assessed = coverage?.summary ?? { pieces: 0, previous: 0 };
@@ -566,7 +566,7 @@ async function summaryView(page, a) {
   clear(body).append(pageHead(`${a.name}: how people feel about their roads`, `From ${from.join(", ")} and public reports.`), h("div", { class: "grid g4" }, tiles), readingCard(a, d));
   if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
   else add(body, h("div", { class: "grid g-wide" }, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Shows what's loud, what's felt, and what nobody is reporting yet."))),
-    h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, "This needs assessed pieces, and a street survey or enquiries."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))), roleCard()));
+    h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, att.needs ? `This needs ${att.needs}.` : "This can't be worked out just now."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))), roleCard()));
   add(body, compareCard(a, d, street));
 }
 function roleCard() {
@@ -601,7 +601,7 @@ function attentionCard(att) {
     label(70, 58, "Felt and reported", "q-zone-name"), label(590, 58, "Loud, not widely felt", "q-zone-name", "end"), label(70, 380, "Early signs: felt, not reported", "q-zone-name early"), label(590, 380, "Quiet and minor", "q-zone-name", "end"));
   for (const t of att.topics) {
     const x = X(t.concern), y = Y(t.attention), cls = t.early ? "early" : "";
-    const left = t.topic.length * 6.6 > (x < midX ? midX : 600) - x - 12; // a name stays on its own side of the line
+    const width = t.topic.length * 6.6, left = width > (x < midX ? midX : 600) - x - 12 && x - 12 - width >= 0; // a name stays on its own side of the line, if it fits there
     chart.append(svg("circle", { class: `q-dot ${cls}`, cx: x, cy: y, r: t.early ? 7 : 6 }), label(x + (left ? -12 : 12), y + 4, t.topic, `q-name ${cls}`, left ? "end" : "start"));
   }
   chart.append(label(330, 418, "Public concern (rank): higher to the left", "q-axis", "middle"));
@@ -819,15 +819,15 @@ const ENQUIRY_TEMPLATE = "Date raised,Service,Ward,Method,Type\n01/10/2026,Road 
 const NOT_USED = "";
 const COLUMN_USES = [[NOT_USED, "Not used"], ["date", "Date"], ["category", "Category"], ["area", "Ward or road"], ["route", "How it came in"], ["kind", "Enquiry or complaint"]];
 const COLUMN_GUESSES = [["date", /date|raised|created|received|logged|opened/i], ["category", /service|categor|topic|issue|problem|request|reason/i], ["area", /ward|parish|division|road|street|area|locality|town/i], ["route", /method|channel|source|route|how|via/i], ["kind", /type|complaint|class/i]];
-const PLACE_HEADING = /ward|parish|division|locality|\btown\b|\broad\b|\bstreet\b(?! ?light)/i;
+const PLACE_HEADING = /ward|parish|division|locality|location|village|(?<!service )\barea\b|\btown\b|\broad\b|\bstreet\b(?! ?light)/i;
 // Always personal, whatever else the heading says. "Ward name" and "Service description" are the only kind of exception
 const personalColumn = (name) => {
-  const n = name.trim().toLowerCase();
-  if (/address|e-?mail|phone|mobile|tele|post ?code|dob|birth/.test(n)) return true;
-  if (/^(ward|street|road|service|categor(y|ies)|area|parish|division|town|locality|method|channel)[ _-](name|description)$/.test(n)) return false;
+  const n = name.trim().toLowerCase().replace(/[_-]+/g, " ");
+  if (/address|e ?mail|phone|mobile|tele|\btel\b|post ?code|dob|birth/.test(n)) return true;
+  if (/^(ward|street|road|service|categor(y|ies)|area|parish|division|town|locality|method|channel) (name|description)$/.test(n)) return false;
   return /name|user|customer|citizen|resident|caller|complainant|requester|requestor|applicant|reporter|person|contact\b(?! (method|channel|type))|owner|agent|officer|staff|\bby\b|assigned|note|comment|descri|detail|free ?text|message|narrative|summary|subject|title/.test(n);
 };
-const looksPersonal = (s) => /[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+/.test(s) || /(?<!\d)\+?\d(?:[\s().-]*\d){9,12}(?!\d)/.test(s) || /\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/i.test(s) || /\b\d+[a-z]?,?\s+([a-z'-]+\s+){1,3}(road|rd|street|st|avenue|ave|lane|close|drive|dr|way|crescent|place|court|gardens|terrace|grove|walk|hill|rise|mews|square)\b/i.test(s) || /\b(mr|mrs|ms|miss|mx|dr|cllr|councillor|sir|rev)\.?\s+[a-z]/i.test(s);
+const looksPersonal = (s) => /[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+/.test(s) || /(?<!\d)\+?\d(?:[\s()./-]*\d){9,12}(?!\d)/.test(s) || /\b[a-z]{1,2}\d[a-z\d]?[\s-]*\d[a-z]{2}\b/i.test(s) || /\b\d+[a-z]?,?\s+([a-z'\u2019.-]+\s+){1,3}(road|rd|street|st|avenue|ave|lane|close|drive|dr|way|crescent|place|court|gardens|terrace|grove|walk|hill|rise|mews|square)\b/i.test(s) || /\b(mr|mrs|ms|miss|mx|dr|cllr|councillor|sir|rev)\.?\s+[a-z]/i.test(s);
 function readCsv(text) {
   const clean = text.replace(/^\ufeff/, ""), first = clean.split(/\r?\n/, 1)[0];
   const sep = [",", ";", "\t"].sort((x, y) => first.split(y).length - first.split(x).length)[0];
@@ -1029,7 +1029,7 @@ async function adminView(page) {
       h("tbody", {}, d.topics.map((x) => h("tr", {}, h("th", {}, x.topic), x.regions.map((n, i) => h("td", { class: shade(n, d.regions[i].authorities) }, n))))))),
       h("div", { class: "heat-legend" }, h("span", {}, "Fewer authorities"), [0, 2, 4, 5].map((i) => h("i", { class: `h-s${i}` })), h("span", {}, "More authorities"))] : h("p", { class: "muted" }, "This fills in once authorities have sorted their street survey comments.")),
     h("div", { class: "grid g2" },
-      h("section", { class: "card" }, h("h3", {}, "Early signs in more than one authority"), d.earlySigns.length ? h("ul", {}, d.earlySigns.map((x) => h("li", {}, `${x.topic}: ${fmt(x.authorities)} authorities`))) : h("p", { class: "muted" }, "None at the moment."), h("p", { class: "note" }, "Felt by many, reported by few. No authority is named here.")),
+      h("section", { class: "card" }, h("h3", {}, "Early signs in more than one authority"), d.earlySigns.length ? h("ul", {}, d.earlySigns.map((x) => h("li", {}, `${x.topic}: ${fmt(x.authorities)} authorities`))) : h("p", { class: "muted" }, "None at the moment."), d.earlySignsMissing ? h("p", { class: "note" }, "Some authorities couldn't be read just now, so this may be incomplete.") : null, h("p", { class: "note" }, "Felt by many, reported by few. No authority is named here.")),
       h("section", { class: "card" }, h("h3", {}, "News that reached people"), h("div", { class: "empty" }, "This comes once impact notes can be compared across authorities."))),
     h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Core questions by authority"), h("p", {}, "In alphabetical order, not ranked. A difference may reflect local choices, geography or who was asked. For FHRG administrators only."))),
       h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Authority"), h("th", { class: "r" }, "Replies"), h("th", { class: "r" }, "Satisfied"), h("th", { class: "r" }, "Say worse"), h("th", {}, "Direction of mood"), h("th", {}, "Latest survey"))),

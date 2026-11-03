@@ -32,6 +32,16 @@ c = t.compare([said("A", 5), said("B", 3), said("C", 1), said("D", 1)], [{ topic
 ok(row("B").concern === 1 && row("A").concern === 2 && row("C").concern === 3, "with both held, each counts equally, however different their sizes");
 c = t.compare([said("A", 2), said("B", 1)], [{ topic: "C", count: 1 }], []);
 ok(c.ready && c.topics.length === 3 && row("C").attention === 3 && row("C").pieces === 0, "a topic nobody has reported comes last for attention");
+c = t.compare([said("A", 5), said("Other", 9), said("B", 1)], [{ topic: "Other", count: 50 }, { topic: "A", count: 2 }], [contact("Other", 900), contact("C", 10)]);
+ok(c.ready && !c.topics.some((x) => x.topic === "Other"), "a catch-all like Other isn't a topic, so it can't be an early sign");
+c = t.compare([said("Aardvark", 1), said("Bee", 1), said("Cat", 5), said("Dog", 5)], [{ topic: "Zebra", count: 9 }, { topic: "Cat", count: 3 }], []);
+ok(!c.earlySigns.some((x) => x.topic === "Aardvark" || x.topic === "Bee"), "a topic nobody has raised can't be an early sign, however a tie falls");
+ok(!c.topics.filter((x) => !x.pieces).some((x) => /over-react|be seen to/.test(x.action)), "and a topic nobody has reported can't count as loud");
+ok(/street survey or enquiries/.test(t.compare([said("A", 1)], [{ topic: "A", count: 0 }], [contact("B", 0, 0)]).needs), "rows with nothing in them don't count as having a measure of concern");
+const kinds = (said2, contacts) => t.kindsHeld({ surveys: [], signals: { fixMyStreet: { ok: false }, petitions: { ok: false }, questions: { ok: false } }, said: said2, contacts });
+ok(kinds([said("A", 1)], [contact("B", 2)]).length === 0, "one piece and a couple of contacts aren't two kinds of signal, so can't make a change in mood");
+ok(kinds([said("A", 3), said("B", 2)], [contact("B", 25, 5)]).join() === "actions,open talk", "five pieces and 30 contacts are");
+ok(t.findGaps({ needed: ["Fault report counts by category and month"] }, [{}], { fixMyStreet: { ok: true }, petitions: { ok: true }, questions: { ok: true } }, { unavailable: [] }, true, true).length === 0, "enquiries answer the gap for fault report counts");
 
 // ---- through the API
 newsTopics.push("Parking", "Pavements");
@@ -83,13 +93,13 @@ ok(!JSON.stringify(r.earlySigns).includes("West Sussex") && !JSON.stringify(r.ea
 
 // ---- the pages
 const html = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-async function open(token, hash) {
+async function open(token, hash, swap = {}) {
   const dom = new JSDOM(html, {
     url: `https://clarion.test/${hash}`, runScripts: "dangerously", pretendToBeVisual: true,
     beforeParse(w) {
       w.localStorage.setItem("clarion_token", token);
       w.scrollTo = () => {};
-      w.fetch = async (url, opts = {}) => { const res = await handleRequest(new Request(new URL(url, "https://clarion.test").href, opts)); const text = await res.text(); return { ok: res.ok, status: res.status, json: async () => JSON.parse(text) }; };
+      w.fetch = async (url, opts = {}) => { if (swap[url]) return swap[url](); const res = await handleRequest(new Request(new URL(url, "https://clarion.test").href, opts)); const text = await res.text(); return { ok: res.ok, status: res.status, json: async () => JSON.parse(text) }; };
     },
   });
   await until(() => dom.window.document.querySelector(".main .page > *"), "the page to start");
@@ -105,6 +115,15 @@ ok(!/\bnull\b|undefined/.test(main), "with nothing stray on the page");
 dom = await open(member, `#a/${WSX}`); d = dom.window.document;
 await see(d, /Early signs/);
 ok(d.querySelector(".quad"), "and the Summary page shows it too");
+dom = await open(member, `#a/${WSX}`, { "/api/attention": () => ({ ok: false, status: 500, json: async () => ({ error: "Out of order" }) }) }); d = dom.window.document;
+await see(d, /how people feel about their roads/);
+ok(/can't be worked out just now/.test(text(d.querySelector(".main"))) && !/Out of order/.test(text(d.querySelector(".main"))), "the Summary page still opens if the comparison can't be read");
+const long = (topic, concern) => ({ topic, concern, attention: 1, early: false, action: "Keep watching", kinds: "" });
+const many = { ready: true, usesSurvey: true, usesEnquiries: false, earlySigns: [], topics: [long("A", 1), long("Potholes and road condition", 2), ...[3, 4, 5, 6, 7, 8].map((n) => long(`T${n}`, n))] };
+dom = await open(member, `#attention/${WSX}`, { "/api/attention": () => ({ ok: true, status: 200, json: async () => many }) }); d = dom.window.document;
+await see(d, /What's driving it/);
+const name = [...d.querySelectorAll(".q-name")].find((x) => x.textContent.startsWith("Potholes"));
+ok(name.getAttribute("text-anchor") === "start", "a long topic name isn't turned back off the edge of the chart");
 await addUser(5, "lead@lincolnshire.gov.uk", "Lin Lead", 10, "lead");
 const lin = await login("lead@lincolnshire.gov.uk");
 dom = await open(lin, "#attention/E10000019"); d = dom.window.document;

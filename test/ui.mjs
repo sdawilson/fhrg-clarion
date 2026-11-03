@@ -57,7 +57,7 @@ await until(() => [...d.querySelectorAll("h2")].some((x) => x.textContent === "M
 let page = text(d.querySelector(".main"));
 ok(d.querySelector("h1").textContent === "West Sussex: how people feel about their roads", "a lead goes straight to their authority");
 ok(/Condition of highways/.test(page) && /24 \/ 100/.test(page) && /Amber/.test(page), "the summary leads with survey results and the DfT rating");
-ok(/This needs assessed pieces, and a street survey or enquiries/.test(page), "and says what the comparison is waiting for");
+ok(/This needs assessed press and media pieces/.test(page), "and says what the comparison is waiting for");
 ok(/Not enough authorities have results yet/.test(page), "and no FHRG figure appears yet");
 ok(!d.querySelector(".demo-banner"), "there's no demonstration banner for a member");
 ok([...d.querySelectorAll(".nav button")].map((b) => b.textContent).join() === "Summary,What's being said,Attention and concern,Impact notes,Street surveys,Evidence,Sources & method", "the rail lists the sections");

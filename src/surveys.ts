@@ -575,7 +575,7 @@ export function summarise(s: Survey, all: Answer[], census: Census | null): Stre
   return {
     title: s.title, id: s.id, status: s.status, ran: s.openedOn, current: Date.now() - Date.parse(s.updated) < CURRENT_DAYS * DAY_MS, responses: results.used, weighted: results.weighted,
     satisfied, dissatisfied: pctOf(results, "c1", [...DISSATISFIED]), better: pctOf(results, "c2", ["Better"]), worse: pctOf(results, "c2", ["Worse"]), blameCouncil: pctOf(results, "c4", ["The local council"]),
-    topics: topicCounts(cleanComments(s, rows)).slice(0, 6),
+    topics: topicCounts(cleanComments(s, rows)),
     note: "A street sample, not a random one, so this is indicative only.",
   };
 }

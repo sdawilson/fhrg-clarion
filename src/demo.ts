@@ -181,7 +181,8 @@ const enquiryMonth = (pothole: number, pavement: number, flood: number, light: n
 });
 function demoEnquiries(topics: string[]) {
   const months = { "2026-07": enquiryMonth(1500, 680, 300, 330), "2026-08": enquiryMonth(1450, 690, 310, 340), "2026-09": enquiryMonth(1480, 670, 330, 345), "2026-10": enquiryMonth(1976, 685, 537, 340) };
-  const note = { id: "d1", months: Object.keys(months), rows: 21000, added: 20986, skipped: 14, at: WHEN, by: "Demo officer" };
+  const added = Object.values(months).flatMap((m) => Object.values(m.categories)).reduce((sum, [enquiries, complaints]) => sum + enquiries + complaints, 0);
+  const note = { id: "d1", months: Object.keys(months), rows: added + 14, added, skipped: 14, at: WHEN, by: "Demo officer" };
   return {
     canEdit: true, adults: ADULTS, topics, view: enquiriesView({ months, matches: {}, imports: [note], page: "" }, ADULTS, topics), imports: [note],
     website: { page: "", read: true, posts: [{ title: "Winter gritting routes confirmed", url: "", date: "2026-10-28", topic: "Winter service" }, { title: "Moor Lane resurfacing starts next month", url: "", date: "2026-10-21", topic: "Potholes" }] },
@@ -287,9 +288,9 @@ export function buildPack() {
     surveyList: { canEdit: true, surveys: [autumn, winter].map((s) => ({ id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: s.id === autumn.id ? rows.length : 0, target: s.plan.target })) },
     surveys: pages, sites: SITE_PACK,
     suggestions: [
-      { text: "Have you heard about the closure of the Relief Road?", kind: "choice", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"], reason: "Loud: has it reached people?", topic: "Relief Road closure", basedOn: ["Impact note"], why: "41 items in four weeks, but nothing yet shows how many people it affects." },
+      { text: "Have you heard about the closure of the Relief Road?", kind: "choice", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"], reason: "Loud: has it reached people?", topic: "Relief Road closure", basedOn: ["Impact note"], why: "5 assessed pieces in four weeks, but nothing yet shows how many people it affects." },
       { text: "Over the past year, have potholes near you been repaired faster, slower or about the same?", kind: "choice", options: ["Faster", "About the same", "Slower", "Don't know"], reason: "A promise: do people believe it?", topic: "Pothole repairs", basedOn: ["Impact note", "Fault reports"], why: "The council promised faster repairs. This tests whether people believe it." },
-      { text: "How much does street lighting at night matter to you?", kind: "choice", options: ["A great deal", "A fair amount", "Not very much", "Not at all", "Don't know"], reason: "Loud: is it widely felt?", topic: "Street lighting", basedOn: ["Petitions"], why: "28 items, most about one campaign. It may be a strong view held by few." },
+      { text: "How much does street lighting at night matter to you?", kind: "choice", options: ["A great deal", "A fair amount", "Not very much", "Not at all", "Don't know"], reason: "Loud: is it widely felt?", topic: "Street lighting", basedOn: ["Petitions"], why: "4 assessed pieces, most about one campaign. It may be a strong view held by few." },
       { text: "How would you rate the condition of the pavements near where you live?", kind: "choice", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], reason: "Quiet: is it wider than it looks?", topic: "Pavements", basedOn: ["Fault reports"], why: "Few press items, but fault reports are rising." },
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },

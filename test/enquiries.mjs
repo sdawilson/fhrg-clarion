@@ -1,7 +1,7 @@
 // Enquiries and the council's own news: the rules on their own, then the routes and the page against the simulators.
 import fs from "node:fs";
 import { JSDOM } from "jsdom";
-import { addUser, files, getText, hooks, newsTopics, until } from "./sim.mjs";
+import { addUser, files, getText, hooks, newsTopics, putText, until } from "./sim.mjs";
 const { handleRequest } = await import("./.build/app.mjs");
 const t = await import("./.build/internals.mjs");
 
@@ -26,10 +26,11 @@ const sent = (months, over = {}) => ({ rows: 146, skipped: 0, months, ...over })
 const imported = t.readImport(sent({ "2026-10": month() }), "2026-11");
 ok(imported.added === 146 && imported.months["2026-10"].categories["Road defects"][1] === 20, "counts are read back and added up");
 ok(imported.months["2026-10"].hiddenAreas === 1 && !("Tiny" in imported.months["2026-10"].areas) && imported.months["2026-10"].areas.Moorside === 60, "an area under 10 isn't kept by name, even if a browser sends it");
-for (const x of ["12 Acacia Avenue", "Flat 2, 14b High Street", "BN1 1AA", "Mrs Brown", "Cllr Jones", "a.person@example.com", "01234 567890"]) ok(t.looksPersonal(x), `"${x}" is recognised as personal`);
+for (const x of ["12 Acacia Avenue", "Flat 2, 14b High Street", "12 St Mary\u2019s Road", "12 St. Mary's Road", "BN1 1AA", "BN1-1AA", "Mrs Brown", "Cllr Jones", "a.person@example.com", "01234 567890", "01234/567890"]) ok(t.looksPersonal(x), `"${x}" is recognised as personal`);
 for (const x of ["Road defects", "Street lights", "A27 Worthing Road", "24 hour parking", "20mph limits", "St Mary's Ward"]) ok(!t.looksPersonal(x), `"${x}" isn't`);
 const noted = t.readImport(sent({ "2026-10": { categories: { "Road defects": [5, 0], ["x".repeat(61)]: [5, 0], "Call 01234 567890": [5, 0], "a.person@example.com": [5, 0], __proto__x: [1, 0], "['__proto__']": [1, 0] }, areas: { "b.person@example.com": 40 }, routes: {} } }, { rows: 12 }), "2026-11");
 ok(!Object.keys(noted.months["2026-10"].categories).some((k) => /x{61}|0123|@/.test(k)) && !Object.keys(noted.months["2026-10"].areas).length, "anything long, or that looks like contact details, is left out even if it's sent");
+const putJson = (path, value) => putText(path, JSON.stringify(value));
 const refusal = (fn) => { try { fn(); return ""; } catch (e) { return e.message; } };
 ok(/hasn't finished/.test(refusal(() => t.readImport(sent({ "2026-11": month() }), "2026-11"))) && /hasn't finished/.test(refusal(() => t.readImport(sent({ "2026-12": month() }), "2026-11"))) && /can't be read/.test(refusal(() => t.readImport(sent({ "20-10": month() }), "2026-11"))), "the month you're in, a future month, or one that can't be read, is refused");
 const names = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`Pat Lee ${i}`, [1, 0]]));
@@ -49,6 +50,7 @@ ok(v.areas.length === 2 && v.hiddenAreas === 1 && !JSON.stringify(v).includes("T
 ok(v.routes[0].name === "Online" && v.routes[0].share === 75, "and the routes in are shown as shares");
 ok(t.enquiriesView({ months: { "2026-10": month({ routes: { Online: 90, "Low Green Office": 4 } }) }, matches: {}, imports: [], page: "" }, 100000, TOPICS).routes.map((x) => x.name).join() === "Online,Other routes", "a route with fewer than 10 contacts is pooled too");
 ok(t.enquiriesView({ ...held, matches: { Other: "Parking", "Road defects": "" } }, 100000, TOPICS).rows.some((x) => x.topic === "Parking") && !t.enquiriesView({ ...held, matches: { "Road defects": "" } }, 100000, TOPICS).rows.some((x) => x.topic.startsWith("Potholes")), "an officer's own match beats the suggestion");
+ok(t.enquiriesView({ ...held, months: { "2026-10": month({ categories: { toString: [5, 0], constructor: [5, 0] } }) } }, 1000, TOPICS).ready, "an odd category name can't break the page");
 ok(t.enquiriesView({ ...held, months: {} }, 100, TOPICS).ready === false && t.enquiriesView(held, null, TOPICS).rows[0].perThousand === null, "nothing held says so, and no Census figures means no rate");
 
 const own = { ownSites: ["westsussex.gov.uk", "kirkleestogether.co.uk"] };
@@ -112,6 +114,8 @@ const stored = getText(files("").find((k) => k.endsWith(`${WSX}/enquiries.json`)
 ok(!stored.includes("Tiny") && JSON.parse(stored).months[M1].hiddenAreas === 1, "small areas aren't stored by name");
 ok((await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Made up" }, lead)).status === 400, "a category can only go to a real topic");
 ok((await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Parking" }, member)).status === 403, "by a lead");
+ok((await api("/api/enquiries/match", { code: WSX, category: "Jane Smith", topic: "Parking" }, lead)).status === 404, "and only a category that's held, so nothing else can be stored this way");
+ok(!getText(files("").find((k) => k.endsWith(`${WSX}/enquiries.json`))).includes("Jane Smith"), "and it isn't");
 await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Parking" }, lead);
 r = await api("/api/enquiries/get", { code: WSX }, lead);
 ok(r.view.rows.some((x) => x.topic === "Parking" && x.categories.join() === "Other") && !r.view.unmatched.categories.includes("Other"), "and that's kept");
@@ -119,6 +123,11 @@ ok((await api("/api/enquiries/remove", { code: WSX, id: "nope" }, lead)).status 
 await api("/api/enquiries/remove", { code: WSX, id: r.imports.find((x) => x.months.includes(M2)).id }, lead);
 r = await api("/api/enquiries/get", { code: WSX }, lead);
 ok(r.view.monthsHeld === 1 && r.imports.length === 1, "taking an import out removes its month");
+await api("/api/enquiries/import", { code: WSX, rows: 12, months: { [M2]: { categories: { "Short lived": [5, 0] }, areas: {}, routes: {} } } }, lead);
+await api("/api/enquiries/match", { code: WSX, category: "Short lived", topic: "Parking" }, lead);
+r = await api("/api/enquiries/get", { code: WSX }, lead);
+await api("/api/enquiries/remove", { code: WSX, id: r.imports.find((x) => x.months.includes(M2)).id }, lead);
+ok(!getText(files("").find((k) => k.endsWith(`${WSX}/enquiries.json`))).includes("Short lived"), "and its categories go with it");
 
 ok(r.website.read === false && r.website.posts.length === 0, "a news page that can't be read says so");
 ok((await api("/api/enquiries/page", { code: WSX, url: "https://example.com/news" }, lead)).status === 400 && (await api("/api/enquiries/page", { code: WSX, url: "http://169.254.169.254/latest" }, lead)).status === 400 && (await api("/api/enquiries/page", { code: WSX, url: "https://kirkleestogether.co.uk/" }, lead)).status === 400, "only the council's own site can be set, not another's");
@@ -129,6 +138,12 @@ r = await api("/api/enquiries/get", { code: WSX }, lead);
 ok(r.website.read && r.website.posts.length === 2 && r.website.posts[0].title.startsWith("Winter") && r.website.posts.every((x) => x.topic) && !JSON.stringify(r.website).includes("Robert Plant"), "only posts about roads are listed, newest first");
 const sources = await api("/api/coverage/get", { code: WSX }, lead);
 ok(sources.automatic.some((x) => /news page/.test(x.name) && x.last === "2026-11-03"), "and the sources list shows when it last found one");
+let asked = 0;
+pages.set("https://www.kirklees.gov.uk/off-the-list/", () => { asked++; return new Response("<p>Not ours</p>"); });
+const heldFile = files("").find((k) => k.endsWith(`${WSX}/enquiries.json`));
+await putJson(heldFile, { ...JSON.parse(getText(heldFile)), page: "https://www.kirklees.gov.uk/off-the-list/" });
+r = await api("/api/enquiries/get", { code: WSX }, lead);
+ok(r.website.read === false && asked === 0, "an address already saved is checked again before it's read");
 pages.set("https://www.westsussex.gov.uk/moved/", page("", 302, { location: "https://example.com/elsewhere" }));
 await api("/api/enquiries/page", { code: WSX, url: "https://www.westsussex.gov.uk/moved/" }, lead);
 r = await api("/api/enquiries/get", { code: WSX }, lead);
@@ -209,10 +224,10 @@ ok(topicBox && /Pothole/.test(topicBox.value), "a lead can see each category's t
 const cols = (name, content) => { choose(w, d.querySelector('input[type="file"]'), name, content); };
 const today = `15/${M1.slice(5)}/${M1.slice(0, 4)}`;
 // headings that are personal, however they're worded
-cols("headings.csv", `Date raised,Service user name,Service notes,Requester,Subject,Ward name,Service description,Reported by\n${today},a,b,c,d,Moorside,Road defects,e\n`);
+cols("headings.csv", `Date raised,Service user name,Service notes,Requester,Subject,Ward name,Service description,Reported by,reported_by,post_code,E mail,Tel,contact_number\n${today},a,b,c,d,Moorside,Road defects,e,f,g,h,i,j\n`);
 await see(d, /Ward name/);
 await until(() => !d.querySelector('select[aria-label="Use for Ward"]'), "the new columns");
-ok((text(d.querySelector(".main")).match(/Ignored, never sent/g) || []).length === 5 && d.querySelector('select[aria-label="Use for Ward name"]') && d.querySelector('select[aria-label="Use for Service description"]') && !d.querySelector('select[aria-label="Use for Service user name"]') && !d.querySelector('select[aria-label="Use for Requester"]'), "personal headings are locked however they're worded, and only plain ones are let through");
+ok((text(d.querySelector(".main")).match(/Ignored, never sent/g) || []).length === 10 && d.querySelector('select[aria-label="Use for Ward name"]') && d.querySelector('select[aria-label="Use for Service description"]') && !d.querySelector('select[aria-label="Use for Service user name"]') && !d.querySelector('select[aria-label="Use for Requester"]'), "personal headings are locked however they're worded, and only plain ones are let through");
 // a column of names chosen by hand: nothing rare gets out, and the officer can see that
 const rows = ["Date raised,Who,Ward"];
 for (let i = 0; i < 20; i++) rows.push(`${today},Pat Lee ${i},Moorside`);
@@ -222,6 +237,12 @@ setUse("Who", "category");
 checkIt();
 await see(d, /Send these counts/);
 ok(/Categories: Other/.test(text(d.querySelector(".main"))) && !/Pat Lee/.test(text(d.querySelector("#preview, .main"))), "a column of names chosen by hand is pooled, so no name gets out in a small file");
+// a place used as a category, where small numbers would show
+cols("area.csv", `Date raised,Service,Area\n${today},Road defects,Low Green\n`);
+await until(() => d.querySelector('select[aria-label="Use for Area"]'), "the Area column");
+setUse("Service", ""); setUse("Area", "category");
+checkIt();
+await see(d, /"Area" looks like a place/);
 // rows that have slipped, American dates, the month we're in, and an older encoding
 cols("slipped.csv", `Date raised,Service,Ward\n${today},Road defects,Moorside\n${today},Road defects,Moorside\n${today},Road defects,Moorside\n${today},Smith, Jane,Moorside\n`);
 await until(() => /from 4 rows/.test(text(d.querySelector(".main"))), "the slipped file");

@@ -51,8 +51,8 @@ export async function saveNotes(c: Config, code: string, notes: unknown, by: str
 
 export type Evidence = { figures: Figures; signals: Signals; surveys: SurveyResult[]; streets: StreetSummary[]; said?: Said[]; contacts?: Contacts[]; gaps: string[]; gathered: string };
 
-export function findGaps(p: Pilot, surveys: SurveyResult[], signals: Signals, figures: Figures, hasStreetSurvey = false): string[] {
-  const gaps = [...p.needed.filter((n) => !(surveys.length && /survey/i.test(n)))];
+export function findGaps(p: Pilot, surveys: SurveyResult[], signals: Signals, figures: Figures, hasStreetSurvey = false, hasEnquiries = false): string[] {
+  const gaps = [...p.needed.filter((n) => !(surveys.length && /survey/i.test(n)) && !(hasEnquiries && /fault report/i.test(n)))];
   if (!surveys.length && !gaps.some((g) => /survey/i.test(g))) gaps.unshift("A survey result to anchor the reading");
   if (figures.unavailable.length) gaps.push(`Published figures that couldn't be read just now: ${figures.unavailable.join(", ")}`);
   for (const s of [signals.fixMyStreet, signals.petitions, signals.questions]) if (!s.ok) gaps.push(`${s.source}: couldn't be read just now`);
@@ -68,20 +68,24 @@ export async function loadEvidence(c: Config, p: Pilot, facts: Facts): Promise<E
   // read fresh each time, because answers arrive through the day
   const streets = await streetSummaries(c, p.code).catch((e) => { console.log(`[warn] street surveys: ${(e as Error).message}`); return [] as StreetSummary[]; });
   const { said, contacts } = await ownSignals(c, p).catch((e) => { console.log(`[warn] own signals: ${(e as Error).message}`); return { said: [] as Said[], contacts: [] as Contacts[] }; });
-  return { figures, signals, surveys, streets, said, contacts, gaps: findGaps(p, surveys, signals, figures, streets.length > 0), gathered: new Date().toISOString() };
+  return { figures, signals, surveys, streets, said, contacts, gaps: findGaps(p, surveys, signals, figures, streets.length > 0, contacts.length > 0), gathered: new Date().toISOString() };
 }
+
+// Enough to count as a kind of signal. One piece, or a few contacts, can't be half of a change in mood. A starting judgement
+const MIN_PIECES = 5; // assessed in the last four weeks
+const MIN_CONTACTS = 30; // enquiries and complaints in the latest month
 
 // The kinds of signal Clarion really holds. Pulse questions come in a later stage of the build, so they can't count
 // yet. A national petition only says something about this authority if it draws more than a fair share of its
 // signatures from here. Assessed pieces are open talk, and an authority's own enquiries are actions.
 export function kindsHeld(e: Evidence): string[] {
-  const s = e.signals;
+  const s = e.signals, pieces = (e.said ?? []).reduce((sum, x) => sum + x.pieces, 0), contacts = (e.contacts ?? []).reduce((sum, x) => sum + x.enquiries + x.complaints, 0);
   return [
     ...(e.surveys.length ? ["survey"] : []),
     ...(e.streets?.some((x) => x.current) ? ["street survey"] : []),
-    ...((s.fixMyStreet.ok && s.fixMyStreet.data?.reports) || e.contacts?.length ? ["actions"] : []),
+    ...((s.fixMyStreet.ok && s.fixMyStreet.data?.reports) || contacts >= MIN_CONTACTS ? ["actions"] : []),
     ...((s.petitions.ok && s.petitions.data?.some((p) => p.localShare > p.fairShare)) || (s.questions.ok && s.questions.data?.length) ? ["representatives"] : []),
-    ...(e.said?.length ? ["open talk"] : []),
+    ...(pieces >= MIN_PIECES ? ["open talk"] : []),
   ];
 }
 

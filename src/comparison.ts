@@ -16,6 +16,7 @@ import { londonToday } from "./util";
 const SURVEY_DAYS = 365; // a street survey counts as a signal for a year
 const ENQUIRY_MONTHS = 3; // enquiries older than this don't speak for now
 const MIN_TOPICS = 3;
+const NOT_A_TOPIC = /^(other|not given)$/i; // a catch-all can't be felt or reported
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type Said = { topic: string; pieces: number; adjusted: number; critical: number; supportive: number };
@@ -31,20 +32,23 @@ export function placeTopic(concern: number, attention: number, count: number): {
 const plural = (n: number, one: string) => `${n.toLocaleString("en-GB")} ${one}${n === 1 ? "" : "s"}`;
 
 export function compare(said: Said[], street: Street[], contacts: Contacts[]) {
-  const names = [...new Set([...said.map((x) => x.topic), ...street.map((x) => x.topic), ...contacts.map((x) => x.topic)])];
-  const needs = !said.length ? "assessed press and media pieces from the last four weeks" : !street.length && !contacts.length ? "a street survey or enquiries" : names.length < MIN_TOPICS ? `at least ${MIN_TOPICS} topics` : "";
+  const real = (x: { topic: string }) => !NOT_A_TOPIC.test(x.topic.trim());
+  const pressed = said.filter(real).filter((x) => x.pieces > 0), commented = street.filter(real).filter((x) => x.count > 0), reached = contacts.filter(real).filter((x) => x.enquiries + x.complaints > 0);
+  const names = [...new Set([...pressed.map((x) => x.topic), ...commented.map((x) => x.topic), ...reached.map((x) => x.topic)])];
+  const needs = !pressed.length ? "assessed press and media pieces from the last four weeks" : !commented.length && !reached.length ? "a street survey or enquiries" : names.length < MIN_TOPICS ? `at least ${MIN_TOPICS} topics` : "";
   if (needs) return { ready: false as const, needs };
-  const comments = new Map(street.map((x) => [x.topic, x.count])), contactsOf = (t: string) => { const x = contacts.find((y) => y.topic === t); return x ? x.enquiries + x.complaints : 0; };
-  const pieces = (t: string) => said.find((x) => x.topic === t)?.pieces ?? 0, adjusted = (t: string) => said.find((x) => x.topic === t)?.adjusted ?? 0;
-  const allComments = street.reduce((sum, x) => sum + x.count, 0), allContacts = contacts.reduce((sum, x) => sum + x.enquiries + x.complaints, 0);
+  const comments = new Map(commented.map((x) => [x.topic, x.count])), contactsOf = (t: string) => { const x = reached.find((y) => y.topic === t); return x ? x.enquiries + x.complaints : 0; };
+  const pieces = (t: string) => pressed.find((x) => x.topic === t)?.pieces ?? 0, adjusted = (t: string) => pressed.find((x) => x.topic === t)?.adjusted ?? 0;
+  const allComments = commented.reduce((sum, x) => sum + x.count, 0), allContacts = reached.reduce((sum, x) => sum + x.enquiries + x.complaints, 0);
   const sharesHeld = [allComments, allContacts].filter(Boolean).length || 1;
   const concernScore = (t: string) => ((allComments ? (comments.get(t) ?? 0) / allComments : 0) + (allContacts ? contactsOf(t) / allContacts : 0)) / sharesHeld;
   const byConcern = [...names].sort((a, b) => concernScore(b) - concernScore(a) || (comments.get(b) ?? 0) - (comments.get(a) ?? 0) || a.localeCompare(b));
   const byAttention = [...names].sort((a, b) => pieces(b) - pieces(a) || adjusted(b) - adjusted(a) || a.localeCompare(b));
   const topics = byConcern.map((topic, i) => {
-    const attention = byAttention.indexOf(topic) + 1, replies = comments.get(topic) ?? 0, reached = contactsOf(topic);
-    const kinds = [replies ? "Street survey" : "", reached ? "Enquiries" : "", pieces(topic) ? "Press and media" : ""].filter(Boolean).join(", ");
-    return { topic, concern: i + 1, attention, pieces: pieces(topic), replies, contacts: reached, kinds, ...placeTopic(i + 1, attention, names.length) };
+    const attention = byAttention.indexOf(topic) + 1, replies = comments.get(topic) ?? 0, people = contactsOf(topic);
+    const kinds = [replies ? "Street survey" : "", people ? "Enquiries" : "", pieces(topic) ? "Press and media" : ""].filter(Boolean).join(", ");
+    // With nothing on one side a topic can't be high on it, whatever order a tie happens to leave it in
+    return { topic, concern: i + 1, attention, pieces: pieces(topic), replies, contacts: people, kinds, ...placeTopic(concernScore(topic) ? i + 1 : Infinity, pieces(topic) ? attention : Infinity, names.length) };
   });
   const earlySigns = topics.filter((x) => x.early).map((x) => ({
     topic: x.topic, concern: x.concern, attention: x.attention,
@@ -60,12 +64,12 @@ export async function ownSignals(c: Config, p: Pilot): Promise<{ said: Said[]; c
   const oldest = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - ENQUIRY_MONTHS, 1)).toISOString().slice(0, 7);
   return {
     said: summariseCoverage(withWeights(assessments, sources), today).topics.map(({ topic, pieces, adjusted, critical, supportive }) => ({ topic, pieces, adjusted, critical, supportive })),
-    contacts: view.ready && view.latest >= oldest ? view.rows.map(({ topic, enquiries, complaints, trend }) => ({ topic, enquiries, complaints, trend })) : [],
+    contacts: view.ready && view.latest >= oldest ? view.rows.filter((x) => x.enquiries + x.complaints > 0).map(({ topic, enquiries, complaints, trend }) => ({ topic, enquiries, complaints, trend })) : [],
   };
 }
 
 export async function loadComparison(c: Config, p: Pilot) {
   const [{ said, contacts }, streets] = await Promise.all([ownSignals(c, p), streetSummaries(c, p.code)]);
-  const latest = streets.find((s) => Date.now() - Date.parse(s.ran) < SURVEY_DAYS * DAY_MS);
+  const latest = streets.find((s) => Date.now() - Date.parse(s.ran) < SURVEY_DAYS * DAY_MS && s.topics.length); // a newer one may not have had its comments sorted yet
   return compare(said, latest?.topics ?? [], contacts);
 }
