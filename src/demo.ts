@@ -8,6 +8,7 @@ import {
   type Assessment, type Rate, type Source,
 } from "./coverage";
 import { compare } from "./comparison";
+import { mondayOf, worksFigures, type Week } from "./works";
 import { enquiriesView, type Month } from "./enquiries";
 import { packFrom, standFor, type SitesPack } from "./sites";
 import { ABOUT, ACCESS_CHECKS, CORE, answersCsv, cellKey, summarise, surveyPage, type Answer, type Census, type Question, type Site, type Survey } from "./surveys";
@@ -188,6 +189,20 @@ function demoEnquiries(topics: string[]) {
     website: { page: "", read: true, posts: [{ title: "Winter gritting routes confirmed", url: "", date: "2026-10-28", topic: "Winter service" }, { title: "Moor Lane resurfacing starts next month", url: "", date: "2026-10-21", topic: "Potholes" }] },
   };
 }
+// Made-up weekly jobs and weather events, run through the same sums as a real authority's
+function demoWorks(satisfied: number | null) {
+  const today = COUNTY_DAY(0), thisWeek = mondayOf(today), jobs = (i: number) => 150 + ((i * 37) % 40), rainWeek = mondayOf(COUNTY_DAY(45)), galeWeek = mondayOf(COUNTY_DAY(18));
+  const weeks: Week[] = Array.from({ length: 40 }, (_, i) => {
+    const week = new Date(Date.parse(`${thisWeek}T12:00:00Z`) - (40 - i) * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), wet = week === rainWeek || week === mondayOf(COUNTY_DAY(38)), windy = week === galeWeek || week === mondayOf(COUNTY_DAY(11));
+    return { week, public: Math.round(jobs(i) * (wet ? 1.7 : windy ? 1.5 : 1)), inspection: 120 + ((i * 23) % 30), other: 0, fns: { cw: Math.round(jobs(i) * 0.4), dr: Math.round(jobs(i) * (wet ? 0.6 : 0.15)), tr: Math.round(jobs(i) * (windy ? 0.5 : 0.1)), sg: Math.round(jobs(i) * (windy ? 0.3 : 0.1)) } };
+  });
+  const events = [{ type: "heat", label: "Heatwave", start: COUNTY_DAY(112), end: COUNTY_DAY(107), severity: 1, detail: "Highest 29\u00b0C" }, { type: "rain", label: "Heavy rain", start: COUNTY_DAY(47), end: COUNTY_DAY(45), severity: 2, detail: "Wettest day 34 mm" }, { type: "storm", label: "Gale", start: COUNTY_DAY(19), end: COUNTY_DAY(18), severity: 1, detail: "Peak gust 56 mph" }];
+  const press: Record<string, number> = {};
+  for (const x of PIECES) press[mondayOf(x.date)] = (press[mondayOf(x.date)] ?? 0) + 1;
+  const held = { on: true, toolkitId: 0, by: "Demo officer", at: WHEN, checked: WHEN, uploaded: WHEN, from: "2024-01-01", to: COUNTY_DAY(2), weatherTo: COUNTY_DAY(2), weeks, wards: { Moorside: 1240, "Dale End": 980, "Bridge Ward": 760, "High Fell": 530 }, events, problem: "" };
+  const figures = worksFigures(held, press, [{ created: WHEN, direction: "Worsening" }], [{ ran: "2026-10-03", satisfied }], today, Object.fromEntries(FUNCTIONS.map(([id, name]) => [id, name])));
+  return { ready: true, on: true, by: "Demo officer", at: WHEN, checked: WHEN, uploaded: WHEN, from: held.from, to: held.to, weatherTo: held.weatherTo, problem: "", canTurnOn: false, canTurnOff: false, figures };
+}
 function demoCoverage(census: Census) {
   const rows = withWeights(PIECES, SOURCES), today = COUNTY_DAY(0);
   return {
@@ -294,7 +309,7 @@ export function buildPack() {
       { text: "How would you rate the condition of the pavements near where you live?", kind: "choice", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], reason: "Quiet: is it wider than it looks?", topic: "Pavements", basedOn: ["Fault reports"], why: "Few press items, but fault reports are rising." },
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
-    coverage: demoCoverage(census), enquiries, coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
+    coverage: demoCoverage(census), enquiries, works: demoWorks(street?.satisfied ?? null), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
     attention: comparison,
   };
 }

@@ -220,6 +220,9 @@ table.heat { border-collapse: separate; border-spacing: 2px; font-size: 0.84rem;
 .aud-row i { display: block; height: 9px; border-radius: 2px; }
 .aud-bars .this, .aud-key .this { background: var(--accent); }
 .aud-bars .all, .aud-key .all { background: var(--line-2); }
+.works-wrap { overflow-x: auto; }
+.works-chart { display: block; width: 100%; min-width: 640px; height: auto; }
+.aud-key b { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .aud-key { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--ink-2); margin: 6px 0 0; }
 .aud-key b { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .seg-row { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-start; }
@@ -372,6 +375,7 @@ const Demo = {
       case "/api/coverage/get": return P.coverage;
       case "/api/coverage/summary": return { summary: P.coverage.summary };
       case "/api/enquiries/get": return P.enquiries;
+      case "/api/works/get": return P.works;
       case "/api/abc/find": return { titles: P.abcTitles.filter((x) => (b.q || "").length > 2 && x.name.toLowerCase().includes(b.q.toLowerCase())) };
       case "/api/coverage/check": {
         const words = b.keywords || [];
@@ -520,7 +524,7 @@ function shell() {
   if (view === "print" && id) return printView(page, current, id, Number(App.route[3]), Number(App.route[4]));
   if (view === "evidence") return evidenceView(page, current);
   if (view === "said") return saidView(page, current, id);
-  if (view === "attention") return attentionView(page, current);
+  if (view === "attention") return attentionView(page, current, id);
   if (view === "about") return aboutView(page, current);
   return summaryView(page, current);
 }
@@ -620,9 +624,12 @@ function drivingCard(att) {
     h("tbody", {}, att.topics.map((t) => h("tr", {}, h("td", {}, t.topic), h("td", { class: "r" }, ordinal(t.concern)), h("td", { class: "r" }, ordinal(t.attention)), h("td", {}, t.action), h("td", {}, t.kinds)))))));
 }
 const comingCard = (what) => h("section", { class: "card" }, h("div", { class: "empty" }, what));
-async function attentionView(page, a) {
+async function attentionView(page, a, part) {
+  const works = part === "works";
+  const tabs = h("div", { class: "tab-row no-print", role: "tablist" }, [["", "Comparison"], ["works", "Works and weather"]].map(([key, label]) => h("button", { type: "button", "aria-selected": (key === "works") === works ? "true" : "false", onclick: () => { location.hash = `#attention/${a.code}${key ? `/${key}` : ""}`; } }, label)));
   const body = h("div", { class: "stack gap" }, loading("Loading…"));
-  page.append(pageHead(`${a.name}: attention and concern`, "Which concerns are widely felt, which are just loud, and what nobody is reporting yet."), body);
+  page.append(pageHead(works ? `${a.name}: works and weather` : `${a.name}: attention and concern`, works ? "What happened on the network, beside what people said about it." : "Which concerns are widely felt, which are just loud, and what nobody is reporting yet."), tabs, body);
+  if (works) return worksPanel(body, a);
   const view = App.viewId;
   let att;
   try { att = await API.call("/api/attention", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
@@ -630,6 +637,53 @@ async function attentionView(page, a) {
   if (att.ready) add(clear(body), h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
   else clear(body).append(h("section", { class: "card" }, h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, `This compares what's being said with what people tell you. It needs ${att.needs}.`), h("a", { class: "btn small", href: `#said/${a.code}` }, "Go to What's being said"))));
 }
+// Works and weather, from the Climate Toolkit: weekly totals and weather events only
+function worksChart(f) {
+  const left = 52, right = 1024, top = 28, base = 274, n = f.weeks.length, step = (right - left) / n, first = Date.parse(f.weeks[0].week);
+  const most = Math.max(10, ...f.weeks.map((w) => w.public + w.inspection)), tick = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find((t) => most / t <= 4) || 10000, topValue = tick * Math.ceil(most / tick);
+  const y = (v) => base - (v / topValue) * (base - top), x = (iso) => left + ((Date.parse(iso) - first) / (7 * 86400000)) * step;
+  const pressTop = Math.max(1, ...f.weeks.map((w) => w.press)), py = (v) => base - (v / pressTop) * (base - top) * 0.9;
+  const chart = svg("svg", { class: "works-chart", viewBox: "0 0 1040 330", role: "img", "aria-label": `Weekly jobs reported by the public and found on inspection, with press items assessed and ${f.events.length} weather events, over the last six months.` });
+  for (let v = 0; v <= topValue; v += tick) chart.append(svg("line", { class: "q-line", x1: left, x2: right, y1: y(v), y2: y(v) }), svg("text", { class: "q-axis", x: left - 8, y: y(v) + 4, "text-anchor": "end" }, fmt(v)));
+  for (const e of f.events) {
+    const from = Math.max(left, x(e.start)), to = Math.min(right, x(e.end) + step / 7);
+    chart.append(svg("rect", { x: from, y: top, width: Math.max(6, to - from), height: base - top, fill: "#f6e3c8", opacity: "0.8" }), svg("text", { class: "q-axis", x: Math.min(right - 30, (from + to) / 2), y: top - 8, "text-anchor": "middle" }, e.label));
+  }
+  f.weeks.forEach((w, i) => {
+    const at = left + i * step + 2, wide = Math.max(2, step - 4);
+    chart.append(svg("rect", { x: at, y: y(w.inspection), width: wide, height: base - y(w.inspection), fill: "#c3d1e0" }), svg("rect", { x: at, y: y(w.inspection + w.public), width: wide, height: y(w.inspection) - y(w.inspection + w.public), fill: "#264a6f" }));
+    if (i % 4 === 0) chart.append(svg("text", { class: "q-axis", x: at + wide / 2, y: base + 18, "text-anchor": "middle" }, new Date(`${w.week}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })));
+  });
+  chart.append(svg("polyline", { fill: "none", stroke: "#d9731f", "stroke-width": 2.5, points: f.weeks.map((w, i) => `${left + (i + 0.5) * step},${py(w.press)}`).join(" ") }));
+  for (const m of f.marks) chart.append(svg("line", { x1: x(m.date), x2: x(m.date), y1: top + 8, y2: base + 24, stroke: "#17212c", "stroke-dasharray": "4 3" }), svg("text", { class: "q-axis", x: Math.max(left + 70, Math.min(right - 70, x(m.date))), y: base + 40, "text-anchor": "middle" }, m.label));
+  return chart;
+}
+const signedChange = (n) => (n === null ? "\u2013" : `${n > 0 ? "+" : ""}${fmt(n)}%`);
+async function worksPanel(body, a) {
+  const view = App.viewId;
+  let w;
+  try { w = await API.call("/api/works/get", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  if (view !== App.viewId) return;
+  const m = saveNote();
+  const change = async (path) => { try { await API.call(path, { code: a.code }); route(); } catch (e) { said(m, e.message, "err"); } };
+  const dates = [w.uploaded ? `Records uploaded to the Climate Toolkit on ${fmtDate(w.uploaded)}${w.to ? `, running to ${fmtDate(w.to)}` : ""}.` : "", w.weatherTo ? `Weather to ${fmtDate(w.weatherTo)}.` : ""].filter(Boolean).join(" ");
+  add(clear(body), h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Use our Climate Toolkit records"), h("p", {}, "Only your authority's lead can turn this on, and it can be turned off at any time.")), h("span", { class: `pill ${w.on ? "good" : ""}` }, w.on ? "On" : "Off")),
+    !w.ready ? h("p", {}, "Clarion isn't connected to the Climate Toolkit yet.") : h("p", {}, "Clarion reads weekly job totals by function and ward, and weather events, for your authority only. It keeps no street names or job details, and no other authority sees them."),
+    w.problem ? h("div", { class: "callout crit", role: "alert" }, w.problem) : null, dates ? h("p", { class: "note" }, `${dates} Clarion checks for new records each day.`) : null, w.on && !w.problem && !w.figures ? h("p", { class: "note" }, "Your records are being read. Come back in a few minutes.") : null, m,
+    w.ready && !w.on && w.canTurnOn ? h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => change("/api/works/on") }, "Turn this on")) : null,
+    w.ready && !w.on && !w.canTurnOn ? h("p", { class: "note" }, "Your authority's own FHRG lead can turn this on.") : null,
+    w.on && w.canTurnOff ? h("div", { class: "row" }, h("button", { class: "btn small ghost", type: "button", onclick: () => change("/api/works/off") }, "Turn this off and remove what's held")) : null));
+  const f = w.figures;
+  if (!f) return;
+  add(body, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "The last six months"), h("p", {}, "Maintenance jobs each week, press items assessed, and weather events."))), h("div", { class: "works-wrap" }, worksChart(f)),
+    h("div", { class: "aud-key" }, [["#264a6f", "Jobs reported by the public"], ["#c3d1e0", "Jobs found on inspection"], ["#d9731f", "Press items assessed"], ["#f6e3c8", "Weather event"]].map(([colour, label]) => h("span", {}, h("b", { style: { background: colour } }), label)))),
+    h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "After each weather event"), h("p", {}, "The two weeks afterwards, compared with the eight weeks before."))),
+      f.after.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Event"), h("th", {}, "Dates"), h("th", {}, "Functions most affected"), h("th", { class: "r" }, "Public reports"), h("th", { class: "r" }, "Press items"), h("th", {}, "Mood afterwards"))),
+        h("tbody", {}, f.after.map((x) => h("tr", {}, h("td", { title: x.detail }, x.label), h("td", {}, x.start === x.end ? fmtDate(x.start) : `${fmtDate(x.start)} to ${fmtDate(x.end)}`), h("td", {}, x.functions.join(", ") || "\u2013"), h("td", { class: "r" }, signedChange(x.publicChange)), h("td", { class: "r" }, signedChange(x.pressChange)), h("td", {}, x.mood || "No reading")))))) : h("p", { class: "muted" }, "No weather events in this period."),
+      h("p", { class: "note" }, "Works and weather help explain a change in mood. They don't count as a kind of mood signal, so \"two kinds agree\" stays about what the public feel. Jobs reported by the public are the exception, as they're the public speaking. A rise may have other causes, so treat this as a pointer.")),
+    f.wards.length ? h("section", { class: "card" }, h("h3", {}, "Busiest wards"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Ward"), h("th", { class: "r" }, "Jobs"))), h("tbody", {}, f.wards.map((x) => h("tr", {}, h("td", {}, x.name), h("td", { class: "r" }, fmt(x.n))))))), h("p", { class: "note" }, "Over the last 16 months or so. Wards with fewer than 10 jobs aren't shown.")) : null);
+}
+
 // What's being said: what Clarion reads by itself, and what officers assess. Clarion never reads the press.
 async function saidView(page, a, part) {
   const body = h("div", { class: "stack gap" }, loading("Loading…"));
@@ -995,6 +1049,7 @@ function aboutView(page, a) {
   page.append(sec("How mood is read", h("ul", {}, ["Mood is read from six kinds of signal: surveys, street surveys, short repeated questions, public actions such as fault reports and enquiries, representatives, and open talk in the press and on social media.", "Survey results set the level. The other signals can only suggest direction.", "A change is reported only when two different kinds of signal agree.", "What's loud isn't the same as what's widely felt, and perception isn't the same as condition."].map((x) => h("li", {}, x)))),
     sec("What's being said", h("ul", {}, ["Clarion reads sources with no licensing issue by itself: GOV.UK, Parliament and FixMyStreet.", "It never reads press, broadcast or social sources. A coverage check is a simple web search that keeps only yes or no and the date, and no match doesn't mean no coverage.", "Officers find each piece for themselves and record their own assessment. Leaning and stance are their judgement.", "Audience figures are national patterns by age, overlaid on Census figures for the authority. They describe a kind of source, not one publication's readers, and hold no party data.", "Enquiries and complaints are counts only. An officer's browser reads the file, and the officer sees what will be sent. Columns that look personal can't be used, small groups are pooled, and areas with fewer than 10 contacts in a month aren't kept by name.", "Allowing for a source's stance halves or adds half to a piece's reach. These weights are a starting judgement to be tested in the pilot, and raw figures are always kept."].map((x) => h("li", {}, x)))),
     sec("Attention and concern", h("ul", {}, ["Attention is a topic's assessed pieces in the last four weeks, then their reach after allowing for the source.", "Concern is a topic's share of street survey comments and of enquiries, averaged over whichever are held. Street surveys count for a year, and enquiries for three months.", "Ranks are compared, because a press count and a survey share aren't on one scale.", "An early sign is in the upper half for concern and the lower half for attention. It's a pointer for officers to check, not a finding."].map((x) => h("li", {}, x)))),
+    sec("Works and weather", h("ul", {}, ["An authority's lead can turn on the link to its Climate Toolkit records, and can turn it off again at any time, which removes what's held.", "Clarion keeps only weekly job totals by function and source, ward totals and weather events, with no street names or job details.", "Weather events use the Climate Toolkit's own rules for gales, heavy rain, cold, freeze and thaw, and heatwaves.", "These help explain a change in mood. Only jobs reported by the public can count as a kind of signal."].map((x) => h("li", {}, x)))),
     sec("Street surveys", h("ul", {}, ["A street sample isn't random, so every result is labelled indicative.", "Results are weighted to the local population's age and sex from Census 2021.", "Proposed survey sites are a calculation on Census and deprivation figures, not an opinion, and town size stands in for footfall. Each site's replies count, as far as they can, for the share of adults it stands for.", "Groups under 30 people aren't reported.", "Written comments stay hidden until Claude has taken out names. Only the authority's own members can read them, and they're never used in a mood reading or impact note."].map((x) => h("li", {}, x)))),
     sec("Comparing authorities", h("ul", {}, ["An authority sees only one FHRG middle figure, with nobody named, once five authorities have results.", "FHRG administrators see figures and topic counts for each authority, in alphabetical order and never ranked. A difference may be a local choice, or reflect geography, funding or who was asked."].map((x) => h("li", {}, x)))));
 }

@@ -32,6 +32,9 @@
 //   POST /api/enquiries/remove     {code, id}: take an import back out
 //   POST /api/enquiries/match      {code, category, topic}: sort one of the authority's categories into a topic
 //   POST /api/enquiries/page       {code, url}: the authority's news page
+//   POST /api/works/get            {code}: works and weather from the Climate Toolkit
+//   POST /api/works/on             {code}: a lead turns that on
+//   POST /api/works/off            {code}: turns it off, and removes what's held
 //   POST /api/abc/find             {code, q}: titles in ABC's register that match what's been typed
 //   POST /api/abc/status           ABC titles held (site administrators)
 //   POST /api/abc/save             {text}: ABC's table, pasted (site administrators)
@@ -64,6 +67,7 @@
 
 import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member } from "./accounts";
 import { findTitles, saveTitles, titlesHeld } from "./abc";
+import { loadWorks, refreshWorks, turnOff, turnOn, worksPage } from "./works";
 import { enquiriesView, loadEnquiries, readNews, removeImport, saveImport, saveMatch, savePage } from "./enquiries";
 import { adminOverview, benchmark } from "./admin";
 import { loadComparison } from "./comparison";
@@ -218,6 +222,16 @@ async function handleEnquiries(c: Config, request: Request): Promise<Response> {
     canEdit: canEdit(me, p), adults: census?.adults ?? null, topics, view: enquiriesView(held, census?.adults ?? null, topics), imports: held.imports,
     website: { page, posts: posts ?? [], read: posts !== null },
   });
+}
+
+async function handleWorks(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const held = await loadWorks(c, p.code);
+  // Records can take a while to read, so the page doesn't wait: it shows what's held, and the work carries on
+  const latest = held.on ? await briefly(`works|${p.code}`, held, () => refreshWorks(c, p)) : held;
+  return json(await worksPage(c, me, p, latest, Object.fromEntries(FUNCTIONS.map(([id, name]) => [id, name]))));
 }
 
 async function handleAbc(c: Config, request: Request, what: "find" | "status" | "save"): Promise<Response> {
@@ -497,6 +511,9 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/enquiries/remove": { const { p, b } = await editor(c, request, 1000); await removeImport(c, p, b.id); return json({ ok: true }); }
         case "/api/enquiries/match": { const { p, b } = await editor(c, request, 1000); await saveMatch(c, p, b, await sharedTopics(c)); return json({ ok: true }); }
         case "/api/enquiries/page": { const { p, b } = await editor(c, request, 1000); await savePage(c, p, b.url); return json({ ok: true }); }
+        case "/api/works/get": return await handleWorks(c, request);
+        case "/api/works/on": { const me = await signedIn(c, request); const b = await readJsonBody(request, 1000); const p = pilotFor(me, b.code); await turnOn(c, me, p); refreshWorks(c, p).catch((e) => console.log(`[warn] works: ${(e as Error).message}`)); return json({ ok: true }); }
+        case "/api/works/off": { const { p } = await editor(c, request, 1000); await turnOff(c, p); return json({ ok: true }); }
         case "/api/abc/find": return await handleAbc(c, request, "find");
         case "/api/abc/status": return await handleAbc(c, request, "status");
         case "/api/abc/save": return await handleAbc(c, request, "save");

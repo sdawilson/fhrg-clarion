@@ -12,6 +12,8 @@
 //                                              Reference data > Keys for outside services)
 //              SEARCH_KEY                    optional; a Brave Search API key, for checking whether a keyword turns
 //                                              up for a publication. Without it, officers find pieces themselves
+//              TOOLKIT_STORAGE_KEY           optional; the Climate Toolkit storage zone's READ-ONLY password, for
+//                                              Works and weather. Without it, that page says it isn't connected
 //   Variables: STORAGE_ZONE (required), STORAGE_HOST (default storage.bunnycdn.com),
 //              ROOT_FOLDER (default clarion), WEBSITE_URL (default https://fhrg.co.uk),
 //              SITE_ADMINS (emails, separated by commas; the website's site administrators count too),
@@ -22,7 +24,9 @@
 //              are at most 5), DATA_QUERIES_MAX (default 8: library queries per impact note),
 //              DAILY_JOBS_MAX (default 20: readings and notes per authority per day; site administrators
 //              aren't limited), SEARCHES_A_MONTH (default 2000: coverage checks for all authorities together; keep
-//              it within the Brave Search plan), DEMO (on, the default, or off: the Northbridge demonstration at /demo)
+//              it within the Brave Search plan), TOOLKIT_STORAGE_ZONE (the Climate Toolkit's storage zone),
+//              TOOLKIT_ROOT_FOLDER (default climate-toolkit), DEMO (on, the default, or off: the Northbridge
+//              demonstration at /demo)
 
 import process from "node:process";
 
@@ -43,6 +47,10 @@ export type Config = {
   refUrl: string;
   refKey: string;
   searchKey: string;
+  toolkitKey: string;
+  toolkitZone: string;
+  toolkitRoot: string;
+  toolkitHost: string;
   monthlyCapUsd: number;
   webMax: number;
   dataMax: number;
@@ -67,8 +75,8 @@ function env(name: string, fallback = "", keepEmpty = false): string {
 }
 
 // For the start-up log: which settings arrived (names only, never values)
-const SECRET_SETTINGS = ["ANTHROPIC_API_KEY", "STORAGE_ACCESS_KEY", "WEBSITE_DATABASE_URL", "WEBSITE_DATABASE_AUTH_TOKEN", "SESSION_SECRET", "SSO_SECRET", "FHRG_REF_KEY", "SEARCH_KEY"];
-const VARIABLE_SETTINGS = ["STORAGE_ZONE", "STORAGE_HOST", "ROOT_FOLDER", "WEBSITE_URL", "SITE_ADMINS", "CLAUDE_MODEL", "CLAUDE_EFFORT", "FHRG_REF_URL", "DEMO", "MONTHLY_CAP_USD", "WEB_SEARCH_MAX", "DATA_QUERIES_MAX", "DAILY_JOBS_MAX", "SEARCHES_A_MONTH"];
+const SECRET_SETTINGS = ["ANTHROPIC_API_KEY", "STORAGE_ACCESS_KEY", "WEBSITE_DATABASE_URL", "WEBSITE_DATABASE_AUTH_TOKEN", "SESSION_SECRET", "SSO_SECRET", "FHRG_REF_KEY", "SEARCH_KEY", "TOOLKIT_STORAGE_KEY"];
+const VARIABLE_SETTINGS = ["STORAGE_ZONE", "STORAGE_HOST", "ROOT_FOLDER", "WEBSITE_URL", "SITE_ADMINS", "CLAUDE_MODEL", "CLAUDE_EFFORT", "FHRG_REF_URL", "DEMO", "MONTHLY_CAP_USD", "WEB_SEARCH_MAX", "DATA_QUERIES_MAX", "DAILY_JOBS_MAX", "SEARCHES_A_MONTH", "TOOLKIT_STORAGE_ZONE", "TOOLKIT_ROOT_FOLDER"];
 
 function folder(name: string, fallback: string): string {
   const f = env(name, fallback, true).replace(/^\/+|\/+$/g, "");
@@ -100,6 +108,10 @@ export function getConfig(): Config {
     refUrl: (env("FHRG_REF_URL") || "https://builder.fhrg.co.uk").replace(/\/+$/, ""),
     refKey: env("FHRG_REF_KEY"),
     searchKey: env("SEARCH_KEY"),
+    toolkitKey: env("TOOLKIT_STORAGE_KEY"),
+    toolkitZone: env("TOOLKIT_STORAGE_ZONE"),
+    toolkitRoot: folder("TOOLKIT_ROOT_FOLDER", "climate-toolkit"),
+    toolkitHost: env("STORAGE_HOST", "storage.bunnycdn.com").replace(/^https?:\/\//, "").replace(/\/+$/, ""),
     monthlyCapUsd: num("MONTHLY_CAP_USD", 40, 1, 2000),
     webMax: num("WEB_SEARCH_MAX", 4, 1, 10),
     dataMax: num("DATA_QUERIES_MAX", 8, 1, 20),

@@ -13,6 +13,7 @@ export { closest as closestTitles, readTable as readAbcTable } from "../src/abc"
 export { enquiriesView, looksPersonal, ownSite, postsFromFeed, postsFromPage, readImport, topicFor, trendOf } from "../src/enquiries";
 export { decode } from "../src/signals";
 export { compare, placeTopic } from "../src/comparison";
+export { mondayOf, publicJobs, sourceOf, tallyRecords, weatherEvents, worksFigures } from "../src/works";
 export { ageSexTargets, answersCsv, commentSample, findProblems, formNumber, likelyRange, parseCsv, readAnswers, readCsv, readLocals, surveyResults, templateCsv, topicCounts, validAccess, waitingComments, weightsFor, CORE, ABOUT } from "../src/surveys";
 export { scrubContacts, sweepHelp, tidyScan } from "../src/surveyai";
 export { middleFigure } from "../src/admin";
