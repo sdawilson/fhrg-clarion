@@ -112,17 +112,18 @@ export function forget(prefix: string): void {
 
 // Something from outside that a page can do without. The page waits a moment and carries on without it, and the work
 // keeps going so the next visitor gets what it found. If it failed, it's left alone for a few minutes rather than being
-// tried again on every click.
+// tried again on every click, and whatever it did manage is used in the meantime.
 const BRIEF_MS = 3000;
 const REST_MS = 5 * 60 * 1000;
 const underway = new Map<string, Promise<unknown>>();
-const resting = new Map<string, number>();
+const resting = new Map<string, { until: number; value: unknown }>();
 export function briefly<T, F>(key: string, without: F, fn: () => Promise<T>, failed: (v: T) => boolean = () => false, ms = BRIEF_MS): Promise<T | F> {
-  if ((resting.get(key) ?? 0) > Date.now()) return Promise.resolve(without);
+  const rest = resting.get(key);
+  if (rest && rest.until > Date.now()) return Promise.resolve(rest.value as T | F);
   let job = underway.get(key) as Promise<T | F> | undefined;
   if (!job) {
-    const rest = () => { resting.set(key, Date.now() + REST_MS); };
-    job = fn().then((v) => { if (failed(v)) rest(); return v; }, () => { rest(); return without; }).finally(() => { underway.delete(key); });
+    const leave = (value: T | F) => { resting.set(key, { until: Date.now() + REST_MS, value }); };
+    job = fn().then((v) => { if (failed(v)) leave(v); return v; }, () => { leave(without); return without; }).finally(() => { underway.delete(key); });
     underway.set(key, job);
   }
   const running = job;

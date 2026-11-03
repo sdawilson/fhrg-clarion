@@ -710,7 +710,7 @@ function saidAssess(top, a, d) {
       add(clear(results), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Publication"), h("th", {}, "Keyword"), h("th", {}, "Result"), h("th", {}, "Date"), h("th", {}, ""))),
         h("tbody", {}, r.checks.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.keyword), h("td", {}, h("span", { class: x.result === "Found" ? "pill serious" : "pill" }, x.result)), h("td", {}, x.date ? fmtDate(x.date) : ""), h("td", {}, /^Found/.test(x.result) ? h("button", { class: "btn small", type: "button", onclick: () => { pickSource(x.source, x.date); summary.focus(); } }, "Assess") : null)))))),
         r.checks.some((x) => x.result === "Not checked") ? h("p", { class: "note" }, "\"Not checked\" means the search service didn't answer, so Clarion stopped asking. Try again later.") : null,
-        h("p", { class: "note" }, "Clarion keeps only yes or no and the date: no headlines, extracts or links. \"No match\" doesn't mean no coverage, because paywalled and print-only pieces often won't show up."));
+        h("p", { class: "note" }, `Clarion keeps only yes or no and the date: no headlines, extracts or links. "No match" doesn't mean no coverage, because paywalled and print-only pieces often won't show up. Your authority has ${fmt(r.left)} searches left today.`));
     } catch (e) { said(m1, e.message, "err"); } finally { ev.target.disabled = false; }
   }
   top.append(h("section", { class: "card" }, h("h2", {}, "1. Check for coverage"), h("p", { class: "note" }, "A simple web search. Clarion doesn't open any article."),

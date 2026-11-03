@@ -308,6 +308,7 @@ export function audienceFor(type: Source["type"], census: Census | null, rates: 
 export type Check = { source: string; name: string; keyword: string; result: "Found" | "Found, no date" | "No match" | "Not checked"; date: string };
 
 const checksToday = new Map<string, number>();
+const checksLeft = (code: string) => CHECKS_A_DAY - (checksToday.get(`${code}|${londonToday()}`) ?? 0);
 function countChecks(code: string, n: number): void {
   const key = `${code}|${londonToday()}`;
   const used = checksToday.get(key) ?? 0;
@@ -343,10 +344,10 @@ async function searchSite(c: Config, domain: string, keyword: string, from: stri
   return { found: hits.length > 0, date: dates.at(-1) ?? "" };
 }
 
-export async function checkCoverage(c: Config, p: Pilot, b: any): Promise<{ ready: boolean; why: string; from: string; to: string; checks: Check[] }> {
+export async function checkCoverage(c: Config, p: Pilot, b: any): Promise<{ ready: boolean; why: string; from: string; to: string; left: number; checks: Check[] }> {
   const days = [7, 14, 30].includes(b?.days) ? b.days : 14;
   const to = londonToday(), from = shiftDays(to, -days);
-  if (!c.searchKey) return { ready: false, why: "The search service isn't set up yet, so find pieces yourself and record them below.", from, to, checks: [] };
+  if (!c.searchKey) return { ready: false, why: "The search service isn't set up yet, so find pieces yourself and record them below.", from, to, left: 0, checks: [] };
   const keywords = readKeywords(b?.keywords);
   const chosen: unknown[] | null = Array.isArray(b?.sources) ? b.sources : null;
   if (chosen && !chosen.length) throw new FriendlyError("Tick at least one publication.");
@@ -354,24 +355,29 @@ export async function checkCoverage(c: Config, p: Pilot, b: any): Promise<{ read
   if (!sources.length) throw new FriendlyError("Add a web address to a source first, so Clarion knows where to look.");
   const pairs = sources.flatMap((s) => keywords.map((keyword) => ({ s, keyword, key: `check|${s.domain}|${keyword.toLowerCase()}|${from}|${to}` })));
   if (pairs.length > MAX_CHECKS) throw new FriendlyError(`That's too many at once. Choose fewer publications: up to ${MAX_CHECKS} checks at a time.`);
-  countChecks(p.code, pairs.filter((x) => !isCached(x.key, CHECK_MS)).length); // an answer already held costs nothing
+  const needed = pairs.filter((x) => !isCached(x.key, CHECK_MS)).length; // an answer already held costs nothing
+  countChecks(p.code, needed);
   const checks: Check[] = [], stopAt = Date.now() + CHECK_RUN_MS;
-  let fails = 0;
-  for (const { s, keyword, key } of pairs) {
-    const row = { source: s.id, name: s.name, keyword };
-    if (fails >= FAILS_TO_STOP || Date.now() > stopAt) { checks.push({ ...row, result: "Not checked", date: "" }); continue; }
-    let asked = false;
-    try {
-      const r = await cached(key, CHECK_MS, async () => { asked = true; return await searchSite(c, s.domain, keyword, from, to); });
-      checks.push({ ...row, result: !r.found ? "No match" : r.date ? "Found" : "Found, no date", date: r.date });
-      fails = 0;
-    } catch (e) {
-      if (e instanceof FriendlyError) throw e;
-      console.log(`[warn] coverage check: ${(e as Error).message}`);
-      checks.push({ ...row, result: "Not checked", date: "" });
-      fails++;
+  let fails = 0, made = 0;
+  try {
+    for (const { s, keyword, key } of pairs) {
+      const row = { source: s.id, name: s.name, keyword };
+      if ((fails >= FAILS_TO_STOP || Date.now() > stopAt) && !isCached(key, CHECK_MS)) { checks.push({ ...row, result: "Not checked", date: "" }); continue; }
+      let asked = false;
+      try {
+        const r = await cached(key, CHECK_MS, async () => { asked = true; made++; return await searchSite(c, s.domain, keyword, from, to); });
+        checks.push({ ...row, result: !r.found ? "No match" : r.date ? "Found" : "Found, no date", date: r.date });
+        if (asked) fails = 0;
+      } catch (e) {
+        if (e instanceof FriendlyError) throw e;
+        console.log(`[warn] coverage check: ${(e as Error).message}`);
+        checks.push({ ...row, result: "Not checked", date: "" });
+        fails++;
+      }
+      if (asked) await delay(SEARCH_GAP_MS);
     }
-    if (asked) await delay(SEARCH_GAP_MS);
+  } finally {
+    countChecks(p.code, Math.min(0, made - needed)); // only searches really made count
   }
-  return { ready: true, why: "", from, to, checks };
+  return { ready: true, why: "", from, to, left: checksLeft(p.code), checks };
 }

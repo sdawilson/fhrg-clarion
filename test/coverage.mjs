@@ -80,6 +80,8 @@ await t.briefly("test-broken", "without", async () => { tries++; throw new Error
 await t.briefly("test-empty", "without", async () => { tries++; return null; }, (x) => x === null);
 await t.briefly("test-empty", "without", async () => { tries++; return null; }, (x) => x === null);
 ok(tries === 2, "and something that's failing is left alone for a while, rather than tried on every click");
+await t.briefly("test-part", "without", async () => ({ ok: false, part: "held" }), (x) => !x.ok);
+ok((await t.briefly("test-part", "without", async () => { tries++; return null; }, (x) => !x.ok)).part === "held" && tries === 2, "what it did manage is used in the meantime");
 
 // ---- through the API
 await addUser(1, "lead@westsussex.gov.uk", "Lee Lead", 30, "lead");
@@ -173,14 +175,21 @@ search.body = null;
 r = await api("/api/coverage/check", { code: WSX, keywords: ["cycling"] }, lead);
 ok(r.checks[0].result === "No match", "and isn't remembered, so the next check asks again");
 const second = (await api("/api/coverage/source", { code: WSX, name: "Second paper", type: "Local Newspaper", domain: "second.example" }, lead)).source;
+const third = (await api("/api/coverage/source", { code: WSX, name: "Third paper", type: "Local Newspaper", domain: "third.example" }, lead)).source;
+const spent = (await api("/api/coverage/check", { code: WSX, keywords: ["signs"] }, lead)).left; // these answers are now held
 search.status = 429;
 const asked = search.calls.length;
-r = await api("/api/coverage/check", { code: WSX, keywords: ["signs", "lines"] }, lead);
+r = await api("/api/coverage/check", { code: WSX, keywords: ["lines", "kerbs"] }, lead);
 const tried = search.calls.slice(asked);
-ok(r.checks.length === 4 && r.checks.every((x) => x.result === "Not checked") && tried.length === 2, "after two failures in a row Clarion stops asking");
+ok(r.checks.length === 6 && r.checks.every((x) => x.result === "Not checked") && tried.length === 2, "after two failures in a row Clarion stops asking");
 ok(tried[1].at - tried[0].at >= 1000, "and it waits between tries even when they fail");
+ok(r.left === spent - 2, "and only the searches really made count towards the day's allowance");
+const askedNext = search.calls.length;
+r = await api("/api/coverage/check", { code: WSX, keywords: ["signs", "bollards"] }, lead);
+ok(search.calls.length === askedNext + 2 && r.checks.filter((x) => x.keyword === "signs").every((x) => x.result === "No match") && r.checks.filter((x) => x.result === "Not checked").length === 3, "an answer already held doesn't hide a run of failures, and is still given after Clarion stops asking");
 search.status = 200;
 await api("/api/coverage/unsource", { code: WSX, id: second.id }, lead);
+await api("/api/coverage/unsource", { code: WSX, id: third.id }, lead);
 const already = search.calls.length;
 let bought = true;
 for (let i = 0; i < 210; i++) bought = bought && (await api("/api/coverage/check", { code: WSX, keywords: ["cycling"] }, lead)).status === 200;
