@@ -36,6 +36,8 @@ For the pilot authorities (Lincolnshire, Kirklees and West Sussex):
 | `src/surveys.ts`, `src/surveyai.ts` | Street surveys, and what Claude does for them |
 | `src/sites.ts` | Proposing survey sites from neighbourhood figures |
 | `src/coverage.ts` | What's being said: sources, assessments, audiences and coverage checks |
+| `src/enquiries.ts` | An authority's enquiries as counts, and its own news page |
+| `src/abc.ts` | ABC's register, pasted in by an administrator |
 | `src/demo.ts` | The Northbridge demonstration's made-up data |
 | `src/admin.ts` | The position across all authorities |
 | `src/claude.ts`, `src/jobs.ts`, `src/style.ts` | Claude, background jobs, and the house style |

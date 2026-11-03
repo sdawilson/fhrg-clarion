@@ -7,6 +7,8 @@ import {
   FUNCTIONS, LEANINGS, PROMINENCE, RATE_MEASURES, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, summarise as summariseCoverage, withWeights,
   type Assessment, type Rate, type Source,
 } from "./coverage";
+import { compare } from "./comparison";
+import { enquiriesView, type Month } from "./enquiries";
 import { packFrom, standFor, type SitesPack } from "./sites";
 import { ABOUT, ACCESS_CHECKS, CORE, answersCsv, cellKey, summarise, surveyPage, type Answer, type Census, type Question, type Site, type Survey } from "./surveys";
 import { cached } from "./util";
@@ -119,11 +121,7 @@ const COMMENTS: [string, string][] = [
   ["Parking", "People park on the pavement on Mill Street and block it."],
 ];
 
-// How often each topic appears in press and sector coverage over the four weeks
-const COVERAGE: [string, number, string][] = [
-  ["Potholes", 58, "Street survey, fault reports, press"], ["Relief Road closure", 41, "Press"], ["Street lighting", 28, "Press, petition"], ["Roadworks information", 21, "Street survey, press"],
-  ["Speed limits", 16, "Press, MPs' questions"], ["Parking", 12, "Press"], ["Pavements", 6, "Street survey, fault reports"], ["Flooding on minor roads", 4, "Street survey"],
-];
+const DEMO_TOPICS = ["Potholes", "Relief Road closure", "Street lighting", "Roadworks information", "Speed limits", "Parking", "Pavements", "Flooding on minor roads", "Winter service"];
 
 // The sources Northbridge follows, and what its officers made of the coverage. Run through the real calculations.
 const COUNTY_DAY = (daysAgo: number) => new Date(Date.parse(WHEN) - daysAgo * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -152,6 +150,21 @@ const PIECES: Assessment[] = [
   piece(8, "s2", 19, "Praise for the speed of repairs after the storm", "Potholes", "Some", "Supportive", "Inside page", ["cw"]),
   piece(9, "s1", 24, "Editorial on the state of the county's roads", "Potholes", "High", "Critical", "Inside page", ["cw"]),
   piece(10, "s3", 33, "Interview on the winter gritting plan", "Winter service", "Some", "Neutral", "Inside page", ["ws"]),
+  piece(11, "s1", 13, "Readers' letters on repeat repairs", "Potholes", "Some", "Critical", "Inside page", ["cw"]),
+  piece(12, "s3", 16, "Phone-in on the state of side roads", "Potholes", "Some", "Critical", "Passing mention", ["cw"]),
+  piece(13, "s1", 9, "Town centre traders on lost trade during the closure", "Relief Road closure", "High", "Critical", "Inside page", ["nm"]),
+  piece(14, "s2", 14, "Update on the reopening date", "Relief Road closure", "Some", "Neutral", "Inside page", ["nm"]),
+  piece(15, "s1", 11, "Campaigners on lights going off at midnight", "Street lighting", "High", "Critical", "Inside page", ["sl"]),
+  piece(16, "s5", 18, "Moorside residents ask about the switch-off", "Street lighting", "Some", "Neutral", "Inside page", ["sl"]),
+  piece(17, "s6", 20, "Forum thread on dark streets", "Street lighting", "Some", "Critical", "Passing mention", ["sl"]),
+  piece(18, "s1", 4, "Complaints about roadworks signs on the ring road", "Roadworks information", "Some", "Critical", "Inside page", ["nm"]),
+  piece(19, "s2", 17, "What the winter works mean for drivers", "Roadworks information", "Some", "Neutral", "Inside page", ["nm"]),
+  piece(20, "s3", 22, "Traffic bulletin on the bridge works", "Roadworks information", "Little", "Neutral", "Passing mention", ["nm"]),
+  piece(21, "s1", 6, "Call for a lower limit near the school", "Speed limits", "High", "Neutral", "Inside page", ["sg"]),
+  piece(22, "s2", 21, "Parish council backs a village speed check", "Speed limits", "Some", "Supportive", "Inside page", ["sg"]),
+  piece(23, "s2", 7, "Traders on parking charges", "Parking", "Some", "Neutral", "Inside page", ["nm"]),
+  piece(24, "s5", 23, "Note on the new permit zone", "Parking", "Little", "Neutral", "Passing mention", ["nm"]),
+  piece(25, "s1", 26, "Short item on a cracked pavement on Mill Street", "Pavements", "Little", "Neutral", "Passing mention", ["fw"]),
 ];
 // Published national rates, the same ones the data library holds, with no links
 const DEMO_RATES: Rate[] = ([[0,16,19,7.6],[0,20,24,9],[0,25,29,9.9],[0,30,34,12.3],[0,35,39,14.4],[0,40,44,18.4],[0,45,49,19.7],[0,50,54,21.7],[0,55,59,23.8],[0,60,64,27.4],[0,65,69,31.3],[0,70,74,35.6],[0,75,79,39.3],[0,80,84,41.4],[0,85,null,39.7],[1,16,19,20.8],[1,20,24,31.7],[1,25,29,34.9],[1,30,34,41.8],[1,35,39,41],[1,40,44,40.6],[1,45,49,46],[1,50,54,48],[1,55,59,45.8],[1,60,64,46.6],[1,65,69,44.4],[1,70,74,39.6],[1,75,79,32.6],[1,80,84,30.8],[1,85,null,16],[2,16,19,9.8],[2,20,24,11.7],[2,25,29,14],[2,30,34,15.4],[2,35,39,18.7],[2,40,44,22.3],[2,45,49,26],[2,50,54,27.5],[2,55,59,30.8],[2,60,64,36],[2,65,69,41.4],[2,70,74,47.9],[2,75,79,54.2],[2,80,84,56.2],[2,85,null,53.7],[9,17,20,32.5],[9,21,29,60.7],[9,30,39,72.1],[9,40,49,80.6],[9,50,59,83.7],[9,60,69,83.8],[9,70,null,74.3],[10,16,24,70.8],[10,25,34,71.1],[10,35,44,68.5],[10,45,54,71.4],[10,55,64,71],[10,65,74,71.9],[10,75,84,61.2],[10,85,null,35.7],[11,16,24,11.5],[11,25,34,11],[11,35,44,11.2],[11,45,54,12.3],[11,55,64,11.2],[11,65,74,7.8],[11,75,84,4.2],[11,85,null,1.7],[12,16,24,28.3],[12,25,34,37.5],[12,35,49,40.9],[12,50,64,41.5],[12,65,74,43],[12,75,null,34.3],[13,16,24,9],[13,25,34,22],[13,35,44,38],[13,45,54,33],[13,55,64,24],[13,65,null,31],[3,16,24,5],[3,25,34,9],[3,35,44,9],[3,45,54,13],[3,55,64,15],[3,65,74,14],[3,75,null,23],[4,16,24,59],[4,25,34,59],[4,35,44,52],[4,45,54,52],[4,55,64,40],[4,65,74,38],[4,75,null,26],[5,16,24,25],[5,25,34,29],[5,35,44,38],[5,45,54,39],[5,55,64,51],[5,65,74,59],[5,75,null,64],[7,16,24,18],[7,25,34,17],[7,35,44,27],[7,45,54,26],[7,55,64,28],[7,65,74,31],[7,75,null,33]] as [number, number, number | null, number][]).map(([m, age_from, age_to, value]) => ({ measure: RATE_MEASURES[m], age_from, age_to, value, publisher: "", year: "2025" }));
@@ -161,11 +174,25 @@ const DEMO_CHECK = { ready: true, why: "", from: COUNTY_DAY(14), to: COUNTY_DAY(
   { source: "s2", name: "Dale Valley Gazette", keyword: "potholes", result: "No match", date: "" },
   { source: "s3", name: "Northbridge Radio", keyword: "potholes", result: "No match", date: "" },
 ] };
+// Northbridge's enquiries, as an officer's browser would send them, run through the real calculations
+const enquiryMonth = (pothole: number, pavement: number, flood: number, light: number): Month => ({
+  categories: { "Road defects": [Math.round(pothole * 0.9), Math.round(pothole * 0.1)], "Footway defects": [Math.round(pavement * 0.9), Math.round(pavement * 0.1)], Gullies: [Math.round(flood * 0.93), Math.round(flood * 0.07)], "Street lights": [Math.round(light * 0.95), Math.round(light * 0.05)], Other: [612, 48] },
+  areas: { Moorside: Math.round(pothole / 4), "Dale End": Math.round(pothole / 5), "Bridge Ward": Math.round(pothole / 6), "High Fell": Math.round(pothole / 9) }, hiddenAreas: 1, routes: { Online: 2500, Phone: 1200, Email: 500 },
+});
+function demoEnquiries(topics: string[]) {
+  const months = { "2026-07": enquiryMonth(1500, 680, 300, 330), "2026-08": enquiryMonth(1450, 690, 310, 340), "2026-09": enquiryMonth(1480, 670, 330, 345), "2026-10": enquiryMonth(1976, 685, 537, 340) };
+  const added = Object.values(months).flatMap((m) => Object.values(m.categories)).reduce((sum, [enquiries, complaints]) => sum + enquiries + complaints, 0);
+  const note = { id: "d1", months: Object.keys(months), rows: added + 14, added, skipped: 14, at: WHEN, by: "Demo officer" };
+  return {
+    canEdit: true, adults: ADULTS, topics, view: enquiriesView({ months, matches: {}, imports: [note], page: "" }, ADULTS, topics), imports: [note],
+    website: { page: "", read: true, posts: [{ title: "Winter gritting routes confirmed", url: "", date: "2026-10-28", topic: "Winter service" }, { title: "Moor Lane resurfacing starts next month", url: "", date: "2026-10-21", topic: "Potholes" }] },
+  };
+}
 function demoCoverage(census: Census) {
   const rows = withWeights(PIECES, SOURCES), today = COUNTY_DAY(0);
   return {
     ready: true, canEdit: true, today, searchReady: true, adults: ADULTS, sources: SOURCES, rows, summary: summariseCoverage(rows, today),
-    topics: [...new Set([...COVERAGE.map((x) => x[0]), ...PIECES.map((x) => x.topic)])], functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachUnitFor: REACH_UNIT_FOR, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
+    topics: DEMO_TOPICS, functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachUnitFor: REACH_UNIT_FOR, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
     audiences: Object.fromEntries(SOURCE_TYPES.map((t) => [t, audienceFor(t, census, DEMO_RATES)])),
     automatic: [
       { name: "GOV.UK: DfT and National Highways", type: "Government announcement", last: "2026-10-29" }, { name: "Parliament: MPs' written questions", type: "Parliament", last: "2026-10-09" },
@@ -199,12 +226,6 @@ const survey = (over: Partial<Survey>): Survey => ({
   created: WHEN, by: "Demo officer", updated: WHEN, openedBy: "", openedOn: "", closedOn: "", printedTo: 0, ...over,
 });
 
-// Where a topic sits, from its two ranks. The upper half of each ranking counts as high.
-function placeTopic(concern: number, attention: number, count: number): { early: boolean; action: string } {
-  const felt = concern <= count / 2, loud = attention <= count / 2;
-  return { early: felt && !loud, action: felt && loud ? "Act, and be seen to" : felt ? "Look into it early" : loud ? "Answer it, but don't over-react" : "Keep watching" };
-}
-
 export function buildPack() {
   const rows = replies();
   const autumn = survey({
@@ -216,11 +237,9 @@ export function buildPack() {
   const street = summarise(autumn, rows, census);
   const counted = new Map<string, number>();
   for (const [topic] of COMMENTS) counted.set(topic, (counted.get(topic) || 0) + 1);
-  const byConcern = [...counted.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0]);
-  const topics = COVERAGE.map(([topic, items, kinds], i) => {
-    const concern = byConcern.indexOf(topic) + 1;
-    return { topic, items, kinds, attention: i + 1, concern, replies: counted.get(topic) || 0, ...placeTopic(concern, i + 1, COVERAGE.length) };
-  }).sort((a, b) => a.concern - b.concern);
+  const enquiries = demoEnquiries(DEMO_TOPICS), today = COUNTY_DAY(0);
+  const said = summariseCoverage(withWeights(PIECES, SOURCES), today).topics;
+  const comparison = compare(said, [...counted.entries()].map(([topic, count]) => ({ topic, count })), enquiries.view.ready ? enquiries.view.rows : []);
   const reading = {
     id: "20261030090000000-de000003", code: DEMO_CODE, status: "ready", stage: "Ready", created: WHEN, updated: WHEN, by: "Demo officer",
     headline: "People are less satisfied with their roads than a year ago. Potholes are the main worry, and pavements and flooding matter more than the coverage suggests.",
@@ -269,14 +288,14 @@ export function buildPack() {
     surveyList: { canEdit: true, surveys: [autumn, winter].map((s) => ({ id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: s.id === autumn.id ? rows.length : 0, target: s.plan.target })) },
     surveys: pages, sites: SITE_PACK,
     suggestions: [
-      { text: "Have you heard about the closure of the Relief Road?", kind: "choice", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"], reason: "Loud: has it reached people?", topic: "Relief Road closure", basedOn: ["Impact note"], why: "41 items in four weeks, but nothing yet shows how many people it affects." },
+      { text: "Have you heard about the closure of the Relief Road?", kind: "choice", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"], reason: "Loud: has it reached people?", topic: "Relief Road closure", basedOn: ["Impact note"], why: "5 assessed pieces in four weeks, but nothing yet shows how many people it affects." },
       { text: "Over the past year, have potholes near you been repaired faster, slower or about the same?", kind: "choice", options: ["Faster", "About the same", "Slower", "Don't know"], reason: "A promise: do people believe it?", topic: "Pothole repairs", basedOn: ["Impact note", "Fault reports"], why: "The council promised faster repairs. This tests whether people believe it." },
-      { text: "How much does street lighting at night matter to you?", kind: "choice", options: ["A great deal", "A fair amount", "Not very much", "Not at all", "Don't know"], reason: "Loud: is it widely felt?", topic: "Street lighting", basedOn: ["Petitions"], why: "28 items, most about one campaign. It may be a strong view held by few." },
+      { text: "How much does street lighting at night matter to you?", kind: "choice", options: ["A great deal", "A fair amount", "Not very much", "Not at all", "Don't know"], reason: "Loud: is it widely felt?", topic: "Street lighting", basedOn: ["Petitions"], why: "4 assessed pieces, most about one campaign. It may be a strong view held by few." },
       { text: "How would you rate the condition of the pavements near where you live?", kind: "choice", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], reason: "Quiet: is it wider than it looks?", topic: "Pavements", basedOn: ["Fault reports"], why: "Few press items, but fault reports are rising." },
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
-    coverage: demoCoverage(census), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
-    attention: { ready: true, topics, earlySigns: topics.filter((x) => x.early).map((x) => ({ topic: x.topic, concern: x.concern, attention: x.attention, why: x.topic === "Pavements" ? "Fault reports are up by a quarter." : "Named by people on the same few roads." })) },
+    coverage: demoCoverage(census), enquiries, coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
+    attention: comparison,
   };
 }
 

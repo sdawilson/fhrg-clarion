@@ -4,6 +4,7 @@
 
 import type { Config } from "./config";
 import { monthSpend } from "./claude";
+import { loadComparison } from "./comparison";
 import { PILOTS, type Pilot } from "./pilots";
 import { latestReadings } from "./reading";
 import { storageJson, storageList } from "./storage";
@@ -15,16 +16,16 @@ const TOP_TOPICS = 3;
 
 type Row = {
   code: string; name: string; region: string; kind: string; direction: string; readingOn: string; surveysRun: number; reported: number; replies: number; street: StreetSummary | null;
-  readingsThisMonth: number; notesThisMonth: number; forecastsDue: number;
+  readingsThisMonth: number; notesThisMonth: number; forecastsDue: number; early: string[] | null;
 };
 
 const month = () => new Date().toISOString().slice(0, 7).replace("-", "");
 
 async function authorityRow(c: Config, p: Pilot): Promise<Row> {
-  const [readings, surveys, streets, readingNames, noteNames, forecasts] = await Promise.all([
+  const [readings, surveys, streets, readingNames, noteNames, forecasts, comparison] = await Promise.all([
     latestReadings(c, p.code), listSurveys(c, p.code), streetSummaries(c, p.code),
     storageList(c, `${c.root}authorities/${p.code}/readings/`), storageList(c, `${c.root}authorities/${p.code}/notes/`),
-    storageJson<unknown[]>(c, `${c.root}authorities/${p.code}/forecasts.json`, []),
+    storageJson<unknown[]>(c, `${c.root}authorities/${p.code}/forecasts.json`, []), loadComparison(c, p).catch((e) => { console.log(`[warn] comparison for ${p.code}: ${(e as Error).message}`); return null; }),
   ]);
   const latest = readings.find((r) => r.status === "ready");
   const today = new Date().toISOString().slice(0, 10);
@@ -33,7 +34,13 @@ async function authorityRow(c: Config, p: Pilot): Promise<Row> {
     surveysRun: surveys.filter((s) => s.status !== "draft").length, reported: streets.length, replies: streets.reduce((n, x) => n + x.responses, 0), street: streets[0] ?? null,
     readingsThisMonth: readingNames.filter((n) => n.startsWith(month())).length, notesThisMonth: noteNames.filter((n) => n.startsWith(month())).length,
     forecastsDue: (Array.isArray(forecasts) ? forecasts : []).filter((f: any) => typeof f?.checkDate === "string" && f.checkDate <= today && !f.outcome).length,
+    early: comparison === null ? null : comparison.ready ? comparison.earlySigns.map((x) => x.topic) : [],
   };
+}
+
+// Topics that are an early sign in more than one authority, as a count: no authority is named
+function sharedSigns(rows: Row[]): { topic: string; authorities: number }[] {
+  return [...new Set(rows.flatMap((r) => r.early ?? []))].sort().map((topic) => ({ topic, authorities: rows.filter((r) => r.early?.includes(topic)).length })).filter((x) => x.authorities > 1);
 }
 
 export async function adminOverview(c: Config) {
@@ -48,7 +55,7 @@ export async function adminOverview(c: Config) {
     regions: regions.map((g) => rows.filter((r) => r.region === g.name && r.street?.topics.slice(0, TOP_TOPICS).some((t) => t.topic === topic)).length),
   }));
   return {
-    authorities: rows, regions, topics, directions,
+    authorities: rows.map(({ early: _early, ...row }) => row), regions, topics, directions, earlySigns: sharedSigns(rows), earlySignsMissing: rows.some((r) => r.early === null),
     totals: {
       using: rows.filter((r) => r.direction || r.surveysRun || r.notesThisMonth).length, authorities: rows.length, withSurvey: withStreet.length, surveys: rows.reduce((n, r) => n + r.reported, 0),
       replies: rows.reduce((n, r) => n + r.replies, 0), middle: median(satisfied), lowest: satisfied.length ? Math.min(...satisfied) : null, highest: satisfied.length ? Math.max(...satisfied) : null,

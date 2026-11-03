@@ -115,7 +115,7 @@ r = await api("/api/coverage/get", { code: WSX });
 ok(r.status === 401, "this needs a sign-in");
 ok((await api("/api/coverage/get", { code: WSX }, kirk)).status === 403, "and it's only for your own authority");
 r = await api("/api/coverage/get", { code: WSX }, member);
-ok(r.ready && !r.canEdit && !r.searchReady && r.sources.length === 0 && r.automatic.length === 4, "a member can read it, and the automatic sources are listed");
+ok(r.ready && !r.canEdit && !r.searchReady && r.sources.length === 0 && r.automatic.length === 5, "a member can read it, and the automatic sources are listed");
 ok(r.audiences["Local Newspaper"].known && r.audiences["Local Newspaper"].likelihoods.length === 5 && r.audiences["Local Newspaper"].likelihoods.every((x) => x.label !== "Likely to vote"), "with the audience worked out from the library");
 ok(r.audiences["Social Media"].known && r.audiences["Local Television"].known && r.audiences["Local Television"].note === "", "including Ofcom's local news figures");
 ok((await api("/api/coverage/source", { code: WSX, name: "X", type: "Local Newspaper" }, member)).status === 403, "a member can't change the sources");
