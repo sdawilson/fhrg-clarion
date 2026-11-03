@@ -102,7 +102,7 @@ async function send() {
       if (S.stuck) break;
     }
   } catch (e) {
-    if (e.status === 409) { S.closed = true; drawStatus(); if (!S.form) closedScreen(); }
+    if (e.status === 409) { S.closed = true; S.paused = /paused/.test(e.message); drawStatus(); if (!S.form) closedScreen(); }
     if (e.status === 404) S.stuck = true; // the survey has gone back to a draft, so its code no longer works
   } finally {
     S.sending = false;
@@ -127,7 +127,7 @@ function codeScreen(message) {
 
 function closedScreen() {
   const n = queue().length;
-  frame(h("h1", {}, "This survey is closed"), n ? [h("p", { class: "bad" }, `${n} form${n === 1 ? " is" : "s are"} still on this tablet.`), h("p", {}, "Ask your officer to open the survey again, then press the button below."), h("button", { class: "main-btn", type: "button", onclick: () => load() }, "Try again")] : h("p", {}, "Thank you. All your forms have been sent."));
+  frame(h("h1", {}, S.paused ? "This survey is paused" : "This survey is closed"), S.paused ? h("p", {}, "Street surveys stop during a pre-election period.") : null, n ? [h("p", { class: "bad" }, `${n} form${n === 1 ? " is" : "s are"} still on this tablet.`), h("p", {}, "Ask your officer to open the survey again, then press the button below."), h("button", { class: "main-btn", type: "button", onclick: () => load() }, "Try again")] : h("p", {}, "Thank you. All your forms have been sent."));
 }
 
 function startScreen() {
@@ -184,7 +184,7 @@ async function load() {
     store.set("clarion_survey", S.survey);
   } catch (e) {
     if (e.status === 404) return codeScreen(e.message);
-    if (e.status === 409) { S.closed = true; drawStatus(); return closedScreen(); }
+    if (e.status === 409) { S.closed = true; S.paused = /paused/.test(e.message); drawStatus(); return closedScreen(); }
     if (e.status === 429) return codeScreen(e.message);
     S.survey = store.get("clarion_survey", null); // no signal: carry on with what the tablet already has
     if (!S.survey) return codeScreen("There's no signal here, and this survey hasn't been opened on this tablet before.");

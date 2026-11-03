@@ -99,6 +99,7 @@ From now on, every change Claude makes reaches the container by itself.
 - Open West Sussex. The evidence appears, and "What's missing" lists only real gaps. If a source says it couldn't be read, tell Claude which.
 - Click **Write the first reading**, and wait a minute or two.
 - Open **Impact notes**, choose an announcement, and click **Write the impact note**.
+- Open **Councillor briefings** and click **Write a briefing**. A lead of the authority checks it and clicks **Release this briefing**; only then can it be taken as Word or PDF.
 
 ---
 

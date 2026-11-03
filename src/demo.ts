@@ -7,6 +7,7 @@ import {
   FUNCTIONS, LEANINGS, PROMINENCE, RATE_MEASURES, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, summarise as summariseCoverage, withWeights,
   type Assessment, type Rate, type Source,
 } from "./coverage";
+import { ELECTION_NOTE, longDate, wordCopy, type Briefing } from "./briefings";
 import { compare } from "./comparison";
 import { mondayOf, worksFigures, type Week } from "./works";
 import { enquiriesView, type Month } from "./enquiries";
@@ -311,7 +312,28 @@ export function buildPack() {
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
     coverage: demoCoverage(census), enquiries, works: demoWorks(street?.satisfied ?? null), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
     attention: comparison,
+    ...demoBriefing(street?.satisfied ?? null, street?.responses ?? 0, today),
   };
+}
+
+// Written by hand, since the demonstration never calls Claude, with the survey's figures dropped in
+function demoBriefing(satisfied: number | null, responses: number, today: string) {
+  const briefing: Briefing = {
+    id: "20261030090000000-de000011", code: DEMO_CODE, status: "ready", stage: "Ready", created: WHEN, updated: WHEN, by: "Demo officer", title: `${NAME}: councillor briefing`,
+    summary: `Satisfaction with the roads in ${NAME} has fallen since last year. In the autumn street survey ${Math.round(satisfied ?? 0)}% of the ${responses} people asked were satisfied, which is indicative because a street sample isn't a random one. Potholes are the main worry, and fault reports point the same way.`,
+    feel: `The residents' survey and the street survey agree that people are less satisfied than a year ago, and that potholes come first. Pavements and flooding come up more in the street survey than in press coverage. Confidence is moderate: a few stories lead the coverage, and a street sample is indicative.`,
+    matters: `The extra pothole money was announced in October, so people may judge it on their own street before the work reaches them. Enquiries about flooding rose after last month's heavy rain.`,
+    questions: [
+      { question: "Are the roads getting worse?", answer: "The residents' survey scored the condition of highways at 29 out of 100. The autumn street survey suggests satisfaction has fallen, though it's indicative." },
+      { question: "When will the extra money reach my street?", answer: "The programme is still being set. Officers will publish it once it's agreed." },
+      { question: "Why do pavements get less attention than roads?", answer: "Pavements were raised more often in the street survey than in the coverage. Officers plan to ask about them on their own in the next survey." },
+    ],
+    lines: ["Satisfaction in the autumn street survey is indicative, because a street sample isn't random.", "Fault reports and the street survey both put potholes first."],
+    sources: [`Evidence read on ${longDate(today)}.`, "Residents' survey 2025", `Street survey "Autumn roads survey", ${responses} replies (indicative)`, "The authority's enquiries and complaints, latest month", "Published figures in the FHRG reference library"],
+    cost: 0, approvedBy: "", approvedOn: "",
+  };
+  const off = { on: false, by: "", at: "" }, released = { ...briefing, approvedBy: "Demo officer", approvedOn: today };
+  return { briefing, electionNote: ELECTION_NOTE, briefingWord: wordCopy(released, off), briefingWordElection: wordCopy(released, { ...off, on: true }) };
 }
 
 export const demoPack = () => cached("demo-pack", 24 * 60 * 60 * 1000, async () => JSON.stringify(buildPack()));

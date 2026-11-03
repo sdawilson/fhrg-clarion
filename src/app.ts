@@ -20,6 +20,15 @@
 //   POST /api/note/start           {code, url, title, text}: write an impact note (runs in the background)
 //   POST /api/note/get             {code, id}
 //   POST /api/note/list            {code}
+//   POST /api/briefing/list        {code}: councillor briefings, and the election setting
+//   POST /api/briefing/get         {code, id}
+//   POST /api/briefing/start       {code}: draft one (runs in the background)
+//   POST /api/briefing/save        {code, id, title, summary, feel, matters, questions, lines}: an officer's changes
+//   POST /api/briefing/approve     {code, id}: a named officer of the authority releases it, which fixes it
+//   POST /api/briefing/copy        {code, id}: a new draft from one
+//   POST /api/briefing/remove      {code, id}: only a draft
+//   POST /api/briefing/word        {code, id}: a released briefing as a Word file
+//   POST /api/briefing/election    {code, on}: the pre-election setting
 //   POST /api/coverage/get         {code}: sources, assessments, and what's been read automatically
 //   POST /api/coverage/summary     {code}: the last four weeks' assessments, for the Summary page
 //   POST /api/coverage/source      {code, ...source}: add or change a source
@@ -70,6 +79,7 @@ import { findTitles, saveTitles, titlesHeld } from "./abc";
 import { loadWorks, refreshWorks, turnOff, turnOn, worksPage } from "./works";
 import { enquiriesView, loadEnquiries, readNews, removeImport, saveImport, saveMatch, savePage } from "./enquiries";
 import { adminOverview, benchmark } from "./admin";
+import { PAUSED, approveBriefing, canApprove, copyBriefing, forReader, getBriefing, listBriefings, loadElection, removeBriefing, saveBriefing, setElection, startBriefing, wordCopy, type Briefing, type Election } from "./briefings";
 import { loadComparison } from "./comparison";
 import {
   FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
@@ -330,13 +340,39 @@ async function surveyEditor(c: Config, request: Request, limit = 2000): Promise<
   return { me, p, b, s: await surveyFor(c, p, b.id) };
 }
 
+const briefingPage = (me: Member, p: Pilot, x: Briefing, election: Election) => json({ briefing: forReader(x, election), canEdit: canEdit(me, p), canApprove: canApprove(me, p), election });
+
+async function handleBriefingList(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const [all, election] = await Promise.all([listBriefings(c, p.code), loadElection(c, p.code)]);
+  return json({ briefings: all.map(({ id, status, stage, created, by, title, approvedBy, approvedOn }) => ({ id, status, stage, created, by, title, approvedBy, approvedOn })), canEdit: canEdit(me, p), election });
+}
+
+async function briefingFor(c: Config, request: Request): Promise<{ me: Member; p: Pilot; x: Briefing; election: Election }> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const [x, election] = await Promise.all([getBriefing(c, p.code, b.id), loadElection(c, p.code)]);
+  if (!x) throw new FriendlyError("That briefing wasn't found.", 404);
+  return { me, p, x, election };
+}
+
+async function handleBriefingChange(c: Config, request: Request, step: (me: Member, p: Pilot, b: Record<string, any>, election: Election) => Promise<Briefing>): Promise<Response> {
+  const { me, p, b } = await editor(c, request, 60_000);
+  const election = await loadElection(c, p.code);
+  return briefingPage(me, p, await step(me, p, b, election), election);
+}
+
 async function handleSurveyList(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
   const surveys = await listSurveys(c, p.code);
-  const counts = await Promise.all(surveys.map((s) => loadAnswers(c, p.code, s.id)));
+  const [counts, election] = await Promise.all([Promise.all(surveys.map((s) => loadAnswers(c, p.code, s.id))), loadElection(c, p.code)]);
   return json({
+    paused: election.on,
     canEdit: canEdit(me, p),
     surveys: surveys.map((s, i) => ({ id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: counts[i].filter((r) => !r.excluded).length, target: s.plan.target })),
   });
@@ -345,8 +381,9 @@ async function handleSurveyList(c: Config, request: Request): Promise<Response> 
 async function handleSurveyGet(c: Config, request: Request): Promise<Response> {
   const { me, p, s } = await reader(c, request);
   const edit = canEdit(me, p);
-  const [rows, census, sorting] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id)]);
+  const [rows, census, sorting, election] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id), loadElection(c, p.code)]);
   return json({
+    paused: election.on,
     ...surveyPage(s, rows, census, edit, isMember(me, p), p.constituencies.length),
     sorting: sorting?.status === "working" ? sorting : null, dropped: edit && sorting?.status === "ready" ? sorting.result?.dropped ?? 0 : 0,
   });
@@ -364,7 +401,10 @@ async function handleSurveySave(c: Config, request: Request): Promise<Response> 
 
 async function handleSurveyStatus(c: Config, request: Request): Promise<Response> {
   const { me, b, s } = await surveyEditor(c, request);
-  if (b.status === "open") return json({ survey: await openSurvey(c, me, s) });
+  if (b.status === "open") {
+    if ((await loadElection(c, s.code)).on) throw new FriendlyError(PAUSED, 409);
+    return json({ survey: await openSurvey(c, me, s) });
+  }
   if (b.status === "closed") return json({ survey: await closeSurvey(c, s) });
   if (b.status === "draft") return json({ survey: await backToDraft(c, s) });
   throw new FriendlyError("That isn't a survey status.");
@@ -448,6 +488,7 @@ async function surveyFromCode(c: Config, request: Request, value: unknown, forms
   if (sent.n + forms > MAX_FORMS) throw new FriendlyError("Too many forms at once. Please wait a few minutes.", 429);
   sent.n += forms;
   if (s.status !== "open") throw new FriendlyError("This survey isn't open.", 409);
+  if ((await loadElection(c, s.code)).on) throw new FriendlyError(PAUSED, 409);
   return s;
 }
 
@@ -502,6 +543,15 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/note/start": return await handleNoteStart(c, request);
         case "/api/note/get": return await handleNoteGet(c, request);
         case "/api/note/list": return await handleNoteList(c, request);
+        case "/api/briefing/list": return await handleBriefingList(c, request);
+        case "/api/briefing/get": { const { me, p, x, election } = await briefingFor(c, request); return briefingPage(me, p, x, election); }
+        case "/api/briefing/start": { const { me, p } = await editor(c, request, 1000); return json({ briefing: await startBriefing(c, me, p) }); }
+        case "/api/briefing/save": return await handleBriefingChange(c, request, (_me, p, b, election) => saveBriefing(c, p, b, election));
+        case "/api/briefing/approve": return await handleBriefingChange(c, request, (me, p, b, election) => approveBriefing(c, me, p, b.id, election));
+        case "/api/briefing/copy": return await handleBriefingChange(c, request, (me, p, b, election) => copyBriefing(c, me, p, b.id, election));
+        case "/api/briefing/remove": { const { p, b } = await editor(c, request, 1000); await removeBriefing(c, p, b.id); return json({ ok: true }); }
+        case "/api/briefing/word": { const { x, election } = await briefingFor(c, request); return json(wordCopy(x, election)); }
+        case "/api/briefing/election": { const { me, p, b } = await editor(c, request, 1000); return json({ election: await setElection(c, me, p, b.on === true) }); }
         case "/api/facts/survey": return await handleFactsSurvey(c, request);
         case "/api/facts/notes": return await handleFactsNotes(c, request);
         case "/api/attention": return await handleAttention(c, request);
