@@ -863,12 +863,13 @@ function checkPart(top, a, d) {
 
   const progressBox = h("div", {});
   const c = h("section", { class: "card" }, h("h2", {}, "Written comments"),
-    h("p", {}, "Before anyone can read them, Claude takes out names and anything else that identifies a person, and sorts each comment into a topic. Only people in your authority can see them."));
+    h("p", {}, "Before anyone can read them, Claude takes out names and anything else that identifies a person, and sorts each comment into a topic. Only people in the authority can see them."));
   if (d.waiting) c.append(h("p", {}, h("strong", {}, `${fmt(d.waiting)} comment${d.waiting === 1 ? "" : "s"} waiting.`)), h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => askHelp(a, s.id, "/api/survey/sort", {}, progressBox, () => route()) }, "Take out names and sort")));
   else c.append(h("p", { class: "muted" }, "No comments waiting."));
   if (d.dropped) c.append(h("p", { class: "note" }, `${fmt(d.dropped)} comment${d.dropped === 1 ? " was" : "s were"} taken out, because Claude wouldn't process ${d.dropped === 1 ? "it" : "them"}. Nobody has seen ${d.dropped === 1 ? "it" : "them"}.`));
   c.append(progressBox);
   if (d.sorting) watchHelp(a, s.id, d.sorting, progressBox, () => route());
+  if (!d.ownComments) c.append(h("p", { class: "note" }, "Comments stay with the authority, so only its own members can read and check them. You can still start the sorting."));
   if (d.sample.length) {
     const left = d.sample.filter((x) => !x.checked).length;
     c.append(h("h3", {}, "Check a sample"), h("p", { class: "note" }, `Please read one comment in ten, in case a name has got through. ${left ? `${left} still to check.` : "All checked."}`));
@@ -910,8 +911,9 @@ function resultsPart(top, a, d) {
   if (r.targetMet.length) top.append(h("section", { class: "card" }, h("h2", {}, "How the sample compares"), h("p", { class: "note" }, "Replies against the numbers planned from Census 2021."), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Age"), h("th", { class: "r" }, "Planned"), h("th", { class: "r" }, "So far"))), h("tbody", {}, r.targetMet.map((x) => h("tr", {}, h("td", {}, x.age), h("td", { class: "r" }, fmt(x.want)), h("td", { class: "r" }, fmt(x.got)))))))));
   const c = h("section", { class: "card" }, h("h2", {}, "What people said"), h("p", { class: "note" }, "With names taken out. These stay with your authority, and aren't used in mood readings."));
   if (d.waiting) c.append(h("p", { class: "note" }, `${fmt(d.waiting)} more ${d.waiting === 1 ? "is" : "are"} waiting to have names taken out.`));
-  if (!d.comments.length) c.append(h("p", { class: "muted" }, "No comments to show yet."));
-  for (const t of d.topics) c.append(h("details", {}, h("summary", {}, `${t.topic} (${fmt(t.count)})`), d.comments.filter((x) => x.topic === t.topic).map((x) => h("div", { class: "comment" }, x.text))));
+  if (!d.topics.length) c.append(h("p", { class: "muted" }, "No comments to show yet."));
+  for (const t of d.topics) c.append(d.ownComments ? h("details", {}, h("summary", {}, `${t.topic} (${fmt(t.count)})`), d.comments.filter((x) => x.topic === t.topic).map((x) => h("div", { class: "comment" }, x.text))) : h("p", {}, `${t.topic}: ${fmt(t.count)}`));
+  if (!d.ownComments && d.topics.length) c.append(h("p", { class: "note" }, "Topic counts only. The comments themselves stay with the authority."));
   top.append(c);
   if (d.canEdit) { const msg = saveNote(); top.append(h("div", { class: "row no-print" }, h("button", { class: "btn", type: "button", onclick: async () => { try { const r2 = await API.call("/api/survey/export", { code: a.code, id: s.id }); download(r2.name, r2.csv); } catch (e) { said(msg, e.message, "err"); } } }, "Download the answers"), msg)); }
 }

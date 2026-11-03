@@ -9,9 +9,11 @@ const ok = (cond, what) => { console.log(`${cond ? "PASS" : "FAIL"}  ${what}`); 
 const WSX = "E10000032";
 await addUser(1, "lead@westsussex.gov.uk", "Lee Lead", 30, "lead");
 await addUser(2, "member@westsussex.gov.uk", "Mo Member", 30, "member");
+await addUser(3, "boss@fhrg.test", "Bo Boss", 99, "member");
 const api = async (path, body, token) => (await handleRequest(new Request("https://clarion.test" + path, { method: "POST", headers: { "content-type": "application/json", "x-session-token": token || "" }, body: JSON.stringify(body) }))).json();
 const lead = (await api("/api/login", { email: "lead@westsussex.gov.uk", password: "pw" })).token;
 const member = (await api("/api/login", { email: "member@westsussex.gov.uk", password: "pw" })).token;
+const boss = (await api("/api/login", { email: "boss@fhrg.test", password: "pw" })).token;
 
 const pages = { main: fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8"), tablet: fs.readFileSync(new URL("../public/survey.html", import.meta.url), "utf8") };
 const net = { down: false };
@@ -231,7 +233,7 @@ ok(!bare.w.localStorage.length, "an interviewer can start from the plain address
 w.location.hash = `#survey/${WSX}/${id}/check`;
 await see(d, /Written comments/);
 ok(/comments? waiting/.test(text(d.querySelector(".main"))), "comments wait to be sorted");
-ok(/Only people in your authority/.test(text(d.querySelector(".main"))), "and the page says who can see them");
+ok(/Only people in the authority/.test(text(d.querySelector(".main"))), "and the page says who can see them");
 button(d, "Take out names and sort").click();
 await see(d, /Check a sample/);
 ok(/No comments waiting/.test(text(d.querySelector(".main"))), "sorting clears the queue");
@@ -265,6 +267,10 @@ ok((await w.downloaded.text()).includes("form,site,entered_by,weight"), "a lead 
 w.location.hash = `#a/${WSX}`;
 await see(d, /Street samples aren't random/);
 ok(d.querySelector(`a[href="#survey/${WSX}/${id}/results"]`), "the authority's page links to the survey");
+
+dom = await open(boss, `#survey/${WSX}/${id}/results`); d = dom.window.document;
+await see(d, /The comments themselves stay with the authority/);
+ok(!d.querySelector(".comment") && !/\[removed\]/.test(text(d.querySelector(".main"))), "a site administrator from outside the authority sees topic counts, not comments");
 
 ok(claude.refused.length === 0, "every call to Claude was one the real service would accept");
 console.log(failures ? `\n${failures} FAILED` : "\nAll passed");

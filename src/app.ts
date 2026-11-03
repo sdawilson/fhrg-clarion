@@ -47,7 +47,7 @@ import { getConfig, missingSettings, type Config } from "./config";
 import { addSurvey, loadEvidence, loadFacts, saveNotes } from "./evidence";
 import { validId } from "./jobs";
 import { getNote, listNotes, readInput, startNote } from "./notes";
-import { canEdit, canSee, pilotByCode, pilotsFor, type Pilot } from "./pilots";
+import { canEdit, canSee, isMember, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
 import { announcements, fixMyStreetUrl } from "./signals";
 import { MAX_SCAN_CHARS, getHelp, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
@@ -229,15 +229,17 @@ async function handleSurveyGet(c: Config, request: Request): Promise<Response> {
   const edit = canEdit(me, p);
   const [rows, census, sorting] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id)]);
   const used = rows.filter((r) => !r.excluded);
-  const comments = cleanComments(s, used);
+  const own = isMember(me, p);
+  const cleaned = cleanComments(s, used);
+  const comments = own ? cleaned : []; // topic counts go to everyone who can see the survey, the words only to its authority
   const numbers = rows.map((r) => Number(r.form)).filter(Number.isInteger);
   return json({
     survey: edit ? s : { ...s, access: "" }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS,
     template: edit ? templateCsv(s) : "",
     census: census ? { adults: census.adults } : null, targets: ageSexTargets(census, s.plan.target),
-    results: surveyResults(s, rows, census), topics: topicCounts(comments), comments, waiting: waitingComments(s, used),
+    results: surveyResults(s, rows, census), topics: topicCounts(cleaned), comments, ownComments: own, waiting: waitingComments(s, used),
     problems: edit ? findProblems(s, rows) : [], excluded: edit ? rows.filter((r) => r.excluded).map((r) => ({ n: r.n, form: r.form })) : [],
-    sample: edit ? commentSample(comments) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1, sorting: sorting?.status === "working" ? sorting : null,
+    sample: edit && own ? commentSample(comments) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1, sorting: sorting?.status === "working" ? sorting : null,
     dropped: edit && sorting?.status === "ready" ? sorting.result?.dropped ?? 0 : 0,
   });
 }
@@ -294,7 +296,8 @@ async function handleSurveyForm(c: Config, request: Request): Promise<Response> 
 }
 
 async function handleSurveyComment(c: Config, request: Request): Promise<Response> {
-  const { b, s } = await surveyEditor(c, request, 5000);
+  const { me, p, b, s } = await surveyEditor(c, request, 5000);
+  if (!isMember(me, p)) throw new FriendlyError("Comments stay with the authority, so only its own members can check them.", 403);
   const q = String(b.q ?? "");
   if (!textQuestionIds(s).includes(q)) throw new FriendlyError("That comment wasn't found.", 404);
   await changeAnswer(c, s, Number(b.n), (a) => {
@@ -307,9 +310,9 @@ async function handleSurveyComment(c: Config, request: Request): Promise<Respons
 }
 
 async function handleSurveyExport(c: Config, request: Request): Promise<Response> {
-  const { p, s } = await surveyEditor(c, request);
+  const { me, p, s } = await surveyEditor(c, request);
   const [rows, census] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code)]);
-  return json({ name: `${s.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "survey"}.csv`, csv: answersCsv(s, rows, census) });
+  return json({ name: `${s.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "survey"}.csv`, csv: answersCsv(s, rows, census, isMember(me, p)) });
 }
 
 // Public routes: a wrong code costs a storage read, so wrong guesses are limited
