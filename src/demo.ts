@@ -3,7 +3,8 @@
 // Survey replies come from a seeded simulation and go through the same calculations as a real survey, so the
 // demonstration can't drift from how Clarion works. Links are left blank, so nothing points at a made-up site.
 
-import { ABOUT, ACCESS_CHECKS, CORE, answersCsv, cellKey, summarise, surveyPage, type Answer, type Census, type Question, type Survey } from "./surveys";
+import { packFrom, standFor, type SitesPack } from "./sites";
+import { ABOUT, ACCESS_CHECKS, CORE, answersCsv, cellKey, summarise, surveyPage, type Answer, type Census, type Question, type Site, type Survey } from "./surveys";
 import { cached } from "./util";
 
 export const DEMO_CODE = "NORTHBRIDGE";
@@ -39,10 +40,40 @@ const LOCALS: Question[] = [
   { id: "l1", part: "local", kind: "choice", text: "Have you heard about the closure of the Relief Road?", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"] },
   { id: "l2", part: "local", kind: "choice", text: "How would you rate the condition of the pavements near where you live?", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"] },
 ];
-const SITES = [
-  { name: "Market Square", when: "Saturdays, 10am to 2pm", interviewers: "2" }, { name: "Station Approach", when: "Weekdays, 7am to 9am", interviewers: "2" },
-  { name: "Riverside Retail Park", when: "Sundays, 11am to 3pm", interviewers: "2" }, { name: "Moorside Library", when: "Tuesdays, 10am to 1pm", interviewers: "1" },
+
+// A made-up place: a rough grid of neighbourhoods around made-up towns, out at sea so it can't land on a real one,
+// run through the same calculations as a real authority. There's no street map under it.
+const TOWNS: [string, number, number, number][] = [
+  ["Northbridge", 3, 3, 96000], ["Moorside", 1, 1, 21000], ["Dalecross", 6, 1, 26000], ["Kingsmere", 6, 5, 18000], ["Ashvale", 1, 5, 12000], ["Fernley", 4, 0, 9000], ["Thornbeck", 0, 3, 8000], ["Oakhurst", 4, 6, 7500],
 ];
+const place = (col: number, row: number): [number, number] => [2.4 + col * 0.05, 54.4 + row * 0.03];
+function demoSites(): SitesPack {
+  const r = randomiser(20261103);
+  const hoods: Record<string, any>[] = [], shapes: { key: string; rings: number[][][] }[] = [];
+  for (let col = 0; col < 8; col++) for (let row = 0; row < 7; row++) {
+    if ((col === 0 || col === 7) && (row === 0 || row === 6)) continue; // no square corners
+    const [lng, lat] = place(col, row);
+    const near = TOWNS.map((t) => ({ name: t[0], d: Math.hypot(t[1] - col, t[2] - row), size: t[3] })).sort((a, b) => a.d - b.d)[0];
+    const town = near.d < 1.2, big = near.name === "Northbridge" && town, adults = town ? 7000 + Math.floor(r.next() * 2500) : 4500 + Math.floor(r.next() * 2000);
+    const older = (town ? 0.2 : 0.3) + r.next() * 0.08, younger = (big ? 0.34 : town ? 0.26 : 0.19) + r.next() * 0.05;
+    const households = Math.round(adults / 1.9), workers = Math.round(adults * 0.55), driving = (big ? 0.45 : town ? 0.55 : 0.65) + r.next() * 0.05, walking = big ? 0.16 : town ? 0.11 : 0.06;
+    const key = `N${String(hoods.length).padStart(3, "0")}`;
+    hoods.push({
+      msoa_code: key, msoa_name: `Northbridge ${key.slice(1)}`, place_name: "", lat, lng, rural: town ? 0 : 1, adults, aged_16_34: Math.round(adults * younger), aged_65_plus: Math.round(adults * older),
+      households, households_no_car: Math.round(households * ((big ? 0.3 : town ? 0.2 : 0.09) + r.next() * 0.05)), workers, drive: Math.round(workers * driving), walk_cycle: Math.round(workers * walking), bus_train: Math.round(workers * (big ? 0.08 : 0.03)),
+      imd_people: adults, people_most_deprived_20pct: Math.round(adults * (big ? 0.3 + r.next() * 0.2 : town ? r.next() * 0.2 : 0)), town_code: town ? near.name : "",
+    });
+    const x = 0.025, y = 0.015;
+    shapes.push({ key, rings: [[[lng - x, lat - y], [lng + x, lat - y], [lng + x, lat + y], [lng - x, lat + y], [lng - x, lat - y]]] });
+  }
+  const towns = TOWNS.map(([name, col, row, people]) => { const [lng, lat] = place(col, row); return { town_code: name, town_name: name, lat, lng, people }; });
+  return packFrom(COUNCIL, hoods, towns, shapes, false);
+}
+const SITE_PACK = demoSites();
+const SPOTS = [["Market Square, Saturdays 10am to 2pm", "2"], ["Station Approach, weekdays 7am to 9am", "2"], ["Riverside Retail Park, Sundays 11am to 3pm", "2"], ["The library, Tuesdays 10am to 1pm", "1"]];
+const SITES: Site[] = standFor(SITE_PACK, SITE_PACK.proposals[4], 30).map((x, i) => ({
+  name: x.town.name, when: SPOTS[i][0], interviewers: SPOTS[i][1], share: x.share, ages: x.ages, lat: x.town.lat, lng: x.town.lng,
+}));
 
 // In order of public concern: the demonstration ranks topics by how often people raise them, as Clarion will
 const COMMENTS: [string, string][] = [
@@ -110,7 +141,7 @@ function replies(): Answer[] {
 }
 
 const survey = (over: Partial<Survey>): Survey => ({
-  id: "", code: DEMO_CODE, title: "", purpose: "", status: "draft", access: "", collector: COUNCIL, locals: [], plan: { target: 400, sites: SITES, checks: [...ACCESS_CHECKS] },
+  id: "", code: DEMO_CODE, title: "", purpose: "", status: "draft", access: "", collector: COUNCIL, locals: [], plan: { target: 400, sites: SITES, checks: [...ACCESS_CHECKS], sure: 95, margin: 5, by: "whole", perSite: 30, perHour: 8 },
   created: WHEN, by: "Demo officer", updated: WHEN, openedBy: "", openedOn: "", closedOn: "", printedTo: 0, ...over,
 });
 
@@ -127,7 +158,7 @@ export function buildPack() {
     status: "closed", locals: LOCALS, openedBy: "Demo officer", openedOn: "2026-10-03", closedOn: "2026-10-24", printedTo: 450,
   });
   const winter = survey({ id: "20261028090000000-de000002", title: "Winter roads survey", purpose: "Whether people have noticed more pothole repairs, and how much pavements and flooding matter to them." });
-  const pages = { [autumn.id]: surveyPage(autumn, rows, census, true, true), [winter.id]: surveyPage(winter, [], census, true, true) };
+  const pages = { [autumn.id]: surveyPage(autumn, rows, census, true, true, 4), [winter.id]: surveyPage(winter, [], census, true, true, 4) };
   const street = summarise(autumn, rows, census);
   const counted = new Map<string, number>();
   for (const [topic] of COMMENTS) counted.set(topic, (counted.get(topic) || 0) + 1);
@@ -182,12 +213,12 @@ export function buildPack() {
     noteList: [{ id: note.id, status: "ready", stage: "Ready", created: note.created, by: note.by, title: note.change.title, headline: note.headline }],
     note, announcements: [{ title: "£4.2m extra for pothole repairs", url: "", date: "2026-10-06", summary: "" }],
     surveyList: { canEdit: true, surveys: [autumn, winter].map((s) => ({ id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: s.id === autumn.id ? rows.length : 0, target: s.plan.target })) },
-    surveys: pages,
+    surveys: pages, sites: SITE_PACK,
     suggestions: [
-      { text: "Have you heard about the closure of the Relief Road?", kind: "choice", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"], why: "41 items in four weeks, but nothing yet shows how many people it affects." },
-      { text: "Over the past year, have potholes near you been repaired faster, slower or about the same?", kind: "choice", options: ["Faster", "About the same", "Slower", "Don't know"], why: "The council promised faster repairs. This tests whether people believe it." },
-      { text: "How much does street lighting at night matter to you?", kind: "choice", options: ["A great deal", "A fair amount", "Not very much", "Not at all", "Don't know"], why: "28 items, most about one campaign. It may be a strong view held by few." },
-      { text: "How would you rate the condition of the pavements near where you live?", kind: "choice", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], why: "Few press items, but fault reports are rising." },
+      { text: "Have you heard about the closure of the Relief Road?", kind: "choice", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"], reason: "Loud: has it reached people?", topic: "Relief Road closure", basedOn: ["Impact note"], why: "41 items in four weeks, but nothing yet shows how many people it affects." },
+      { text: "Over the past year, have potholes near you been repaired faster, slower or about the same?", kind: "choice", options: ["Faster", "About the same", "Slower", "Don't know"], reason: "A promise: do people believe it?", topic: "Pothole repairs", basedOn: ["Impact note", "Fault reports"], why: "The council promised faster repairs. This tests whether people believe it." },
+      { text: "How much does street lighting at night matter to you?", kind: "choice", options: ["A great deal", "A fair amount", "Not very much", "Not at all", "Don't know"], reason: "Loud: is it widely felt?", topic: "Street lighting", basedOn: ["Petitions"], why: "28 items, most about one campaign. It may be a strong view held by few." },
+      { text: "How would you rate the condition of the pavements near where you live?", kind: "choice", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], reason: "Quiet: is it wider than it looks?", topic: "Pavements", basedOn: ["Fault reports"], why: "Few press items, but fault reports are rising." },
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
     media: {

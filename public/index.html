@@ -203,8 +203,38 @@ table.heat { border-collapse: separate; border-spacing: 2px; font-size: 0.84rem;
 /* street surveys */
 .q-list { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; }
 .local { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); }
-.site-row { display: grid; gap: 8px; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr) auto; align-items: end; }
+.site-row { display: grid; gap: 8px; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) auto; align-items: end; }
 @media (max-width: 640px) { .site-row { grid-template-columns: minmax(0, 1fr); } }
+.site-entry { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+.site-entry:first-child { border-top: 0; padding-top: 0; }
+.site-head { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; }
+.site-head p { margin: 2px 0 0; }
+.site-num { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 0.9rem; }
+.site-name { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; }
+.seg-row { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-start; }
+.seg { display: inline-flex; flex-wrap: wrap; width: fit-content; border: 1.5px solid var(--accent); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button { border: 0; background: var(--surface); min-height: 40px; padding: 5px 14px; cursor: pointer; color: var(--accent); font: inherit; font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.result { display: grid; gap: 2px; padding: 14px 16px; background: var(--accent); color: var(--accent-ink); border-radius: var(--radius); min-width: 0; }
+.result .label { font-size: 0.88rem; font-weight: 600; }
+.result .value { font-weight: 800; font-size: 1.8rem; line-height: 1.15; letter-spacing: -0.015em; }
+.result .detail { font-size: 0.84rem; }
+tr.selected td { background: var(--surface-2); }
+.map-box { position: relative; width: 100%; aspect-ratio: 640 / 520; overflow: hidden; background: var(--surface-2); border-radius: var(--radius-sm); cursor: grab; touch-action: none; user-select: none; }
+.map-box.dragging { cursor: grabbing; }
+.map-street, .map-marks, .map-shapes { position: absolute; inset: 0; width: 100%; height: 100%; }
+.map-street img { position: absolute; max-width: none; }
+.map-marks { pointer-events: none; }
+.map-marks button { pointer-events: auto; }
+.map-town { position: absolute; transform: translate(-50%, -50%); width: 28px; height: 28px; border: 0; background: transparent; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.map-town i { display: block; width: 11px; height: 11px; border-radius: 50%; background: #fff; border: 2px solid var(--ink-2); box-sizing: border-box; }
+.map-town:hover i { background: var(--accent); }
+.map-pin { position: absolute; transform: translate(-50%, -50%); border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; }
+.map-pin b { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-size: 0.86rem; border: 2px solid #fff; box-sizing: border-box; }
+.map-pin span { position: absolute; left: 30px; top: 2px; background: rgba(255, 255, 255, 0.92); color: var(--ink); font-size: 0.8rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.map-zoom { position: absolute; top: 8px; left: 8px; display: grid; gap: 2px; }
+.map-zoom button { width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; }
+.map-credit { position: absolute; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.85); padding: 1px 6px; font-size: 0.72rem; }
 .link-box { padding: 10px 12px; border: 1.5px solid var(--line-2); border-radius: var(--radius-sm); background: var(--bg); overflow-wrap: anywhere; font-weight: 700; }
 .entry-row { display: grid; gap: 4px 12px; grid-template-columns: minmax(0, 3fr) 5rem minmax(0, 2fr); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .entry-row.wide { grid-template-columns: minmax(0, 1fr); }
@@ -338,6 +368,7 @@ const Demo = {
       case "/api/survey/get": return { ...Demo.survey(b.id), sorting: null, dropped: 0 };
       case "/api/survey/save": return { survey: Demo.survey(b.id).survey };
       case "/api/survey/export": return P.exports[b.id];
+      case "/api/survey/sites": return P.sites;
       case "/api/survey/suggest": return Demo.prepared("suggest", P.suggestions);
       case "/api/survey/wording": return Demo.prepared("wording", []);
       case "/api/survey/help": return { job: Demo.job };
@@ -597,7 +628,7 @@ function aboutView(page, a) {
   page.append(pageHead("Sources & method", "Where the evidence comes from, how it's read, and what to be careful about."));
   if (App.demo) page.append(sec("About this demonstration", h("p", {}, "Northbridge is fictional, and so is everything about it: its people, places, press coverage, ratings and figures. The survey replies come from a simulation, then go through the same calculations as a real survey."), h("p", {}, "Media Watch and the Attention and concern page are shown here ahead of being built for members. Claude isn't used in the demonstration, and nothing is saved.")));
   page.append(sec("How mood is read", h("ul", {}, ["Mood is read from six kinds of signal: surveys, street surveys, short repeated questions, public actions such as fault reports, representatives, and open talk in the press and on social media.", "Survey results set the level. The other signals can only suggest direction.", "A change is reported only when two different kinds of signal agree.", "What's loud isn't the same as what's widely felt, and perception isn't the same as condition."].map((x) => h("li", {}, x)))),
-    sec("Street surveys", h("ul", {}, ["A street sample isn't random, so every result is labelled indicative.", "Results are weighted to the local population's age and sex from Census 2021.", "Groups under 30 people aren't reported.", "Written comments stay hidden until Claude has taken out names. Only the authority's own members can read them, and they're never used in a mood reading or impact note."].map((x) => h("li", {}, x)))),
+    sec("Street surveys", h("ul", {}, ["A street sample isn't random, so every result is labelled indicative.", "Results are weighted to the local population's age and sex from Census 2021.", "Proposed survey sites are a calculation on Census and deprivation figures, not an opinion, and town size stands in for footfall. Each site's replies count, as far as they can, for the share of adults it stands for.", "Groups under 30 people aren't reported.", "Written comments stay hidden until Claude has taken out names. Only the authority's own members can read them, and they're never used in a mood reading or impact note."].map((x) => h("li", {}, x)))),
     sec("Comparing authorities", h("ul", {}, ["An authority sees only one FHRG middle figure, with nobody named, once five authorities have results.", "FHRG administrators see figures and topic counts for each authority, in alphabetical order and never ranked. A difference may be a local choice, or reflect geography, funding or who was asked."].map((x) => h("li", {}, x)))));
 }
 
@@ -960,7 +991,9 @@ function setupPart(top, a, d) {
   }
   const suggestList = (j) => {
     const list = j.result || [];
-    add(help, h("h3", {}, "Suggested questions"), list.length ? list.map((q) => h("div", { class: "local" }, h("div", {}, q.text), q.options.length ? h("div", { class: "note" }, q.options.join(" / ")) : h("div", { class: "note" }, "A written answer"), q.why ? h("div", { class: "note" }, q.why) : null,
+    add(help, h("h3", {}, "Suggested from what's being reported"), h("p", { class: "note" }, "Each suggestion shows what prompted it and what the answer would tell you. You decide what goes in."), list.length ? list.map((q) => h("div", { class: "local" },
+      q.reason ? h("div", { class: "row" }, h("span", { class: "eyebrow" }, q.reason), q.topic ? h("strong", {}, q.topic) : null) : null, h("div", {}, q.text), q.options.length ? h("div", { class: "note" }, q.options.join(" / ")) : h("div", { class: "note" }, "A written answer"), q.why ? h("div", { class: "note" }, q.why) : null,
+      (q.basedOn || []).length ? h("div", { class: "row" }, q.basedOn.map((x) => h("span", { class: "pill" }, x))) : null,
       h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: (ev) => { if (locals.length >= d.maxLocal) return said(m2, `A survey can have up to ${d.maxLocal} local questions.`, "err"); locals.push({ text: q.text, kind: q.kind, options: q.options }); drawLocals(); ev.target.disabled = true; } }, "Add this question")))) : h("p", { class: "muted" }, "No suggestions came back."));
   };
   const wordingList = (j) => {
@@ -981,25 +1014,275 @@ function setupPart(top, a, d) {
   qCard.append(h("h3", {}, "About the person"), h("p", { class: "note" }, "These check you've heard from a fair mix of people, and let results be weighted to the local population."), coreList(d.about, d.core.length + s.locals.length + 1));
   top.append(qCard);
 
-  // the plan
-  const target = h("input", { type: "number", min: 30, max: 5000, value: String(s.plan.target) });
-  let sites = s.plan.sites.map((x) => ({ ...x }));
-  const siteBox = h("div", { class: "stack" });
-  function drawSites() {
-    clear(siteBox).append(...sites.map((x, i) => {
-      const bind = (key, label, placeholder) => { const el = h("input", { value: x[key], maxlength: 80, placeholder, oninput: () => { x[key] = el.value; } }); return h("label", { class: "field" }, label, el); };
-      return h("div", { class: "site-row" }, bind("name", "Site", "Market Square, Horsham"), bind("when", "When", "Saturday 10am to 2pm"), bind("interviewers", "Interviewers", "2"), h("button", { class: "btn small ghost", type: "button", onclick: () => { sites.splice(i, 1); drawSites(); } }, "Remove"));
-    }));
+  planPart(top, a, d, save);
+}
+
+// ----- how many people to ask
+const SURE = { 90: 1.645, 95: 1.96, 99: 2.576 };
+const MAX_REPLIES = 5000;
+const WEIGHTING = 1.3; // the extra replies weighting to age and sex usually costs
+const ALIKE = 0.01; // how far people at one site are alike: an assumption until real results replace it
+const LEVELS = [
+  { name: "Site survey", sure: 90, margin: 10, by: "sites", good: "An authority-wide view from four sites of 30", suggested: true },
+  { name: "Quick check", sure: 90, margin: 7, by: "whole", good: "One question on one news story" },
+  { name: "Standard", sure: 95, margin: 5, by: "whole", good: "A whole-authority view" },
+  { name: "By area", sure: 95, margin: 10, by: "areas", good: "Rough results for each constituency, and a firm one overall" },
+  { name: "Detailed", sure: 95, margin: 3, by: "whole", good: "Tracking small changes between rounds" },
+  { name: "High assurance", sure: 99, margin: 5, by: "whole", good: "A result that will face close challenge" },
+];
+const allowance = (perSite) => WEIGHTING * (1 + (perSite - 1) * ALIKE);
+const siteMargin = (sure, replies, perSite) => SURE[sure] * Math.sqrt((0.25 * allowance(perSite)) / replies) * 100;
+function sizeFor(adults, areas, sure, margin, by, perSite) {
+  const z = SURE[sure], first = (z * z * 0.25) / ((margin / 100) * (margin / 100));
+  const needed = (people) => Math.ceil(first / (1 + (first - 1) / people));
+  if (by === "sites") {
+    const sites = Math.max(3, Math.ceil((first * allowance(perSite)) / perSite));
+    return { sites, target: sites * perSite, overall: siteMargin(sure, sites * perSite, perSite) };
   }
-  drawSites();
+  const people = adults || 1e7;
+  if (by === "areas" && areas) {
+    const each = Math.ceil(needed(people / areas) * WEIGHTING), target = each * areas;
+    return { each, target, overall: z * Math.sqrt((0.25 * WEIGHTING) / target) * 100 };
+  }
+  return { target: Math.ceil(needed(people) * WEIGHTING), overall: margin };
+}
+
+// ----- survey sites
+const distKm = (lng1, lat1, lng2, lat2) => { const rad = Math.PI / 180, x = (lng2 - lng1) * rad * Math.cos(((lat1 + lat2) / 2) * rad); return 6371 * Math.sqrt(x * x + ((lat2 - lat1) * rad) ** 2); };
+function siteWork(pack, picks) {
+  const near = pack.hoods.map((m) => { let best = 0, far = Infinity; picks.forEach((t, j) => { const d = distKm(m[0], m[1], pack.towns[t].lng, pack.towns[t].lat); if (d < far) { far = d; best = j; } }); return best; });
+  const total = pack.hoods.reduce((sum, m) => sum + m[2], 0) || 1;
+  const groups = picks.map((t, j) => {
+    const area = pack.hoods.filter((_, i) => near[i] === j), weight = area.reduce((sum, m) => sum + m[2], 0) || 1;
+    return { t, share: area.reduce((sum, m) => sum + m[2], 0) / total, rural: (area.reduce((sum, m) => sum + m[2] * m[3], 0) / weight) * 100, figures: pack.auth.map((_, f) => area.reduce((sum, m) => sum + m[2] * m[4 + f], 0) / weight) };
+  });
+  return { near, groups, mix: pack.auth.map((_, f) => groups.reduce((sum, g) => sum + g.share * pack.towns[g.t].local[f], 0)) };
+}
+function siteAges(young, old, people) {
+  const raw = [young / 100, 1 - young / 100 - old / 100, old / 100].map((x) => x * people), out = raw.map(Math.floor);
+  const order = raw.map((x, i) => [x - Math.floor(x), i]).sort((p, q) => q[0] - p[0]);
+  let left = people - out.reduce((sum, x) => sum + x, 0);
+  for (let i = 0; left > 0; i++, left--) out[order[i % 3][1]] += 1;
+  return out;
+}
+function siteWhy(pack, g, others) {
+  const z = pack.auth.map((x, f) => (g.figures[f] - x) / (pack.spread[f] || 1)), bits = [];
+  if (z[1] > 0.3) bits.push("older than the authority as a whole");
+  if (z[0] > 0.3) bits.push("younger than the authority as a whole");
+  if (z[2] > 0.3) bits.push("more households without a car");
+  if (z[2] < -0.3) bits.push("more car owners");
+  if (z[6] > 0.3) bits.push("more deprivation");
+  if (g.rural >= 40) bits.push("largely rural");
+  const text = bits.length ? bits.slice(0, 2).join(", ") : "close to the authority as a whole";
+  const list = others.slice(0, 3).join(", ").replace(/, ([^,]*)$/, " and $1");
+  return `${text[0].toUpperCase()}${text.slice(1)}.${list ? ` Its area also takes in ${list}.` : ""}`;
+}
+
+// The map: neighbourhoods coloured by their nearest site, over a street map where there is one. The drawing, the
+// street map and the markers all share one view of the world, measured as Web Mercator is at its smallest zoom.
+const SITE_COLOURS = [["#264a6f", "#c9d6e4"], ["#1f7a6d", "#c2e3dd"], ["#8a5a00", "#f1dfb8"], ["#6d3f83", "#e2d2ea"], ["#a8431f", "#f4d3c6"], ["#4a5563", "#dadde2"]];
+const worldXY = (lng, lat) => { const s = Math.sin((lat * Math.PI) / 180); return [((lng + 180) / 360) * 256, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256]; };
+const MAP_RATIO = 520 / 640;
+function siteMap(pack) {
+  const rings = pack.shapes.map((rs) => rs.map((ring) => ring.map(([x, y]) => worldXY(x, y))));
+  const points = rings.flat(2).length ? rings.flat(2) : pack.hoods.map((m) => worldXY(m[0], m[1]));
+  const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
+  const left = Math.min(...xs), right = Math.max(...xs), top = Math.min(...ys), bottom = Math.max(...ys);
+  const fitW = Math.max((right - left) * 1.08, ((bottom - top) * 1.08) / MAP_RATIO);
+  const home = { x: (left + right) / 2 - fitW / 2, y: (top + bottom) / 2 - (fitW * MAP_RATIO) / 2, w: fitW };
+  let view = { ...home };
+  const paths = rings.map((rs) => svg("path", { d: rs.map((ring) => `M${ring.map(([x, y]) => `${x.toFixed(5)} ${y.toFixed(5)}`).join("L")}Z`).join(""), "fill-rule": "evenodd", stroke: "#ffffff", "stroke-width": 1, "vector-effect": "non-scaling-stroke", "fill-opacity": pack.tiles ? 0.55 : 1 }));
+  const drawing = svg("svg", { class: "map-shapes", preserveAspectRatio: "none", "aria-hidden": "true" }, ...paths);
+  const street = h("div", { class: "map-street" }), marks = h("div", { class: "map-marks" });
+  const pieces = new Map();
+  const at = (x, y) => [`${((x - view.x) / view.w) * 100}%`, `${((y - view.y) / (view.w * MAP_RATIO)) * 100}%`];
+  let places = [];
+  const box = h("div", { class: "map-box" }, street, drawing, marks);
+  function drawStreet() {
+    if (!pack.tiles) return;
+    const zoom = Math.max(1, Math.min(18, Math.round(Math.log2((box.clientWidth || 640) / view.w))));
+    const size = 256 / 2 ** zoom, wanted = new Set();
+    for (let tx = Math.floor(view.x / size); tx * size < view.x + view.w && wanted.size < 80; tx++) {
+      for (let ty = Math.floor(view.y / size); ty * size < view.y + view.w * MAP_RATIO && wanted.size < 80; ty++) {
+        if (tx < 0 || ty < 0 || tx >= 2 ** zoom || ty >= 2 ** zoom) continue;
+        const src = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`;
+        wanted.add(src);
+        if (!pieces.has(src)) { const img = h("img", { src, alt: "", referrerpolicy: "strict-origin-when-cross-origin" }); pieces.set(src, img); street.append(img); }
+        const [x, y] = at(tx * size, ty * size);
+        Object.assign(pieces.get(src).style, { left: x, top: y, width: `${(size / view.w) * 100 + 0.1}%`, height: `${(size / (view.w * MAP_RATIO)) * 100 + 0.1}%` });
+      }
+    }
+    for (const [src, img] of pieces) if (!wanted.has(src)) { img.remove(); pieces.delete(src); }
+  }
+  function placeMarks() { for (const [el, x, y] of places) { const [px, py] = at(x, y); el.style.left = px; el.style.top = py; } }
+  function look() { drawing.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.w * MAP_RATIO}`); placeMarks(); drawStreet(); }
+  function zoomBy(factor) {
+    const w = Math.max(0.004, Math.min(home.w * 1.5, view.w * factor)), cx = view.x + view.w / 2, cy = view.y + (view.w * MAP_RATIO) / 2;
+    view = { x: cx - w / 2, y: cy - (w * MAP_RATIO) / 2, w };
+    look();
+  }
+  let dragging = null;
+  box.addEventListener("pointerdown", (ev) => { if (!ev.target.closest("button, a")) { dragging = [ev.clientX, ev.clientY, view.x, view.y]; box.classList.add("dragging"); } });
+  box.addEventListener("pointermove", (ev) => {
+    if (!dragging) return;
+    const scale = view.w / (box.clientWidth || 640);
+    view = { ...view, x: dragging[2] - (ev.clientX - dragging[0]) * scale, y: dragging[3] - (ev.clientY - dragging[1]) * scale };
+    look();
+  });
+  const stop = () => { dragging = null; box.classList.remove("dragging"); };
+  box.addEventListener("pointerup", stop);
+  box.addEventListener("pointerleave", stop);
+  box.append(h("div", { class: "map-zoom" }, h("button", { type: "button", "aria-label": "Zoom in", onclick: () => zoomBy(0.5) }, "+"), h("button", { type: "button", "aria-label": "Zoom out", onclick: () => zoomBy(2) }, "−")));
+  if (pack.tiles) box.append(h("div", { class: "map-credit" }, "© ", link("https://www.openstreetmap.org/copyright", "OpenStreetMap"), " contributors"));
+  return {
+    el: box,
+    draw(near, chosen, others) {
+      paths.forEach((path, i) => path.setAttribute("fill", SITE_COLOURS[near[i] % SITE_COLOURS.length][1]));
+      places = [];
+      clear(marks);
+      for (const o of others) {
+        const [x, y] = worldXY(o.town.lng, o.town.lat);
+        const el = h("button", { type: "button", class: "map-town", "aria-label": `Add ${o.town.name}`, title: `Add ${o.town.name}`, onclick: o.toggle }, h("i", {}));
+        places.push([el, x, y]); marks.append(el);
+      }
+      chosen.forEach((c, j) => {
+        const [x, y] = worldXY(c.town.lng, c.town.lat);
+        const el = h("button", { type: "button", class: "map-pin", "aria-label": `Remove ${c.town.name}`, title: `Remove ${c.town.name}`, onclick: c.toggle }, h("b", { style: { background: SITE_COLOURS[j % SITE_COLOURS.length][0] } }, String(j + 1)), h("span", {}, c.town.name));
+        places.push([el, x, y]); marks.append(el);
+      });
+      look();
+    },
+  };
+}
+
+function planPart(top, a, d, save) {
+  const s = d.survey, adults = d.census ? d.census.adults : 0;
+  const st = { sure: s.plan.sure || 95, margin: s.plan.margin || 5, by: s.plan.by || "whole", perSite: s.plan.perSite || 30, perHour: s.plan.perHour || 8 };
+  const target = h("input", { type: "number", min: 30, max: 5000, value: String(s.plan.target), oninput: () => { if (pack) drawSites(); drawSize(); } });
+  const perHour = h("input", { type: "number", min: 1, max: 60, value: String(st.perHour), oninput: () => { st.perHour = Number(perHour.value) || 8; drawSize(); } });
+  let sites = s.plan.sites.map((x) => ({ ...x })), pack = null, map = null, picks = [], proposed = false;
+  const sameName = (x, y) => x.trim().toLowerCase() === y.trim().toLowerCase();
+  const onMap = (x) => (pack && x.name ? pack.towns.findIndex((t) => sameName(t.name, x.name)) : -1);
+  const siteCount = () => sites.filter((x) => x.name).length;
+  const aimFromSites = () => { if (st.by === "sites") target.value = String(Math.max(siteCount(), 1) * st.perSite); };
+  const closed = s.status === "closed";
+
+  const siteControls = h("div", { class: "seg-row" }), sizeBox = h("div", { class: "stack" }), mapBox = h("div", { class: "stack" }), siteBox = h("div", { class: "stack" }), matchBox = h("div", { class: "stack" });
+  const seg = (label, list, on, pick, hint) => h("div", { class: "field" }, label, h("div", { class: "seg" }, list.map(([value, text]) => h("button", { type: "button", "aria-pressed": String(value === on), onclick: () => pick(value) }, text))), hint ? h("span", { class: "hint" }, hint) : null);
+  const useLevel = (sure, margin, by) => { Object.assign(st, { sure, margin, by }); applySize(); };
+
+  // A new size sets the aim and, for a site survey, how many sites to propose
+  function applySize() {
+    const size = sizeFor(adults, d.areas, st.sure, st.margin, st.by, st.perSite);
+    target.value = String(size.target);
+    if (st.by === "sites" && pack && (proposed || !siteCount())) propose(size.sites);
+    if (st.by === "sites" && siteCount() > (size.sites || 0)) aimFromSites();
+    if (pack) drawSites();
+    drawSize();
+  }
+  const peopleEach = () => (st.by === "sites" ? st.perSite : Math.max(1, Math.ceil((Number(target.value) || 0) / Math.max(siteCount(), 1))));
+  function drawSize() {
+    const replies = Number(target.value) || 0, size = sizeFor(adults, d.areas, st.sure, st.margin, st.by, st.perSite);
+    const overall = st.by === "sites" ? siteMargin(st.sure, Math.max(replies, 1), st.perSite) : replies === size.target ? size.overall : SURE[st.sure] * Math.sqrt((0.25 * WEIGHTING) / Math.max(replies, 1)) * 100;
+    const row = (l) => {
+      const n = sizeFor(adults, d.areas, l.sure, l.margin, l.by, 30).target, on = l.sure === st.sure && l.margin === st.margin && l.by === st.by;
+      return h("tr", { class: on ? "selected" : null }, h("td", {}, h("strong", {}, l.name), l.suggested ? [" ", h("span", { class: "pill good" }, "Suggested")] : null), h("td", { class: "r" }, `${l.sure}%`), h("td", { class: "r" }, `±${l.margin}${l.by === "areas" ? " each" : ""}`), h("td", { class: "r" }, fmt(n)), h("td", {}, l.good), h("td", { class: "r" }, h("button", { class: "btn small", type: "button", onclick: () => useLevel(l.sure, l.margin, l.by) }, "Use this")));
+    };
+    const count = siteCount(), wanted = Math.ceil(replies / st.perSite);
+    clear(sizeBox).append(
+      h("div", { class: "seg-row" },
+        seg("How sure", [[90, "90%"], [95, "95%"], [99, "99%"]], st.sure, (v) => useLevel(v, st.margin, st.by), "How often a sample would land within the margin"),
+        seg("Margin", [[3, "±3"], [5, "±5"], [7, "±7"], [10, "±10"]], st.margin, (v) => useLevel(st.sure, v, st.by), "Points either side of a result"),
+        seg("Results for", [["sites", "Survey sites"], ["whole", "Whole authority"], ["areas", "Each constituency"]].filter(([k]) => k !== "areas" || d.areas), st.by, (v) => useLevel(st.sure, st.margin, v), st.by === "sites" ? "One result for the authority, from sites you choose on the map" : st.by === "areas" ? `${d.areas} constituencies` : "One result for the authority")),
+      h("div", { class: "stats" },
+        h("div", { class: "result" }, h("span", { class: "label" }, "Aim for"), h("span", { class: "value" }, `${fmt(replies)} replies`), h("span", { class: "detail" }, st.by === "sites" ? `${fmt(wanted)} sites of ${fmt(st.perSite)}${count && count !== wanted ? `. You've chosen ${fmt(count)}` : ""}` : "Including 30% extra for weighting")),
+        stat("Whole-authority margin", `±${fmt(overall, 1)} points`, st.by === "sites" ? "Allowing for weighting and for people at one site being alike" : "If this were a random sample"),
+        stat("Smallest change between two rounds", `About ${fmt(overall * Math.SQRT2)} points`, "Anything smaller could be chance"),
+        stat("Interviewer time", `${fmt(Math.ceil(replies / st.perHour))} hours`, `At ${fmt(st.perHour)} forms an hour`)),
+      replies > MAX_REPLIES ? h("p", { class: "note err" }, `A survey can hold up to ${fmt(MAX_REPLIES)} replies, so choose a lower level.`) : null,
+      st.by === "sites" && wanted > Math.max(count, 6) ? h("p", { class: "note" }, "Clarion proposes up to six sites. Add more from the map, or ask more people at each.") : null,
+      h("h3", {}, "Suggested levels"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Level"), h("th", { class: "r" }, "How sure"), h("th", { class: "r" }, "Margin"), h("th", { class: "r" }, "Replies"), h("th", {}, "Good for"), h("th", {}, ""))), h("tbody", {}, LEVELS.filter((l) => l.by !== "areas" || d.areas).map(row)))));
+  }
+
+  // Sites that stay keep what's been typed against them
+  function propose(count) {
+    const sizes = Object.keys(pack.proposals).map(Number), size = sizes.filter((n) => n <= count).pop() ?? sizes[0];
+    const names = (pack.proposals[size] || []).map((t) => pack.towns[t].name);
+    sites = [...names.flatMap((name) => { const kept = sites.filter((x) => sameName(x.name, name)); return kept.length ? kept : [{ name, when: "", interviewers: "" }]; }), ...sites.filter((x) => onMap(x) < 0)];
+    proposed = true;
+    drawSites();
+  }
+  function toggle(t) {
+    const name = pack.towns[t].name;
+    if (picks.includes(t)) sites = sites.filter((x) => !sameName(x.name, name)); else sites.push({ name, when: "", interviewers: "" });
+    proposed = false;
+    aimFromSites();
+    drawSites();
+    drawSize();
+  }
+  function removeSite(i) {
+    sites.splice(i, 1);
+    proposed = false;
+    if (pack) { aimFromSites(); drawSize(); }
+    drawSites();
+  }
+  // Sites from the map, then any added by hand. Their share and age targets follow the choice.
+  function drawSites() {
+    const row = (x, i, extra) => {
+      const bind = (key, label, placeholder) => { const el = h("input", { value: x[key] || "", maxlength: 80, placeholder, disabled: closed, oninput: () => { x[key] = el.value; } }); return h("label", { class: "field" }, label, el); };
+      return h("div", { class: "site-entry" }, extra ? h("div", { class: "site-head" }, extra) : bind("name", "Site", "Market Square, Horsham"), h("div", { class: "site-row" }, bind("when", extra ? "Exact spot and day" : "When", extra ? "The market square on a Saturday" : "Saturday 10am to 2pm"), bind("interviewers", "Interviewers", "2"), closed ? null : h("button", { class: "btn small ghost", type: "button", onclick: () => removeSite(i) }, "Remove")));
+    };
+    if (!pack) { clear(siteBox).append(...sites.map((x, i) => row(x, i))); return; }
+    picks = [...new Set(sites.flatMap((x) => { const t = onMap(x); return t < 0 ? [] : [t]; }))];
+    const work = picks.length ? siteWork(pack, picks) : { near: pack.hoods.map(() => 0), groups: [], mix: pack.auth };
+    const left = pack.towns.map((town, t) => ({ town, t })).filter((o) => !picks.includes(o.t));
+    const nearest = (o) => { let best = 0, far = Infinity; picks.forEach((t, j) => { const k = distKm(o.town.lng, o.town.lat, pack.towns[t].lng, pack.towns[t].lat); if (k < far) { far = k; best = j; } }); return best; };
+    map.draw(work.near, work.groups.map((g) => ({ town: pack.towns[g.t], toggle: () => toggle(g.t) })), left.map((o) => ({ town: o.town, toggle: () => toggle(o.t) })));
+    for (const x of sites) { delete x.share; delete x.ages; delete x.lat; delete x.lng; }
+    work.groups.forEach((g) => {
+      // two sessions in one town share its age targets
+      const here = sites.filter((y) => onMap(y) === g.t);
+      for (const x of here) Object.assign(x, { share: Math.round(g.share * 1000) / 10, ages: siteAges(g.figures[0], g.figures[1], Math.ceil(peopleEach() / here.length)), lat: pack.towns[g.t].lat, lng: pack.towns[g.t].lng });
+    });
+    clear(siteBox).append(...sites.map((x, i) => {
+      const t = onMap(x), j = picks.indexOf(t);
+      if (j < 0) return row(x, i);
+      const g = work.groups[j], others = left.filter((o) => nearest(o) === j).map((o) => o.town.name);
+      return row(x, i, [h("span", { class: "site-num", style: { background: SITE_COLOURS[j % SITE_COLOURS.length][0] } }, String(j + 1)), h("div", {}, h("div", { class: "site-name" }, h("strong", {}, x.name), h("span", { class: "note" }, `stands for ${fmt(g.share * 100)}% of adults`)), h("p", { class: "note" }, siteWhy(pack, g, others)), h("p", { class: "note" }, `Ask ${x.ages[0]} aged 16 to 34, ${x.ages[1]} aged 35 to 64 and ${x.ages[2]} aged 65 or over.`))]);
+    }));
+    const gapRow = (label, f) => {
+      const gap = work.mix[f] - pack.auth[f], size = Math.abs(gap);
+      return h("tr", {}, h("td", {}, label), h("td", { class: "r" }, `${fmt(pack.auth[f], 1)}%`), h("td", { class: "r" }, `${fmt(work.mix[f], 1)}%`), h("td", { class: "r" }, `${gap > 0 ? "+" : ""}${fmt(gap, 1)}`), h("td", {}, h("span", { class: size <= 2 ? "pill good" : size <= 5 ? "pill" : "pill serious" }, size <= 2 ? "Close" : size <= 5 ? "Fair" : "Wide")));
+    };
+    clear(matchBox);
+    if (picks.length) matchBox.append(h("h3", {}, `How well these sites match ${pack.name}`), h("p", { class: "note" }, "Each town's own make-up, weighted by the share of adults its site stands for. A wide gap isn't fatal: the age targets close the gap on age, and results are weighted afterwards."), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Measure"), h("th", { class: "r" }, pack.name), h("th", { class: "r" }, "These sites"), h("th", { class: "r" }, "Gap (points)"), h("th", {}, "Match"))), h("tbody", {}, pack.measures.map(gapRow)))));
+    clear(siteControls).append(
+      seg("Sites", Object.keys(pack.proposals).map(Number).map((n) => [n, String(n)]), picks.length, (n) => { propose(n); aimFromSites(); drawSites(); drawSize(); }),
+      st.by === "sites" ? seg("People at each site", [[30, "30"], [40, "40"], [50, "50"]], st.perSite, (n) => { st.perSite = n; aimFromSites(); drawSites(); drawSize(); }) : null,
+      proposed ? null : h("button", { class: "btn small", type: "button", onclick: () => { propose(picks.length || 4); aimFromSites(); drawSites(); drawSize(); } }, "Go back to the proposed sites"));
+    clear(mapBox).append(map.el, h("p", { class: "note" }, "Colours show which site stands for each neighbourhood: the nearest one. Click a town to add it, or a numbered site to take it off."), left.length ? h("div", { class: "row" }, h("span", { class: "note" }, "Other towns:"), left.map((o) => h("button", { class: "btn small", type: "button", onclick: () => toggle(o.t) }, o.town.name))) : null);
+  }
+
   const checks = d.accessChecks.map((c) => { const box = h("input", { type: "checkbox", checked: s.plan.checks.includes(c), value: c }); return { box, row: h("label", { class: "check" }, box, c) }; });
   const m3 = saveNote();
-  top.append(h("section", { class: "card" }, h("h2", {}, "Fieldwork plan"),
-    h("label", { class: "field" }, "How many replies you're aiming for", target, h("span", { class: "hint" }, "About 400 is enough for an overall result, with a margin of about 5 points if the sample were random. A street sample isn't random, so treat that as a guide.")),
-    d.targets.length ? h("div", { class: "stack" }, h("h3", {}, "Who to reach"), h("p", { class: "note" }, "From Census 2021, so the people you speak to match the people who live here."), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Age"), h("th", { class: "r" }, "Women"), h("th", { class: "r" }, "Men"))), h("tbody", {}, d.targets.map((x) => h("tr", {}, h("td", {}, x.age), h("td", { class: "r" }, fmt(x.female)), h("td", { class: "r" }, fmt(x.male)))))))) : h("p", { class: "note" }, "Census figures couldn't be read just now."),
-    h("h3", {}, "Sites and times"), siteBox, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => { sites.push({ name: "", when: "", interviewers: "" }); drawSites(); } }, "Add a site")),
-    h("h3", {}, "Before you go out"), h("div", { class: "stack" }, checks.map((x) => x.row)),
-    m3, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => save({ plan: { target: Number(target.value), sites, checks: checks.filter((x) => x.box.checked).map((x) => x.box.value) } }, m3) }, "Save the plan"))));
+  const siteNote = h("p", { class: "note" }, closed ? "This survey is closed, so its sites are fixed and its results stay as they are." : "Loading the neighbourhood figures…");
+  const siteHint = h("p", { class: "note" }, "A site's own result shows only once it has 30 replies, so aim for one or two extra at each.");
+  top.append(h("section", { class: "card" }, h("h2", {}, "How many people to ask"), h("p", { class: "note" }, "Choose how sure you need to be, and Clarion works out the replies you need."), sizeBox,
+    h("div", { class: "form-grid" }, h("label", { class: "field" }, "How many replies you're aiming for", target), h("label", { class: "field" }, "Forms an hour", perHour, h("span", { class: "hint" }, "8 is a starting guess. Change it once you've tried one session."))),
+    h("p", { class: "note" }, "A street sample isn't random, so a margin here is a guide: it's what a random sample of this size would give. Results stay labelled indicative.")));
+  top.append(h("section", { class: "card" }, h("h2", {}, "Survey sites"), siteNote, siteControls, mapBox, h("h3", {}, "Sites and times"), siteBox, siteHint, closed ? null : h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => { sites.push({ name: "", when: "", interviewers: "" }); proposed = false; drawSites(); } }, "Add a place that isn't on the map")), matchBox));
+  if (d.targets.length) top.append(h("section", { class: "card" }, h("h2", {}, "Who to reach"), h("p", { class: "note" }, "From Census 2021, so the people you speak to match the people who live here."), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Age"), h("th", { class: "r" }, "Women"), h("th", { class: "r" }, "Men"))), h("tbody", {}, d.targets.map((t) => h("tr", {}, h("td", {}, t.age), h("td", { class: "r" }, fmt(t.female)), h("td", { class: "r" }, fmt(t.male)))))))));
+  top.append(h("section", { class: "card" }, h("h2", {}, "Before you go out"), h("div", { class: "stack" }, checks.map((x) => x.row)),
+    m3, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => save({ plan: { target: Number(target.value), sites, checks: checks.filter((x) => x.box.checked).map((x) => x.box.value), sure: st.sure, margin: st.margin, by: st.by, perSite: st.perSite, perHour: st.perHour } }, m3) }, "Save the plan"))));
+  drawSize();
+  drawSites();
+  if (closed) return;
+  API.call("/api/survey/sites", { code: a.code }).then((r) => {
+    if (!r.ready) { siteNote.textContent = r.why; return; }
+    pack = r; map = siteMap(pack);
+    siteNote.textContent = s.plan.sites.length ? `${pack.name}: your sites, on the map.` : `${pack.name}: proposed sites, from Census and deprivation figures. Change them to suit what you know of the area.`;
+    if (!sites.length) { propose(st.by === "sites" ? sizeFor(adults, d.areas, st.sure, st.margin, st.by, st.perSite).sites : 4); aimFromSites(); drawSize(); } else { drawSites(); drawSize(); }
+  }).catch(() => { siteNote.textContent = "The map couldn't be loaded, so you can add sites by hand for now."; });
 }
 
 // ----- collect
@@ -1144,7 +1427,7 @@ function resultsPart(top, a, d) {
   const pct = (labels) => (q1 && !q1.held ? q1.options.filter((o) => labels.includes(o.label)).reduce((n, o) => n + o.pct, 0) : null);
   const stat = (label, value, detail) => h("div", { class: "stat" }, h("span", { class: "label" }, label), h("span", { class: "value" }, value), detail ? h("span", { class: "detail" }, detail) : null);
   const good = pct(["Very satisfied", "Fairly satisfied"]), bad = pct(["Fairly dissatisfied", "Very dissatisfied"]);
-  top.append(h("div", { class: "callout" }, h("strong", {}, "Indicative only. "), `A street sample isn't random. ${r.weighted ? "Results are weighted to the local population's age and sex from Census 2021." : d.census ? "Results aren't weighted yet, because there aren't enough replies giving age and sex." : "Results aren't weighted, because the Census figures couldn't be read just now."} Groups under 30 people aren't shown.`),
+  top.append(h("div", { class: "callout" }, h("strong", {}, "Indicative only. "), `A street sample isn't random. ${r.weighted ? "Results are weighted to the local population's age and sex from Census 2021." : d.census ? "Results aren't weighted to age and sex yet, because there aren't enough replies giving them." : "Results aren't weighted to age and sex, because the Census figures couldn't be read just now."}${r.bySite ? " Each site counts, as far as it can, for the share of adults it stands for." : ""} Groups under 30 people aren't shown.`),
     h("div", { class: "stats" }, stat("Replies", fmt(r.used), `Aim: ${fmt(s.plan.target)}${r.excluded ? `. ${fmt(r.excluded)} left out` : ""}`), stat("Satisfied", good === null ? "–" : `${fmt(good)}%`, "Very or fairly"), stat("Dissatisfied", bad === null ? "–" : `${fmt(bad)}%`, "Very or fairly")));
   const wrap = h("section", { class: "card" }, h("h2", {}, "Answers"));
   for (const q of r.questions) {

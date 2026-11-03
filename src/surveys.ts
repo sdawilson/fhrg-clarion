@@ -30,7 +30,10 @@ export const MAX_LOCAL = 5;
 export const MIN_GROUP = 30;
 export const WEIGHT_CAP = 5;
 const MAX_ANSWERS = 5000;
-const DEFAULT_TARGET = 400;
+const MAX_SITES = 40;
+const DEFAULT_TARGET = 120; // four sites of 30
+const DEFAULT_PER_SITE = 30;
+const DEFAULT_PER_HOUR = 8;
 const QUICK_SECS = 30;
 const CURRENT_DAYS = 365; // an older survey is still evidence, but it no longer counts towards a change in mood
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -62,8 +65,12 @@ export const ACCESS_CHECKS = [
   "Times that reach people at work, older people and younger people, not only weekday mornings",
 ];
 
-export type Site = { name: string; when: string; interviewers: string };
-export type Plan = { target: number; sites: Site[]; checks: string[] };
+// A site picked on the map also holds the share of adults it stands for and its age targets (16 to 34, 35 to 64, 65+)
+export type Site = { name: string; when: string; interviewers: string; share?: number; ages?: number[]; lat?: number; lng?: number };
+export type Plan = {
+  target: number; sites: Site[]; checks: string[];
+  sure?: number; margin?: number; by?: "sites" | "whole" | "areas"; perSite?: number; perHour?: number;
+};
 export type Survey = {
   id: string; code: string; title: string; purpose: string; status: "draft" | "open" | "closed"; access: string; collector: string;
   locals: Question[]; plan: Plan;
@@ -100,7 +107,7 @@ export async function createSurvey(c: Config, me: Member, p: Pilot, b: Record<st
   const now = new Date().toISOString();
   const s: Survey = {
     id: newJobId(), code: p.code, title, purpose: cleanLong(b.purpose, 2000), status: "draft", access: "", collector: `${p.name} ${p.kind === "County council" ? "County Council" : "Council"}`,
-    locals: [], plan: { target: DEFAULT_TARGET, sites: [], checks: [] }, created: now, by: me.name, updated: now, openedBy: "", openedOn: "", closedOn: "", printedTo: 0,
+    locals: [], plan: { target: DEFAULT_TARGET, sites: [], checks: [], sure: 90, margin: 10, by: "sites", perSite: DEFAULT_PER_SITE, perHour: DEFAULT_PER_HOUR }, created: now, by: me.name, updated: now, openedBy: "", openedOn: "", closedOn: "", printedTo: 0,
   };
   await savePretty(c, surveyPath(c, p.code, s.id), s);
   return s;
@@ -119,12 +126,33 @@ export function readLocals(v: unknown): Question[] {
   });
 }
 
+const inRange = (v: unknown, lo: number, hi: number): number | undefined => {
+  const n = typeof v === "number" ? v : NaN;
+  return Number.isFinite(n) && n >= lo && n <= hi ? n : undefined;
+};
+
+function readSite(x: any): Site {
+  const site: Site = { name: cleanText(x?.name, 80), when: cleanText(x?.when, 80), interviewers: cleanText(x?.interviewers, 80) };
+  const share = inRange(x?.share, 0, 100), lat = inRange(x?.lat, 49, 61.5), lng = inRange(x?.lng, -9, 2.5);
+  const ages = Array.isArray(x?.ages) ? x.ages.map((n: unknown) => inRange(n, 0, MAX_ANSWERS)).filter((n: number | undefined) => Number.isInteger(n)) : [];
+  if (share !== undefined) site.share = share;
+  if (ages.length === 3) site.ages = ages;
+  if (lat !== undefined && lng !== undefined) { site.lat = lat; site.lng = lng; }
+  return site;
+}
+
 function readPlan(b: any, was: Plan): Plan {
   const target = Number(b?.target);
+  if (b?.target !== undefined && !(Number.isInteger(target) && target >= MIN_GROUP && target <= MAX_ANSWERS)) throw new FriendlyError(`Aim for between ${MIN_GROUP} and ${MAX_ANSWERS.toLocaleString("en-GB")} replies.`);
   return {
-    target: Number.isInteger(target) && target >= 30 && target <= MAX_ANSWERS ? target : was.target,
-    sites: (Array.isArray(b?.sites) ? b.sites : []).map((x: any) => ({ name: cleanText(x?.name, 80), when: cleanText(x?.when, 80), interviewers: cleanText(x?.interviewers, 80) })).filter((x: Site) => x.name).slice(0, 30),
+    target: b?.target === undefined ? was.target : target,
+    sites: (Array.isArray(b?.sites) ? b.sites : []).map(readSite).filter((x: Site) => x.name).slice(0, MAX_SITES),
     checks: (Array.isArray(b?.checks) ? b.checks : []).filter((x: unknown) => ACCESS_CHECKS.includes(x as string)),
+    sure: [90, 95, 99].includes(b?.sure) ? b.sure : was.sure,
+    margin: [3, 5, 7, 10].includes(b?.margin) ? b.margin : was.margin,
+    by: ["sites", "whole", "areas"].includes(b?.by) ? b.by : was.by,
+    perSite: Number.isInteger(inRange(b?.perSite, 5, 500)) ? b.perSite : was.perSite,
+    perHour: Number.isInteger(inRange(b?.perHour, 1, 60)) ? b.perHour : was.perHour,
   };
 }
 
@@ -133,7 +161,8 @@ function readPlan(b: any, was: Plan): Plan {
 export async function saveSurvey(c: Config, s: Survey, b: Record<string, any>): Promise<Survey> {
   return await withLock(surveyPath(c, s.code, s.id), async () => {
     const now = (await loadSurvey(c, s.code, s.id)) as Survey;
-    if (b.plan) now.plan = readPlan(b.plan, now.plan);
+    // Sites decide how replies are weighted, so a closed survey's are fixed and its results stay as they are
+    if (b.plan) now.plan = { ...readPlan(b.plan, now.plan), ...(now.status === "closed" ? { sites: now.plan.sites } : {}) };
     if (typeof b.collector === "string") now.collector = cleanText(b.collector, 160) || now.collector;
     if (Number.isInteger(b.printedTo) && b.printedTo > 0 && b.printedTo < 1e7) now.printedTo = Math.max(now.printedTo || 0, b.printedTo);
     if (now.status === "draft") {
@@ -347,7 +376,7 @@ export function ageSexTargets(census: Census | null, target: number): { age: str
 // Each age and sex group counts for its share of local adults. People who didn't say keep a weight of 1, and no
 // one counts for more than WEIGHT_CAP people, so a few replies in a rare group can't swing a result. What the
 // cap takes off is spread over everyone else in those groups, so they keep their fair share of the total.
-export function weightsFor(rows: Answer[], census: Census | null): { weights: Map<number, number>; weighted: boolean } {
+function weightsByPeople(rows: Answer[], census: Census | null): { weights: Map<number, number>; weighted: boolean } {
   const weights = new Map<number, number>(rows.map((r) => [r.n, 1]));
   const key = (r: Answer) => cellKey(r.answers.a1 ?? "", r.answers.a2 ?? "");
   const known = rows.filter((r) => census?.cells[key(r)]);
@@ -365,13 +394,43 @@ export function weightsFor(rows: Answer[], census: Census | null): { weights: Ma
   return { weights, weighted: true };
 }
 
+// Each site then counts for the share of adults it stands for, however many people were asked there, without
+// undoing the balance of age and sex: the two are adjusted in turn until both settle. Sites with no share, such as
+// one added by hand, are left as they are. The cap still holds, so a site with very few replies can fall short.
+const siteKey = (name: string) => name.trim().toLowerCase();
+const BALANCING_ROUNDS = 6;
+export function weightsFor(rows: Answer[], census: Census | null, sites: Site[] = []): { weights: Map<number, number>; weighted: boolean; bySite: boolean } {
+  const { weights, weighted } = weightsByPeople(rows, census);
+  const shares = new Map(sites.filter((x) => x.share).map((x) => [siteKey(x.name), x.share as number]));
+  const placed = rows.filter((r) => shares.has(siteKey(r.site)));
+  const seen = [...new Set(placed.map((r) => siteKey(r.site)))];
+  if (seen.length < 2 || placed.length < MIN_GROUP) return { weights, weighted, bySite: false };
+  const wanted = seen.reduce((sum, name) => sum + (shares.get(name) as number), 0);
+  const sumOf = (list: Answer[]) => list.reduce((sum, r) => sum + (weights.get(r.n) as number), 0);
+  const groupOf = (r: Answer) => cellKey(r.answers.a1 ?? "", r.answers.a2 ?? "");
+  const groups = weighted ? [...new Set(rows.map(groupOf))].map((key) => { const list = rows.filter((r) => groupOf(r) === key); return { list, aim: sumOf(list) }; }) : [];
+  for (let round = 0; round < BALANCING_ROUNDS; round++) {
+    const total = sumOf(placed);
+    for (const name of seen) {
+      const here = placed.filter((r) => siteKey(r.site) === name), factor = (((shares.get(name) as number) / wanted) * total) / sumOf(here);
+      for (const r of here) weights.set(r.n, (weights.get(r.n) as number) * factor);
+    }
+    for (const g of groups) {
+      const factor = g.aim / (sumOf(g.list) || 1);
+      for (const r of g.list) weights.set(r.n, (weights.get(r.n) as number) * factor);
+    }
+  }
+  for (const r of rows) weights.set(r.n, Math.min(WEIGHT_CAP, weights.get(r.n) as number));
+  return { weights, weighted, bySite: true };
+}
+
 // ----- results
 
 export type OptionResult = { label: string; count: number; pct: number };
 export type QuestionResult = { id: string; text: string; answered: number; range: number | null; options: OptionResult[]; held: boolean };
 export type GroupResult = { group: string; label: string; answered: number; satisfied: number | null; dissatisfied: number | null };
 export type Results = {
-  total: number; used: number; excluded: number; weighted: boolean; questions: QuestionResult[]; groups: GroupResult[]; bySource: Record<string, number>; targetMet: { age: string; got: number; want: number }[];
+  total: number; used: number; excluded: number; weighted: boolean; bySite: boolean; questions: QuestionResult[]; groups: GroupResult[]; bySource: Record<string, number>; targetMet: { age: string; got: number; want: number }[];
 };
 
 const SATISFIED = new Set(["Very satisfied", "Fairly satisfied"]);
@@ -383,7 +442,7 @@ const effectiveSize = (w: number[]) => { const sum = w.reduce((a, b) => a + b, 0
 
 export function surveyResults(s: Pick<Survey, "locals" | "plan">, rows: Answer[], census: Census | null): Results {
   const used = rows.filter((r) => !r.excluded);
-  const { weights, weighted } = weightsFor(used, census);
+  const { weights, weighted, bySite } = weightsFor(used, census, s.plan.sites);
   const weightOf = (r: Answer) => weights.get(r.n) ?? 1;
   const questions = allQuestions(s).filter((q) => q.kind === "choice").map((q): QuestionResult => {
     const answered = used.filter((r) => r.answers[q.id]);
@@ -414,7 +473,7 @@ export function surveyResults(s: Pick<Survey, "locals" | "plan">, rows: Answer[]
   for (const r of used) bySource[r.via] = (bySource[r.via] || 0) + 1;
   const wanted = ageSexTargets(census, s.plan.target);
   const targetMet = wanted.map((w) => ({ age: w.age, want: w.female + w.male, got: used.filter((r) => r.answers.a1 === w.age).length }));
-  return { total: rows.length, used: used.length, excluded: rows.length - used.length, weighted, questions, groups, bySource, targetMet };
+  return { total: rows.length, used: used.length, excluded: rows.length - used.length, weighted, bySite, questions, groups, bySource, targetMet };
 }
 
 // Things a person should look at. Nothing is removed automatically, and matching replies can be genuine.
@@ -454,9 +513,9 @@ export const templateCsv = (s: Pick<Survey, "locals">) => `${csvLine(["form", "s
 
 // One row for each form used. Comments appear only once their names have been taken out, and only for the
 // authority's own members.
-export function answersCsv(s: Pick<Survey, "locals">, rows: Answer[], census: Census | null, withComments: boolean): string {
+export function answersCsv(s: Pick<Survey, "locals"> & Partial<Pick<Survey, "plan">>, rows: Answer[], census: Census | null, withComments: boolean): string {
   const used = rows.filter((r) => !r.excluded);
-  const { weights } = weightsFor(used, census);
+  const { weights } = weightsFor(used, census, s.plan?.sites);
   const qs = allQuestions(s);
   const line = (r: Answer) => csvLine([r.form, r.site, r.via, round(weights.get(r.n) ?? 1, 3), ...qs.map((q) => (q.kind === "text" && (!withComments || !r.clean?.[q.id]) ? "" : r.answers[q.id] ?? ""))]);
   return `${[csvLine(["form", "site", "entered_by", "weight", ...qs.map((q) => q.id)]), ...used.map(line)].join("\n")}\n`;
@@ -535,7 +594,7 @@ export async function streetSummaries(c: Config, code: string): Promise<StreetSu
 
 // Everything a survey's page shows. `edit`: a lead or site administrator. `own`: a member of the authority, the
 // only people who get the words of a comment. Topic counts go to everyone who can see the survey.
-export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edit: boolean, own: boolean) {
+export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edit: boolean, own: boolean, areas = 0) {
   const used = rows.filter((r) => !r.excluded);
   const cleaned = cleanComments(s, used);
   const comments = own ? cleaned : [];
@@ -543,7 +602,7 @@ export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edi
   return {
     survey: edit ? s : { ...s, access: "" }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS,
     template: edit ? templateCsv(s) : "",
-    census: census ? { adults: census.adults } : null, targets: ageSexTargets(census, s.plan.target),
+    census: census ? { adults: census.adults } : null, areas, targets: ageSexTargets(census, s.plan.target),
     results: surveyResults(s, rows, census), topics: topicCounts(cleaned), comments, ownComments: own, waiting: waitingComments(s, used),
     problems: edit ? findProblems(s, rows) : [], excluded: edit ? rows.filter((r) => r.excluded).map((r) => ({ n: r.n, form: r.form })) : [],
     sample: edit && own ? commentSample(comments) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1,

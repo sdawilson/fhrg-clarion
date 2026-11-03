@@ -145,6 +145,9 @@ const suggested = await until(async () => { const j = (await api("/api/survey/he
 ok(suggested.result.length === 2 && suggested.result[1].options.length === 0, "Claude suggests local questions");
 let call = claude.calls.at(-1);
 ok(call.prompt.includes("A27 works") && !call.body.tools.some((x) => /^web_/.test(x.type || "")), "from the officer's purpose, with no web access");
+ok(/<findings>/.test(call.prompt) && /Fault reports/.test(call.prompt) && /Petitions/.test(call.prompt), "and from what Clarion has found lately");
+ok(suggested.result[0].reason === "Loud: has it reached people?" && suggested.result[0].topic === "A27 works" && suggested.result[0].basedOn.includes("Fault reports"), "each suggestion says what prompted it");
+ok(!suggested.result[0].basedOn.includes("Press") && !suggested.result[0].basedOn.includes("Impact note"), "and can't claim a source Clarion doesn't hold");
 const firstSpend = getJson(`${R}usage/${new Date().toISOString().slice(0, 7)}.json`).usd;
 ok(firstSpend > 0, "and the cost counts against the month's limit");
 ok((await api("/api/survey/wording", { code: WSX, id }, lead)).status === 400, "there's nothing to check until there's a local question");
@@ -440,6 +443,7 @@ while (status === 200 && tries < 130) {
   if (status === 200) await until(async () => (await api("/api/survey/help", { code: WSX, id, job: started.job.id }, lead)).job.status !== "working", "the suggestion");
 }
 ok(status === 429 && tries <= 101, "an authority has a daily limit on help from Claude, scans and sorting included");
+ok(claude.calls.filter((x) => /<findings>/.test(x.prompt)).every((x) => !x.prompt.includes("A hole outside")), "people's written comments never reach the suggestions");
 ok((await api("/api/survey/suggest", { code: WSX, id }, boss)).status === 200, "and a site administrator doesn't");
 const nine = await fresh("Too many forms");
 let lastSend = 0;
