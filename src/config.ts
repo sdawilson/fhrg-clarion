@@ -25,7 +25,7 @@
 //              DAILY_JOBS_MAX (default 20: readings and notes per authority per day; site administrators
 //              aren't limited), SEARCHES_A_MONTH (default 2000: coverage checks for all authorities together; keep
 //              it within the Brave Search plan), TOOLKIT_STORAGE_ZONE (the Climate Toolkit's storage zone),
-//              TOOLKIT_ROOT_FOLDER (default climate-toolkit), DEMO (on, the default, or off: the Northbridge
+//              TOOLKIT_ROOT_FOLDER (default climate-toolkit), TOOLKIT_STORAGE_HOST (default storage.bunnycdn.com), DEMO (on, the default, or off: the Northbridge
 //              demonstration at /demo)
 
 import process from "node:process";
@@ -76,7 +76,7 @@ function env(name: string, fallback = "", keepEmpty = false): string {
 
 // For the start-up log: which settings arrived (names only, never values)
 const SECRET_SETTINGS = ["ANTHROPIC_API_KEY", "STORAGE_ACCESS_KEY", "WEBSITE_DATABASE_URL", "WEBSITE_DATABASE_AUTH_TOKEN", "SESSION_SECRET", "SSO_SECRET", "FHRG_REF_KEY", "SEARCH_KEY", "TOOLKIT_STORAGE_KEY"];
-const VARIABLE_SETTINGS = ["STORAGE_ZONE", "STORAGE_HOST", "ROOT_FOLDER", "WEBSITE_URL", "SITE_ADMINS", "CLAUDE_MODEL", "CLAUDE_EFFORT", "FHRG_REF_URL", "DEMO", "MONTHLY_CAP_USD", "WEB_SEARCH_MAX", "DATA_QUERIES_MAX", "DAILY_JOBS_MAX", "SEARCHES_A_MONTH", "TOOLKIT_STORAGE_ZONE", "TOOLKIT_ROOT_FOLDER"];
+const VARIABLE_SETTINGS = ["STORAGE_ZONE", "STORAGE_HOST", "ROOT_FOLDER", "WEBSITE_URL", "SITE_ADMINS", "CLAUDE_MODEL", "CLAUDE_EFFORT", "FHRG_REF_URL", "DEMO", "MONTHLY_CAP_USD", "WEB_SEARCH_MAX", "DATA_QUERIES_MAX", "DAILY_JOBS_MAX", "SEARCHES_A_MONTH", "TOOLKIT_STORAGE_ZONE", "TOOLKIT_ROOT_FOLDER", "TOOLKIT_STORAGE_HOST"];
 
 function folder(name: string, fallback: string): string {
   const f = env(name, fallback, true).replace(/^\/+|\/+$/g, "");
@@ -111,7 +111,7 @@ export function getConfig(): Config {
     toolkitKey: env("TOOLKIT_STORAGE_KEY"),
     toolkitZone: env("TOOLKIT_STORAGE_ZONE"),
     toolkitRoot: folder("TOOLKIT_ROOT_FOLDER", "climate-toolkit"),
-    toolkitHost: env("STORAGE_HOST", "storage.bunnycdn.com").replace(/^https?:\/\//, "").replace(/\/+$/, ""),
+    toolkitHost: env("TOOLKIT_STORAGE_HOST", "storage.bunnycdn.com").replace(/^https?:\/\//, "").replace(/\/+$/, ""),
     monthlyCapUsd: num("MONTHLY_CAP_USD", 40, 1, 2000),
     webMax: num("WEB_SEARCH_MAX", 4, 1, 10),
     dataMax: num("DATA_QUERIES_MAX", 8, 1, 20),

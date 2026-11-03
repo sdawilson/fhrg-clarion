@@ -199,7 +199,7 @@ function demoWorks(satisfied: number | null) {
   const events = [{ type: "heat", label: "Heatwave", start: COUNTY_DAY(112), end: COUNTY_DAY(107), severity: 1, detail: "Highest 29\u00b0C" }, { type: "rain", label: "Heavy rain", start: COUNTY_DAY(47), end: COUNTY_DAY(45), severity: 2, detail: "Wettest day 34 mm" }, { type: "storm", label: "Gale", start: COUNTY_DAY(19), end: COUNTY_DAY(18), severity: 1, detail: "Peak gust 56 mph" }];
   const press: Record<string, number> = {};
   for (const x of PIECES) press[mondayOf(x.date)] = (press[mondayOf(x.date)] ?? 0) + 1;
-  const held = { on: true, toolkitId: 0, by: "Demo officer", at: WHEN, checked: WHEN, uploaded: WHEN, from: "2024-01-01", to: COUNTY_DAY(2), weatherTo: COUNTY_DAY(2), weeks, wards: { Moorside: 1240, "Dale End": 980, "Bridge Ward": 760, "High Fell": 530 }, events, problem: "" };
+  const held = { on: true, toolkitId: 0, toolkitName: "", by: "Demo officer", at: WHEN, checked: WHEN, uploaded: WHEN, from: "2024-01-01", to: COUNTY_DAY(2), weatherTo: COUNTY_DAY(2), weeks, wards: { Moorside: 1240, "Dale End": 980, "Bridge Ward": 760, "High Fell": 530 }, events, problem: "" };
   const figures = worksFigures(held, press, [{ created: WHEN, direction: "Worsening" }], [{ ran: "2026-10-03", satisfied }], today, Object.fromEntries(FUNCTIONS.map(([id, name]) => [id, name])));
   return { ready: true, on: true, by: "Demo officer", at: WHEN, checked: WHEN, uploaded: WHEN, from: held.from, to: held.to, weatherTo: held.weatherTo, problem: "", canTurnOn: false, canTurnOff: false, figures };
 }

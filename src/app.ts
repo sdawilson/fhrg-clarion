@@ -90,7 +90,7 @@ import {
   addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, createSurvey, formNumber, listSurveys, loadAnswers,
   loadCensus, loadSurvey, openSurvey, publicSurvey, readCsv, saveSurvey, surveyByAccess, surveyPage, textQuestionIds, validAccess, type Survey,
 } from "./surveys";
-import { FriendlyError, briefly, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
+import { FriendlyError, briefly, tryAgainNow, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
 
 const PAGE_HEADERS: Record<string, string> = {
   "content-type": "text/html; charset=utf-8",
@@ -228,10 +228,9 @@ async function handleWorks(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
-  const held = await loadWorks(c, p.code);
   // Records can take a while to read, so the page doesn't wait: it shows what's held, and the work carries on
-  const latest = held.on ? await briefly(`works|${p.code}`, held, () => refreshWorks(c, p)) : held;
-  return json(await worksPage(c, me, p, latest, Object.fromEntries(FUNCTIONS.map(([id, name]) => [id, name]))));
+  if ((await loadWorks(c, p.code)).on) await briefly(`works|${p.code}`, null, () => refreshWorks(c, p), (x) => !!x.problem);
+  return json(await worksPage(c, me, p, await loadWorks(c, p.code), Object.fromEntries(FUNCTIONS.map(([id, name]) => [id, name]))));
 }
 
 async function handleAbc(c: Config, request: Request, what: "find" | "status" | "save"): Promise<Response> {
@@ -512,7 +511,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/enquiries/match": { const { p, b } = await editor(c, request, 1000); await saveMatch(c, p, b, await sharedTopics(c)); return json({ ok: true }); }
         case "/api/enquiries/page": { const { p, b } = await editor(c, request, 1000); await savePage(c, p, b.url); return json({ ok: true }); }
         case "/api/works/get": return await handleWorks(c, request);
-        case "/api/works/on": { const me = await signedIn(c, request); const b = await readJsonBody(request, 1000); const p = pilotFor(me, b.code); await turnOn(c, me, p); refreshWorks(c, p).catch((e) => console.log(`[warn] works: ${(e as Error).message}`)); return json({ ok: true }); }
+        case "/api/works/on": { const me = await signedIn(c, request); const b = await readJsonBody(request, 1000); const p = pilotFor(me, b.code); await turnOn(c, me, p); tryAgainNow(`works|${p.code}`); await briefly(`works|${p.code}`, null, () => refreshWorks(c, p), (x) => !!x.problem); return json({ ok: true }); }
         case "/api/works/off": { const { p } = await editor(c, request, 1000); await turnOff(c, p); return json({ ok: true }); }
         case "/api/abc/find": return await handleAbc(c, request, "find");
         case "/api/abc/status": return await handleAbc(c, request, "status");

@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import zlib from "node:zlib";
 import { JSDOM } from "jsdom";
-import { addUser, claude, files, getText, hooks, until } from "./sim.mjs";
+import { addUser, claude, files, getText, hooks, putText, until } from "./sim.mjs";
 const { handleRequest } = await import("./.build/app.mjs");
 const t = await import("./.build/internals.mjs");
 
@@ -12,7 +12,7 @@ const WSX = "E10000032", KIRK = "E08000034";
 
 // ---- the sums
 ok(t.mondayOf("2026-11-03") === "2026-11-02" && t.mondayOf("2026-11-02") === "2026-11-02" && t.mondayOf("2026-11-01") === "2026-10-26", "a date falls in the week starting on its Monday");
-ok(t.sourceOf("Customer report") === "public" && t.sourceOf("Web form") === "public" && t.sourceOf("Safety inspection") === "inspection" && t.sourceOf("Highway steward") === "inspection" && t.sourceOf("") === "other", "jobs are sorted by who found them");
+ok(t.sourceOf("Customer report") === "public" && t.sourceOf("Web form") === "public" && t.sourceOf("Online") === "public" && t.sourceOf("Safety inspection") === "inspection" && t.sourceOf("Contractor report") === "other" && t.sourceOf("") === "other", "jobs are sorted by who found them, as the Toolkit sorts them");
 
 const COLS = "ref,fn,area,type,pri,src,hier,ward,street,logged,target,safe,done,status,ooh,cost,qty,unit";
 const job = (i, date, src, fn, ward) => `SECRET-REF-${i},${fn},Highways,Pothole,P1,${src},2,${ward},"12 Secret Street, Town",${date}T09:30,,,,Done,0,123.45,1,No`;
@@ -22,14 +22,15 @@ for (let i = 0; i < 60; i++) lines.push(job(i, dayAgo(10 + (i % 5)), i % 3 ? "Cu
 for (let i = 0; i < 4; i++) lines.push(job(100 + i, dayAgo(11), "Customer report", "cw", "Tiny Ward"));
 lines.push(job(200, "2019-01-07", "Customer report", "cw", "Old Ward"));
 lines.push(`ref-no-date,cw,,,,,,,,,,,,,,,,`);
+lines.push(job(300, dayAgo(12), "Customer report", "1 Secret Lane", "Moorside"));
 const records = zlib.gzipSync(Buffer.from(`${lines.join("\r\n")}\r\n`));
 const asStream = (bytes) => new Blob([bytes]).stream();
 const since = dayAgo(490);
 let r = await t.tallyRecords(asStream(records), since);
 const weekly = r.weeks.reduce((sum, w) => sum + w.public + w.inspection + w.other, 0);
-ok(weekly === 64 && r.to >= dayAgo(14) && r.from === "2019-01-07", "records are totalled by week, and old ones left out");
+ok(weekly === 65 && r.to >= dayAgo(14) && r.from === "2019-01-07", "records are totalled by week, and old ones left out");
 ok(r.weeks.reduce((sum, w) => sum + w.inspection, 0) === 20 && r.weeks.reduce((sum, w) => sum + (w.fns.cw ?? 0), 0) === 34, "by who found the job and by function");
-ok(r.wards.Moorside === 45 && r.wards["Dale End"] === 15 && !("Tiny Ward" in r.wards), "and a ward with fewer than 10 jobs isn't kept by name");
+ok(r.wards.Moorside === 46 && r.wards["Dale End"] === 15 && !("Tiny Ward" in r.wards), "and a ward with fewer than 10 jobs isn't kept by name");
 ok(!/SECRET|Secret|123\.45/.test(JSON.stringify(r)), "with no street, reference or cost kept");
 const weather = (over) => { const n = 60, f = (v) => new Array(n).fill(v); return { start: "2026-01-01", tmax: f(10), tmin: f(5), rain: f(0), gust: f(20), snow: f(0), ...over }; };
 const at = (list, day, v) => { const out = [...list]; out[day] = v; return out; };
@@ -45,18 +46,22 @@ ok(t.weatherEvents(weather({ tmax: W.tmax.map((v, i) => (i >= 5 && i <= 7 ? 27 :
 ok(t.weatherEvents(weather({ tmin: W.tmin.map((v, i) => (i >= 5 && i <= 8 ? -3 : v)) }))[0]?.label === "Cold spell or snow" && t.weatherEvents(weather({ tmin: W.tmin.map((v, i) => (i === 5 ? -3 : v)) })).length === 0, "and cold needs to last");
 ok(t.weatherEvents(weather({ tmin: W.tmin.map((v, i) => (i >= 5 && i < 15 ? -1 : v)) })).some((e) => e.label === "Freeze and thaw"), "days that freeze and thaw are found");
 ok(t.weatherEvents(weather({ gust: at(W.gust, 10, null), rain: W.rain.map(() => null) })).length === 0, "and days with no reading are passed over");
+ok(t.weatherEvents(weather({ tmax: W.tmax.map((v, i) => (i >= 5 && i <= 9 ? (i === 7 ? null : 27) : v)) }))[0]?.end === "2026-01-10", "a day or two missing from the temperatures is filled in, as the Toolkit does");
 ok(t.weatherEvents(weather({ gust: at(W.gust, 10, 45) }), { gale: 40 }).length === 1, "an authority's own settings in the Toolkit are used");
 
 const week = (date, pub, fns = {}) => ({ week: date, public: pub, inspection: 10, other: 0, fns });
 const mondays = Array.from({ length: 20 }, (_, i) => new Date(Date.parse("2026-11-02T12:00:00Z") - (i + 1) * 7 * 86400000).toISOString().slice(0, 10)).reverse();
-const held = { on: true, weeks: mondays.map((m, i) => week(m, i >= 16 ? 200 : 100, { dr: i >= 16 ? 90 : 10, cw: 40 })), wards: { Big: 50, Bigger: 80 }, events: [{ type: "rain", label: "Heavy rain", start: mondays[15], end: mondays[15], severity: 2, detail: "" }, { type: "storm", label: "Gale", start: "2026-10-30", end: "2026-10-30", severity: 1, detail: "" }] };
+const held = { on: true, from: "2025-01-01", to: "2026-11-01", weeks: mondays.map((m, i) => week(m, i >= 16 ? 200 : 100, { dr: i >= 16 ? 90 : 10, cw: 40 })), wards: { Big: 50, Bigger: 80 }, events: [{ type: "rain", label: "Heavy rain", start: mondays[15], end: mondays[15], severity: 2, detail: "" }, { type: "storm", label: "Gale", start: "2026-10-30", end: "2026-10-30", severity: 1, detail: "" }] };
 const fig = t.worksFigures(held, { [mondays[16]]: 4, [mondays[10]]: 1, [mondays[9]]: 1 }, [{ created: `${mondays[17]}T09:00:00Z`, direction: "Worsening" }], [{ ran: mondays[12], satisfied: 34 }], "2026-11-03", { dr: "Drainage & flooding", cw: "Carriageways" });
 const rain = fig.after.find((x) => x.label === "Heavy rain");
 ok(fig.weeks.length === 26 && fig.weeks.at(-1).week === "2026-10-26", "the chart covers the last 26 full weeks");
 ok(rain.functions[0] === "Drainage & flooding" && rain.functions.length === 1 && rain.mood === "Worsening" && rain.publicChange === 50, "each event shows what rose, by how much against the 8 weeks before, and the mood afterwards");
-ok(fig.marks.some((m) => /Survey: 34% satisfied/.test(m.label)) && fig.marks.some((m) => /Reading: worsening/.test(m.label)), "survey and reading dates are marked");
+ok(fig.marks.some((m) => /Survey: 34% satisfied, indicative/.test(m.label)) && fig.marks.some((m) => /Reading: worsening/.test(m.label)), "survey and reading dates are marked");
 ok(fig.wards[0].name === "Bigger", "and the busiest wards come first");
 ok(rain.pressChange === null, "a rise from next to nothing isn't shown as a percentage");
+const lateStart = t.worksFigures({ ...held, from: mondays[13] }, {}, [], [], "2026-11-03", {}).after.find((x) => x.label === "Heavy rain");
+const stale = t.worksFigures({ ...held, to: mondays[15] }, {}, [], [], "2026-11-03", {}).after.find((x) => x.label === "Heavy rain");
+ok(lateStart.publicChange === null && stale.publicChange === null, "weeks before the records start, or after they stop, aren't taken for weeks with no jobs");
 ok(t.publicJobs(held, "2026-11-03") === 800 && t.publicJobs({ ...held, on: false }, "2026-11-03") === 0, "public reports over four weeks are added up for a mood reading");
 
 // ---- through the API
@@ -64,16 +69,17 @@ await addUser(1, "lead@westsussex.gov.uk", "Lee Lead", 30, "lead");
 await addUser(2, "member@westsussex.gov.uk", "Mo Member", 30, "member");
 await addUser(3, "kit@kirklees.gov.uk", "Kit Officer", 20, "lead");
 await addUser(4, "boss@fhrg.test", "Bo Boss", 99, "member");
+await addUser(7, "admin@westsussex.gov.uk", "Ann Admin", 30, "member", 1);
 const api = async (path, body, token) => { const res = await handleRequest(new Request(`https://clarion.test${path}`, { method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-session-token": token } : {}) }, body: JSON.stringify(body) })); return { status: res.status, ...(await res.json()) }; };
 const login = async (email) => (await api("/api/login", { email, password: "pw" })).token;
-const lead = await login("lead@westsussex.gov.uk"), member = await login("member@westsussex.gov.uk"), kit = await login("kit@kirklees.gov.uk"), boss = await login("boss@fhrg.test");
+const lead = await login("lead@westsussex.gov.uk"), member = await login("member@westsussex.gov.uk"), kit = await login("kit@kirklees.gov.uk"), boss = await login("boss@fhrg.test"), ownAdmin = await login("admin@westsussex.gov.uk");
 
 const asked = [];
 let answer = (path) => null;
 const FOLDER = "https://storage.bunnycdn.com/toolkit-zone/climate-toolkit/authorities/";
 hooks.fetch = async (url, init) => {
   if (!url.startsWith("https://storage.bunnycdn.com/toolkit-zone/")) return null;
-  asked.push({ url, key: init.headers?.AccessKey, method: init.method || "GET" });
+  asked.push({ url, key: init.headers?.AccessKey, method: init.method || "GET", redirect: init.redirect });
   return answer(url.slice(FOLDER.length));
 };
 const json = (x) => new Response(JSON.stringify(x), { status: 200 });
@@ -91,12 +97,14 @@ r = await api("/api/works/get", { code: WSX }, member);
 ok(r.ready && !r.on && !r.canTurnOn, "a member can't turn it on");
 ok((await api("/api/works/on", { code: WSX }, member)).status === 403, "even by asking directly");
 ok((await api("/api/works/on", { code: WSX }, boss)).status === 403, "and nor can an administrator from outside the authority");
+ok((await api("/api/works/on", { code: WSX }, ownAdmin)).status === 403, "or an administrator inside it who isn't its lead");
 ok(asked.length === 0, "nothing is read until it's turned on");
 ok((await api("/api/works/on", { code: WSX }, lead)).status === 200, "the authority's lead can");
 await until(() => asked.some((x) => x.url.endsWith("era5.json")), "the records to be read");
 await until(async () => (await api("/api/works/get", { code: WSX }, member)).figures, "the figures");
 r = await api("/api/works/get", { code: WSX }, member);
 ok(asked.every((x) => x.url.startsWith(`${FOLDER}30/`) && x.key === "toolkit-read-only" && x.method === "GET"), "only that authority's folder is read, with the read-only password, and nothing is changed");
+ok(asked.every((x) => x.redirect === "error"), "a redirect is refused, so the password can't be handed on");
 ok(r.on && r.by === "Lee Lead" && r.figures.weeks.some((w) => w.public > 0) && r.figures.events.some((e) => e.label === "Heavy rain") && r.weatherTo === series.start.slice(0, 0) + r.weatherTo, "the figures and weather events come through");
 ok(!r.canTurnOff, "a member can't turn it off");
 const stored = getText(files("").find((k) => k.endsWith(`${WSX}/works.json`)));
@@ -105,6 +113,12 @@ const reads = asked.length;
 await api("/api/works/get", { code: WSX }, member);
 ok(asked.length === reads, "and it's checked at most once a day");
 ok((await api("/api/works/get", { code: KIRK }, kit)).on === false, "another authority isn't affected");
+const wrongFile = files("").find((k) => k.endsWith(`${WSX}/works.json`)), good = getText(wrongFile);
+putText(wrongFile, JSON.stringify({ ...JSON.parse(good), toolkitId: 77, toolkitName: "West Sussex District Council", checked: "2020-01-01T00:00:00Z" }));
+const readsBefore = asked.length;
+await until(async () => /turning on again/.test((await api("/api/works/get", { code: WSX }, member)).problem), "the link to stop");
+ok(asked.length === readsBefore && !getText(wrongFile).includes("Moorside") && !/"toolkitId": 77/.test(getText(wrongFile)), "a link made by an authority with a similar name is stopped, and nothing is read");
+putText(wrongFile, good);
 ok(!getText(files("").find((k) => k.endsWith(`${WSX}/works.json`))).includes("toolkit-read-only"), "and the password is never saved");
 
 const before = claude.calls.length;
@@ -147,7 +161,7 @@ const gone = getText(files("").find((k) => k.endsWith(`${WSX}/works.json`)));
 ok(!/Moorside|"on": true/.test(gone), "turning it off removes what's held");
 button(d, "Turn this on").click();
 await until(async () => /refused Clarion's password/.test((await api("/api/works/get", { code: WSX }, lead)).problem), "the refusal");
-ok(true, "a refused password is explained");
+ok(!(await api("/api/works/get", { code: WSX }, lead)).checked, "a refused password is explained, and it's tried again rather than left until tomorrow");
 
 hooks.fetch = null;
 console.log(failures ? `\n${failures} FAILED` : "\nAll passed");

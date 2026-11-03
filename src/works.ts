@@ -11,9 +11,9 @@
 
 import type { Member } from "./accounts";
 import type { Config } from "./config";
-import { loadAssessments } from "./coverage";
+import { FUNCTIONS, loadAssessments } from "./coverage";
 import { looksPersonal } from "./enquiries";
-import { canEdit, isMember, type Pilot } from "./pilots";
+import { canEdit, type Pilot } from "./pilots";
 import { latestReadings } from "./reading";
 import { savePretty, storageJson } from "./storage";
 import { streetSummaries } from "./surveys";
@@ -24,7 +24,7 @@ export type Week = { week: string; public: number; inspection: number; other: nu
 export type Weather = { start: string; tmax: (number | null)[]; tmin: (number | null)[]; rain: (number | null)[]; gust: (number | null)[]; snow: (number | null)[]; thunder?: (number | null)[]; updated?: string };
 export type Event = { type: string; label: string; start: string; end: string; severity: number; detail: string };
 export type Held = {
-  on: boolean; toolkitId: number; by: string; at: string; checked: string; uploaded: string; from: string; to: string; weatherTo: string;
+  on: boolean; toolkitId: number; toolkitName: string; by: string; at: string; checked: string; uploaded: string; from: string; to: string; weatherTo: string;
   weeks: Week[]; wards: Tally; events: Event[]; problem: string;
 };
 
@@ -46,8 +46,11 @@ const EVENT_NAMES: Record<string, string> = { storm: "Gale", rain: "Heavy rain",
 const RULES = { heavyRain: 20, veryHeavyRain: 30, rain3: 40, gale: 50, severeGale: 60, hot: 25, heatwaveDays: 3, coldSpellTmin: -2, coldSpellDays: 3, ftCluster: 8 };
 
 const path = (c: Config, code: string) => `${c.root}authorities/${code}/works.json`;
-const blank = (): Held => ({ on: false, toolkitId: 0, by: "", at: "", checked: "", uploaded: "", from: "", to: "", weatherTo: "", weeks: [], wards: {}, events: [], problem: "" });
+const blank = (): Held => ({ on: false, toolkitId: 0, toolkitName: "", by: "", at: "", checked: "", uploaded: "", from: "", to: "", weatherTo: "", weeks: [], wards: {}, events: [], problem: "" });
 export const toolkitReady = (c: Config) => !!(c.toolkitKey && c.toolkitZone);
+// The Toolkit holds every authority's records, so this has to be the very authority, not one with a similar name
+const sameAuthority = (name: string, p: Pilot) => name.trim().toLowerCase() === p.websiteName.toLowerCase();
+const FN_IDS = new Set<string>(FUNCTIONS.map((f) => f[0]));
 
 export async function loadWorks(c: Config, code: string): Promise<Held> {
   return { ...blank(), ...(await storageJson<Partial<Held>>(c, path(c, code), {})) };
@@ -57,10 +60,11 @@ const dayNumber = (iso: string) => Math.floor(Date.parse(`${iso}T12:00:00Z`) / D
 const isoOf = (n: number) => new Date(n * DAY_MS + DAY_MS / 2).toISOString().slice(0, 10);
 export const mondayOf = (iso: string) => { const n = dayNumber(iso); return isoOf(n - ((n + 3) % 7)); }; // day 0 was a Thursday
 
-/** Who found a job: the public, an inspection, or something else. Sources are each authority's own words. */
+/** Who found a job: the public, an inspection, or something else, as the Toolkit sorts them. */
 export function sourceOf(text: string): "public" | "inspection" | "other" {
-  if (/inspect|steward|routine|survey|patrol|cyclic|planned|scheduled/i.test(text)) return "inspection";
-  if (/public|customer|resident|citizen|enquir|report|web|phone|call|e-?mail|fixmystreet|councillor|member/i.test(text)) return "public";
+  const s = text.toLowerCase();
+  if (/inspect|survey|patrol|safety/.test(s)) return "inspection";
+  if (/public|online|phone|web|app|email|councillor|member|resident|customer|report it|fixmystreet/.test(s)) return "public";
   return "other";
 }
 
@@ -81,7 +85,7 @@ export async function tallyRecords(body: ReadableStream<Uint8Array>, since: stri
         if (monday >= since) {
           const w = weeks.get(monday) ?? { week: monday, public: 0, inspection: 0, other: 0, fns: {} };
           w[sourceOf(row.src ?? "")]++;
-          if (row.fn) w.fns[row.fn] = (w.fns[row.fn] ?? 0) + 1;
+          if (FN_IDS.has(row.fn)) w.fns[row.fn] = (w.fns[row.fn] ?? 0) + 1;
           weeks.set(monday, w);
           const ward = cleanText(row.ward, WARD_CHARS + 1);
           if (ward && ward.length <= WARD_CHARS && !looksPersonal(ward)) wards.set(ward, (wards.get(ward) ?? 0) + 1);
@@ -121,8 +125,22 @@ function groups(hit: (i: number) => boolean, n: number, gap: number) {
   return out;
 }
 
+/** Gaps of up to 3 days in the temperatures are filled in a straight line, as the Toolkit does. */
+function fillShortGaps(list: (number | null)[], most = 3): (number | null)[] {
+  const a = [...list];
+  for (let i = 0; i < a.length;) {
+    if (isNum(a[i])) { i++; continue; }
+    let j = i;
+    while (j < a.length && !isNum(a[j])) j++;
+    if (i > 0 && j < a.length && j - i <= most) for (let t = i; t < j; t++) a[t] = (a[i - 1] as number) + (((a[j] as number) - (a[i - 1] as number)) * (t - i + 1)) / (j - i + 1);
+    i = j;
+  }
+  return a;
+}
+
 /** The Toolkit's rules for storms, heavy rain, cold, freeze and thaw and heatwaves. Long wet and dry spells need its normals, so they aren't here. */
-export function weatherEvents(w: Weather, rules: Partial<typeof RULES> = {}): Event[] {
+export function weatherEvents(raw: Weather, rules: Partial<typeof RULES> = {}): Event[] {
+  const w = { ...raw, tmax: fillShortGaps(raw.tmax), tmin: fillShortGaps(raw.tmin) };
   const th = { ...RULES, ...rules }, n = w.rain.length, first = dayNumber(w.start), day = (i: number) => isoOf(first + i), ev: Event[] = [];
   const rain3 = (i: number) => (i >= 2 ? [0, 1, 2].reduce((sum, k) => sum + (isNum(w.rain[i - k]) ? (w.rain[i - k] as number) : 0), 0) : 0);
   const add = (type: string, start: number, end: number, severity: number, detail: string) => ev.push({ type, label: EVENT_NAMES[type], start: day(Math.max(0, start)), end: day(end), severity, detail });
@@ -163,7 +181,8 @@ export function weatherEvents(w: Weather, rules: Partial<typeof RULES> = {}): Ev
 // ----- reading the Toolkit
 
 const toolkitUrl = (c: Config, id: number, file: string) => `https://${c.toolkitHost}/${encodeURIComponent(c.toolkitZone)}/${c.toolkitRoot}authorities/${id}/${file}`;
-const fromToolkit = (c: Config, id: number, file: string, ms = 20000) => fetchWithTimeout(toolkitUrl(c, id, file), { headers: { AccessKey: c.toolkitKey, Accept: "*/*" } }, ms);
+// A redirect is refused, as following one would hand the password to wherever it led
+const fromToolkit = (c: Config, id: number, file: string, ms = 20000) => fetchWithTimeout(toolkitUrl(c, id, file), { redirect: "error", headers: { AccessKey: c.toolkitKey, Accept: "*/*" } }, ms);
 async function toolkitJson<T>(c: Config, id: number, file: string): Promise<T | null> {
   const res = await fromToolkit(c, id, file);
   if (res.status === 404) return null;
@@ -176,10 +195,15 @@ async function toolkitJson<T>(c: Config, id: number, file: string): Promise<T | 
 export async function refreshWorks(c: Config, p: Pilot): Promise<Held> {
   const held = await loadWorks(c, p.code);
   if (!held.on || !toolkitReady(c) || held.checked.slice(0, 10) === londonToday()) return held;
+  if (!sameAuthority(held.toolkitName, p)) {
+    const stopped = { ...blank(), problem: "This link needs turning on again by your authority's lead." };
+    await withLock(path(c, p.code), () => savePretty(c, path(c, p.code), stopped));
+    return stopped;
+  }
   const next: Held = { ...held, checked: new Date().toISOString(), problem: "" };
   try {
     const meta = await toolkitJson<{ uploaded?: string }>(c, held.toolkitId, "data/meta.json");
-    if (!meta?.uploaded) next.problem = "No records have been uploaded to the Climate Toolkit yet.";
+    if (!meta?.uploaded) Object.assign(next, { problem: "No records have been uploaded to the Climate Toolkit yet.", weeks: [], wards: {}, from: "", to: "", uploaded: "" });
     else if (meta.uploaded !== held.uploaded) {
       const res = await fromToolkit(c, held.toolkitId, "data/records.csv.gz", RECORDS_MS);
       if (!res.ok || !res.body) throw new Error(`the records answered ${res.status}`);
@@ -198,17 +222,20 @@ export async function refreshWorks(c: Config, p: Pilot): Promise<Held> {
       next.weatherTo = isoOf(dayNumber(weather.start) + last);
     }
   } catch (e) {
+    next.checked = held.checked; // so that it's tried again, once briefly's rest is over
     if (e instanceof FriendlyError) next.problem = e.message;
     else { console.log(`[warn] works for ${p.code}: ${(e as Error).message}`); next.problem = "The Climate Toolkit couldn't be read just now."; }
   }
-  await withLock(path(c, p.code), async () => { if ((await loadWorks(c, p.code)).on) await savePretty(c, path(c, p.code), next); });
+  await withLock(path(c, p.code), async () => { const now = await loadWorks(c, p.code); if (now.on && now.at === held.at) await savePretty(c, path(c, p.code), next); }); // not if it's been turned off, or off and on, meanwhile
   return next;
 }
 
+const canTurnOn = (me: Member, p: Pilot) => me.role === "lead" && !!me.authorityId && sameAuthority(me.authority, p);
+
 export async function turnOn(c: Config, me: Member, p: Pilot): Promise<void> {
   if (!toolkitReady(c)) throw new FriendlyError("Clarion isn't connected to the Climate Toolkit yet. Ask the FHRG team.");
-  if (!canEdit(me, p) || !isMember(me, p) || !me.authorityId) throw new FriendlyError("Only your authority's own FHRG lead can turn this on.", 403);
-  await withLock(path(c, p.code), () => savePretty(c, path(c, p.code), { ...blank(), on: true, toolkitId: me.authorityId, by: me.name, at: new Date().toISOString() }));
+  if (!canTurnOn(me, p)) throw new FriendlyError("Only your authority's own FHRG lead can turn this on.", 403);
+  await withLock(path(c, p.code), () => savePretty(c, path(c, p.code), { ...blank(), on: true, toolkitId: me.authorityId, toolkitName: me.authority, by: me.name, at: new Date().toISOString() }));
 }
 
 export async function turnOff(c: Config, p: Pilot): Promise<void> {
@@ -225,21 +252,23 @@ export function worksFigures(held: Held, pressByWeek: Tally, readings: { created
   const thisWeek = mondayOf(today), byWeek = new Map(held.weeks.map((w) => [w.week, w]));
   const weekAt = (offset: number, from = thisWeek) => isoOf(dayNumber(from) + offset * 7);
   const weeks = Array.from({ length: CHART_WEEKS }, (_, i) => { const week = weekAt(i - CHART_WEEKS), w = byWeek.get(week); return { week, public: w?.public ?? 0, inspection: w?.inspection ?? 0, press: pressByWeek[week] ?? 0 }; });
-  const first = weeks[0].week, ending = isoOf(dayNumber(thisWeek) - 1);
+  const first = weeks[0].week, ending = isoOf(dayNumber(thisWeek) - 1), firstPress = Object.keys(pressByWeek).sort()[0] ?? "";
   const around = (e: Event) => {
     const start = mondayOf(e.start), end = mondayOf(e.end);
     const before = Array.from({ length: BASE_WEEKS }, (_, i) => weekAt(-i - 1, start)), after = Array.from({ length: AFTER_WEEKS }, (_, i) => weekAt(i, end)).filter((x) => x < thisWeek);
     const pub = (list: string[]) => mean(list.map((x) => byWeek.get(x)?.public ?? 0)), press = (list: string[]) => mean(list.map((x) => pressByWeek[x] ?? 0));
+    // A week outside what's held isn't a week with nothing in it
+    const covered = (list: string[]) => !!held.from && !!held.to && list.every((x) => x >= mondayOf(held.from) && x <= mondayOf(held.to)), pressCovered = (list: string[]) => !!firstPress && list.every((x) => x >= firstPress);
     const fnRise = Object.keys(Object.assign({}, ...[...before, ...after].map((x) => byWeek.get(x)?.fns ?? {})) as Tally).map((fn) => ({ fn, rise: mean(after.map((x) => byWeek.get(x)?.fns[fn] ?? 0)) - mean(before.map((x) => byWeek.get(x)?.fns[fn] ?? 0)) }));
     const reading = readings.find((r) => { const d = dayNumber(r.created.slice(0, 10)); return r.direction && d >= dayNumber(e.end) && d <= dayNumber(e.end) + MOOD_DAYS; });
     return {
-      label: e.label, start: e.start, end: e.end, detail: e.detail, publicChange: after.length && held.weeks.length ? change(pub(after), pub(before), MIN_PUBLIC) : null, pressChange: after.length ? change(press(after), press(before), MIN_PRESS) : null,
+      label: e.label, start: e.start, end: e.end, detail: e.detail, publicChange: after.length && covered([...before, ...after]) ? change(pub(after), pub(before), MIN_PUBLIC) : null, pressChange: after.length && pressCovered([...before, ...after]) ? change(press(after), press(before), MIN_PRESS) : null,
       functions: fnRise.filter((x) => x.rise > 0).sort((a, b) => b.rise - a.rise).slice(0, 2).map((x) => names[x.fn] ?? x.fn), mood: reading?.direction ?? "",
     };
   };
   return {
     weeks, events: held.events.filter((e) => e.end >= first && e.start <= ending),
-    marks: [...surveys.filter((s) => s.ran >= first && s.ran <= ending).map((s) => ({ date: s.ran, label: `Survey${s.satisfied === null ? "" : `: ${fifths(s.satisfied)}% satisfied`}` })), ...readings.filter((r) => r.created.slice(0, 10) >= first && r.created.slice(0, 10) <= ending).slice(0, 2).map((r) => ({ date: r.created.slice(0, 10), label: `Reading: ${(r.direction || "not yet known").toLowerCase()}` }))],
+    marks: [...surveys.filter((s) => s.ran >= first && s.ran <= ending).map((s) => ({ date: s.ran, label: `Survey${s.satisfied === null ? "" : `: ${fifths(s.satisfied)}% satisfied, indicative`}` })), ...readings.filter((r) => r.created.slice(0, 10) >= first && r.created.slice(0, 10) <= ending).slice(0, 2).map((r) => ({ date: r.created.slice(0, 10), label: `Reading: ${(r.direction || "not yet known").toLowerCase()}` }))],
     after: held.events.filter((e) => e.end < ending).slice(-EVENTS_SHOWN).reverse().map(around),
     wards: Object.entries(held.wards).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, TOP_WARDS).map(([name, n]) => ({ name, n })),
   };
@@ -251,7 +280,7 @@ export async function worksPage(c: Config, me: Member, p: Pilot, held: Held, nam
   for (const a of assessments) if (a.relevance !== "None") press[mondayOf(a.date)] = (press[mondayOf(a.date)] ?? 0) + 1;
   return {
     ready: toolkitReady(c), on: held.on, by: held.by, at: held.at, checked: held.checked, uploaded: held.uploaded, from: held.from, to: held.to, weatherTo: held.weatherTo, problem: held.problem,
-    canTurnOn: canEdit(me, p) && isMember(me, p), canTurnOff: canEdit(me, p),
+    canTurnOn: canTurnOn(me, p), canTurnOff: canEdit(me, p),
     figures: held.on && held.weeks.length ? worksFigures(held, press, readings.filter((r) => r.status === "ready"), streets, londonToday(), names) : null,
   };
 }

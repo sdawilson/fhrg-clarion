@@ -221,6 +221,7 @@ table.heat { border-collapse: separate; border-spacing: 2px; font-size: 0.84rem;
 .aud-bars .this, .aud-key .this { background: var(--accent); }
 .aud-bars .all, .aud-key .all { background: var(--line-2); }
 .works-wrap { overflow-x: auto; }
+.works-mark { stroke: var(--ink-2); }
 .works-chart { display: block; width: 100%; min-width: 640px; height: auto; }
 .aud-key b { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .aud-key { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--ink-2); margin: 6px 0 0; }
@@ -639,15 +640,18 @@ async function attentionView(page, a, part) {
 }
 // Works and weather, from the Climate Toolkit: weekly totals and weather events only
 function worksChart(f) {
-  const left = 52, right = 1024, top = 28, base = 274, n = f.weeks.length, step = (right - left) / n, first = Date.parse(f.weeks[0].week);
+  const left = 52, right = 1024, top = 44, base = 284, n = f.weeks.length, step = (right - left) / n, first = Date.parse(f.weeks[0].week);
   const most = Math.max(10, ...f.weeks.map((w) => w.public + w.inspection)), tick = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find((t) => most / t <= 4) || 10000, topValue = tick * Math.ceil(most / tick);
   const y = (v) => base - (v / topValue) * (base - top), x = (iso) => left + ((Date.parse(iso) - first) / (7 * 86400000)) * step;
   const pressTop = Math.max(1, ...f.weeks.map((w) => w.press)), py = (v) => base - (v / pressTop) * (base - top) * 0.9;
-  const chart = svg("svg", { class: "works-chart", viewBox: "0 0 1040 330", role: "img", "aria-label": `Weekly jobs reported by the public and found on inspection, with press items assessed and ${f.events.length} weather events, over the last six months.` });
+  const chart = svg("svg", { class: "works-chart", viewBox: "0 0 1040 356", role: "img", "aria-label": `Weekly jobs reported by the public and found on inspection, with press items assessed and ${f.events.length} weather events, over the last six months.` });
   for (let v = 0; v <= topValue; v += tick) chart.append(svg("line", { class: "q-line", x1: left, x2: right, y1: y(v), y2: y(v) }), svg("text", { class: "q-axis", x: left - 8, y: y(v) + 4, "text-anchor": "end" }, fmt(v)));
+  // Names that would run into the one before drop to a second row
+  const place = (rows, at, size) => { const row = rows.findIndex((end) => at - size / 2 > end + 6); const use = row < 0 ? rows.length - 1 : row; rows[use] = at + size / 2; return use; };
+  const eventRows = [-1e9, -1e9];
   for (const e of f.events) {
-    const from = Math.max(left, x(e.start)), to = Math.min(right, x(e.end) + step / 7);
-    chart.append(svg("rect", { x: from, y: top, width: Math.max(6, to - from), height: base - top, fill: "#f6e3c8", opacity: "0.8" }), svg("text", { class: "q-axis", x: Math.min(right - 30, (from + to) / 2), y: top - 8, "text-anchor": "middle" }, e.label));
+    const from = Math.max(left, x(e.start)), to = Math.min(right, x(e.end) + step / 7), size = e.label.length * 6.4, at = Math.max(left + size / 2, Math.min(right - size / 2, (from + to) / 2));
+    chart.append(svg("rect", { x: from, y: top, width: Math.max(6, to - from), height: base - top, fill: "#f6e3c8", opacity: "0.8" }), svg("text", { class: "q-axis", x: at, y: 18 + place(eventRows, at, size) * 14, "text-anchor": "middle" }, e.label));
   }
   f.weeks.forEach((w, i) => {
     const at = left + i * step + 2, wide = Math.max(2, step - 4);
@@ -655,7 +659,11 @@ function worksChart(f) {
     if (i % 4 === 0) chart.append(svg("text", { class: "q-axis", x: at + wide / 2, y: base + 18, "text-anchor": "middle" }, new Date(`${w.week}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })));
   });
   chart.append(svg("polyline", { fill: "none", stroke: "#d9731f", "stroke-width": 2.5, points: f.weeks.map((w, i) => `${left + (i + 0.5) * step},${py(w.press)}`).join(" ") }));
-  for (const m of f.marks) chart.append(svg("line", { x1: x(m.date), x2: x(m.date), y1: top + 8, y2: base + 24, stroke: "#17212c", "stroke-dasharray": "4 3" }), svg("text", { class: "q-axis", x: Math.max(left + 70, Math.min(right - 70, x(m.date))), y: base + 40, "text-anchor": "middle" }, m.label));
+  const markRows = [-1e9, -1e9];
+  for (const m of [...f.marks].sort((p, q) => p.date.localeCompare(q.date))) {
+    const size = m.label.length * 6.4, at = Math.max(left + size / 2, Math.min(right - size / 2, x(m.date)));
+    chart.append(svg("line", { class: "works-mark", x1: x(m.date), x2: x(m.date), y1: top + 8, y2: base + 24, "stroke-dasharray": "4 3" }), svg("text", { class: "q-axis", x: at, y: base + 40 + place(markRows, at, size) * 14, "text-anchor": "middle" }, m.label));
+  }
   return chart;
 }
 const signedChange = (n) => (n === null ? "\u2013" : `${n > 0 ? "+" : ""}${fmt(n)}%`);
@@ -669,7 +677,7 @@ async function worksPanel(body, a) {
   const dates = [w.uploaded ? `Records uploaded to the Climate Toolkit on ${fmtDate(w.uploaded)}${w.to ? `, running to ${fmtDate(w.to)}` : ""}.` : "", w.weatherTo ? `Weather to ${fmtDate(w.weatherTo)}.` : ""].filter(Boolean).join(" ");
   add(clear(body), h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Use our Climate Toolkit records"), h("p", {}, "Only your authority's lead can turn this on, and it can be turned off at any time.")), h("span", { class: `pill ${w.on ? "good" : ""}` }, w.on ? "On" : "Off")),
     !w.ready ? h("p", {}, "Clarion isn't connected to the Climate Toolkit yet.") : h("p", {}, "Clarion reads weekly job totals by function and ward, and weather events, for your authority only. It keeps no street names or job details, and no other authority sees them."),
-    w.problem ? h("div", { class: "callout crit", role: "alert" }, w.problem) : null, dates ? h("p", { class: "note" }, `${dates} Clarion checks for new records each day.`) : null, w.on && !w.problem && !w.figures ? h("p", { class: "note" }, "Your records are being read. Come back in a few minutes.") : null, m,
+    w.problem ? h("div", { class: "callout crit", role: "alert" }, w.problem) : null, dates ? h("p", { class: "note" }, `${dates} Clarion checks for new records each day.`) : null, w.on && !w.problem && !w.figures ? h("p", { class: "note" }, w.uploaded ? "None of your records are from the last 16 months." : "Your records are being read. Come back in a few minutes.") : null, m,
     w.ready && !w.on && w.canTurnOn ? h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => change("/api/works/on") }, "Turn this on")) : null,
     w.ready && !w.on && !w.canTurnOn ? h("p", { class: "note" }, "Your authority's own FHRG lead can turn this on.") : null,
     w.on && w.canTurnOff ? h("div", { class: "row" }, h("button", { class: "btn small ghost", type: "button", onclick: () => change("/api/works/off") }, "Turn this off and remove what's held")) : null));
