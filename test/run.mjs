@@ -10,7 +10,7 @@ for (const [entry, out] of [["src/app.ts", "app.mjs"], ["src/server.ts", "server
   await esbuild.build({ entryPoints: [new URL(`../${entry}`, import.meta.url).pathname], outfile: `${here}.build/${out}`, bundle: true, platform: "node", format: "esm", target: "node22", logLevel: "warning" });
 }
 
-const suites = ["units.mjs", "api.mjs", "server.mjs", "ui.mjs", "surveys.mjs", "ui-surveys.mjs"];
+const suites = ["units.mjs", "api.mjs", "server.mjs", "ui.mjs", "surveys.mjs", "ui-surveys.mjs", "modes.mjs"];
 let passed = 0, failed = 0;
 for (const s of suites) {
   const r = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", `${here}${s}`], { encoding: "utf8", timeout: 300_000 });

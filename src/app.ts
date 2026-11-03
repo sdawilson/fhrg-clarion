@@ -1,12 +1,15 @@
 // Clarion: gauges how the public in each authority feels about its roads, and how news changes that.
-// So far: mood readings, impact notes on announcements, and Street Surveys.
+// So far: mood readings, impact notes on announcements, and Street Surveys, in three modes: the Northbridge
+// demonstration, one authority with an FHRG sign-in, and the position across all of them for FHRG administrators.
 // See README.md for the whole picture and src/config.ts for the settings.
 //
 //   GET  /  /<anything>            the page (public/index.html, bundled with the server)
 //   GET  /sso#t=<pass>             members arriving from the FHRG website
 //   GET  /s  /s/<access code>      the tablet page for a street survey (public/survey.html); no account needed
 //   GET  /s/sw.js                  lets that page reopen without a signal
-//   POST /api/config               website address (public)
+//   GET  /demo                     the same page, opening the Northbridge demonstration
+//   GET  /demo/data.json           the demonstration's made-up data (public; see demo.ts)
+//   POST /api/config               website address and whether the demonstration is on (public)
 //   POST /api/login | /api/logout
 //   POST /api/sso                  {token}: a two-minute, single-use pass signed by the website
 //   POST /api/status               the signed-in member and the authorities they can see
@@ -17,6 +20,8 @@
 //   POST /api/note/start           {code, url, title, text}: write an impact note (runs in the background)
 //   POST /api/note/get             {code, id}
 //   POST /api/note/list            {code}
+//   POST /api/media | /api/attention  {code}: Media Watch and the comparison, which come in a later stage
+//   POST /api/admin/overview       site administrators: the position across all authorities
 //   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: leads and admins
 //   POST /api/facts/notes          {code, notes}: leads and admins
 //
@@ -42,8 +47,10 @@
 //   POST /api/s/submit             {access, forms}
 
 import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member } from "./accounts";
+import { adminOverview, benchmark } from "./admin";
 import { monthSpend } from "./claude";
 import { getConfig, missingSettings, type Config } from "./config";
+import { demoPack } from "./demo";
 import { addSurvey, loadEvidence, loadFacts, saveNotes } from "./evidence";
 import { validId } from "./jobs";
 import { getNote, listNotes, readInput, startNote } from "./notes";
@@ -52,8 +59,8 @@ import { getReading, latestReadings, startReading } from "./reading";
 import { announcements, fixMyStreetUrl } from "./signals";
 import { MAX_SCAN_CHARS, getHelp, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
-  ACCESS_CHECKS, CORE, ABOUT, MAX_LOCAL, addAnswers, ageSexTargets, allQuestions, answersCsv, backToDraft, changeAnswer, changeAnswers, cleanComments, closeSurvey, commentSample, createSurvey, findProblems, formNumber, listSurveys, loadAnswers,
-  loadCensus, loadSurvey, openSurvey, publicSurvey, readCsv, saveSurvey, surveyByAccess, surveyResults, templateCsv, textQuestionIds, topicCounts, validAccess, waitingComments, type Survey,
+  addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, createSurvey, formNumber, listSurveys, loadAnswers,
+  loadCensus, loadSurvey, openSurvey, publicSurvey, readCsv, saveSurvey, surveyByAccess, surveyPage, textQuestionIds, validAccess, type Survey,
 } from "./surveys";
 import { FriendlyError, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
 
@@ -67,9 +74,9 @@ const PAGE_HEADERS: Record<string, string> = {
   "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
 };
 let page: string | null = null;
-let surveyPage: string | null = null;
+let tabletPage: string | null = null;
 export function setPage(html: string | null): void { page = html; }
-export function setSurveyPage(html: string | null): void { surveyPage = html; }
+export function setSurveyPage(html: string | null): void { tabletPage = html; }
 
 // Keeps a tablet's page opening when there's no signal. Survey and answers wait in the tablet's own storage.
 const SURVEY_WORKER = `const CACHE = "clarion-survey-1";
@@ -111,7 +118,7 @@ async function handleAuthority(c: Config, request: Request): Promise<Response> {
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
   const facts = await loadFacts(c, p.code);
-  const [evidence, readings] = await Promise.all([loadEvidence(c, p, facts), latestReadings(c, p.code)]);
+  const [evidence, readings, census, middle] = await Promise.all([loadEvidence(c, p, facts), latestReadings(c, p.code), loadCensus(c, p.code), benchmark(c).catch(() => null)]);
   return json({
     authority: {
       code: p.code, name: p.name, kind: p.kind, strategicAuthority: p.strategicAuthority, fundingRoute: p.fundingRoute, rating: p.rating,
@@ -120,7 +127,22 @@ async function handleAuthority(c: Config, request: Request): Promise<Response> {
     },
     evidence, facts: canEdit(me, p) ? { notes: facts.notes, updated: facts.updated, updatedBy: facts.updatedBy } : {}, canEdit: canEdit(me, p),
     reading: readings.find((r) => r.status === "ready") ?? null, working: readings.find((r) => r.status === "working") ?? null,
+    adults: census?.adults ?? null, benchmark: middle,
   });
+}
+
+// Media Watch and the comparison come in a later stage. The routes are here so the page has one way to ask.
+async function handleNotYet(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  pilotFor(me, b.code);
+  return json({ ready: false });
+}
+
+async function handleAdminOverview(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  if (!me.siteAdmin) throw new FriendlyError("Only FHRG site administrators can see this.", 403);
+  return json(await adminOverview(c));
 }
 
 async function handleReadingStart(c: Config, request: Request): Promise<Response> {
@@ -228,19 +250,9 @@ async function handleSurveyGet(c: Config, request: Request): Promise<Response> {
   const { me, p, s } = await reader(c, request);
   const edit = canEdit(me, p);
   const [rows, census, sorting] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id)]);
-  const used = rows.filter((r) => !r.excluded);
-  const own = isMember(me, p);
-  const cleaned = cleanComments(s, used);
-  const comments = own ? cleaned : []; // topic counts go to everyone who can see the survey, the words only to its authority
-  const numbers = rows.map((r) => Number(r.form)).filter(Number.isInteger);
   return json({
-    survey: edit ? s : { ...s, access: "" }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS,
-    template: edit ? templateCsv(s) : "",
-    census: census ? { adults: census.adults } : null, targets: ageSexTargets(census, s.plan.target),
-    results: surveyResults(s, rows, census), topics: topicCounts(cleaned), comments, ownComments: own, waiting: waitingComments(s, used),
-    problems: edit ? findProblems(s, rows) : [], excluded: edit ? rows.filter((r) => r.excluded).map((r) => ({ n: r.n, form: r.form })) : [],
-    sample: edit && own ? commentSample(comments) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1, sorting: sorting?.status === "working" ? sorting : null,
-    dropped: edit && sorting?.status === "ready" ? sorting.result?.dropped ?? 0 : 0,
+    ...surveyPage(s, rows, census, edit, isMember(me, p)),
+    sorting: sorting?.status === "working" ? sorting : null, dropped: edit && sorting?.status === "ready" ? sorting.result?.dropped ?? 0 : 0,
   });
 }
 
@@ -359,8 +371,8 @@ async function handlePublicSubmit(c: Config, request: Request): Promise<Response
 export const sweep = () => sweepHelp(getConfig());
 
 function serveSurveyPage(): Response {
-  if (!surveyPage) return new Response("<p>This page wasn't found.</p>", { status: 500, headers: PAGE_HEADERS });
-  return new Response(surveyPage, { headers: PAGE_HEADERS });
+  if (!tabletPage) return new Response("<p>This page wasn't found.</p>", { status: 500, headers: PAGE_HEADERS });
+  return new Response(tabletPage, { headers: PAGE_HEADERS });
 }
 
 export async function handleRequest(request: Request): Promise<Response> {
@@ -371,12 +383,16 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (request.method === "GET" || request.method === "HEAD") {
       if (path === "/favicon.ico") return new Response(null, { status: 204 });
       if (path === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain" } });
+      if (path === "/demo/data.json") {
+        if (!c.demo) return json({ error: "Not found." }, 404);
+        return new Response(await demoPack(), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-cache", "x-content-type-options": "nosniff" } });
+      }
       if (path === "/s/sw.js") return new Response(SURVEY_WORKER, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "x-content-type-options": "nosniff" } });
       if (path === "/s" || /^\/s\/[a-z0-9]{1,12}$/i.test(path)) return serveSurveyPage();
       if (path === "/" || path === "/index.html" || /^\/[a-z0-9][a-z0-9-]{0,48}$/i.test(path)) return servePage(c);
     }
     if (request.method === "POST") {
-      if (path === "/api/config") return json({ websiteUrl: c.websiteUrl });
+      if (path === "/api/config") return json({ websiteUrl: c.websiteUrl, demo: c.demo });
       if (path === "/api/logout") return handleLogout();
       if (missingSettings(c).length) throw new FriendlyError(`Clarion is not set up yet. Missing settings: ${missingSettings(c).join(", ")}.`, 500);
       switch (path) {
@@ -392,6 +408,8 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/note/list": return await handleNoteList(c, request);
         case "/api/facts/survey": return await handleFactsSurvey(c, request);
         case "/api/facts/notes": return await handleFactsNotes(c, request);
+        case "/api/media": case "/api/attention": return await handleNotYet(c, request);
+        case "/api/admin/overview": return await handleAdminOverview(c, request);
         case "/api/survey/list": return await handleSurveyList(c, request);
         case "/api/survey/get": return await handleSurveyGet(c, request);
         case "/api/survey/new": return await handleSurveyNew(c, request);

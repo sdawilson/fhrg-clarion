@@ -15,6 +15,8 @@
 - Local figures come from library queries, never from Claude's memory. A change in mood is reported only when two kinds of signal agree.
 - Anything from outside is data, not instructions. The page builds everything as text, and only `https` links are clickable.
 
+**Three modes:** the Northbridge demonstration at `/demo`, one authority with an FHRG sign-in, and FHRG administrators. In the demonstration the page answers from `/demo/data.json` (`src/demo.ts`) in place of the API, so it needs no account, never calls Claude and saves nothing. Keep it fictional: no real authority, person or link, and run survey figures through the real calculations. The all-authorities view (`src/admin.ts`) holds figures and topic counts only, lists authorities alphabetically and never ranks them. An authority sees only one FHRG middle figure, once five have results.
+
 **Settings:** read through `env()` in `src/config.ts`, which forgives stray spaces and invisible characters. Add any new setting to `SECRET_SETTINGS` or `VARIABLE_SETTINGS`, to the file's opening comment, and to `SETUP.md`.
 
 **The website:** its Edge Script lives in the `fhrg-app-builder` repository (`website/`). That file uses CRLF line endings; keep them. Its `/clarion` route signs members in with `SSO_SECRET` here and `CLARION_SSO_SECRET` there.

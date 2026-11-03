@@ -11,3 +11,4 @@ export { getConfig } from "../src/config";
 export { withLock, median, addMonths } from "../src/util";
 export { ageSexTargets, answersCsv, commentSample, findProblems, formNumber, likelyRange, parseCsv, readAnswers, readCsv, readLocals, surveyResults, templateCsv, topicCounts, validAccess, waitingComments, weightsFor, CORE, ABOUT } from "../src/surveys";
 export { scrubContacts, sweepHelp, tidyScan } from "../src/surveyai";
+export { middleFigure } from "../src/admin";

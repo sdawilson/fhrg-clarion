@@ -1,0 +1,68 @@
+// The FHRG's position across every authority, for site administrators, and the one figure each authority can compare
+// itself with. Figures and topic counts only: residents' comments and officers' notes stay with each authority.
+// Authorities are listed in alphabetical order, never ranked, because a difference may be a local choice.
+
+import type { Config } from "./config";
+import { monthSpend } from "./claude";
+import { PILOTS, type Pilot } from "./pilots";
+import { latestReadings } from "./reading";
+import { storageJson, storageList } from "./storage";
+import { listSurveys, streetSummaries, type StreetSummary } from "./surveys";
+import { cached, median } from "./util";
+
+const BENCHMARK_MIN = 5; // fewer, and the middle figure could give away an authority's own result
+const TOP_TOPICS = 3;
+
+type Row = {
+  code: string; name: string; region: string; kind: string; direction: string; readingOn: string; surveys: number; street: StreetSummary | null;
+  readingsThisMonth: number; notesThisMonth: number; forecastsDue: number;
+};
+
+const month = () => new Date().toISOString().slice(0, 7).replace("-", "");
+
+async function authorityRow(c: Config, p: Pilot): Promise<Row> {
+  const [readings, surveys, streets, readingNames, noteNames, forecasts] = await Promise.all([
+    latestReadings(c, p.code), listSurveys(c, p.code), streetSummaries(c, p.code),
+    storageList(c, `${c.root}authorities/${p.code}/readings/`), storageList(c, `${c.root}authorities/${p.code}/notes/`),
+    storageJson<unknown[]>(c, `${c.root}authorities/${p.code}/forecasts.json`, []),
+  ]);
+  const latest = readings.find((r) => r.status === "ready");
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    code: p.code, name: p.name, region: p.region, kind: p.kind, direction: latest?.direction ?? "", readingOn: latest?.created.slice(0, 10) ?? "", surveys: surveys.length, street: streets[0] ?? null,
+    readingsThisMonth: readingNames.filter((n) => n.startsWith(month())).length, notesThisMonth: noteNames.filter((n) => n.startsWith(month())).length,
+    forecastsDue: (Array.isArray(forecasts) ? forecasts : []).filter((f: any) => typeof f?.checkDate === "string" && f.checkDate <= today && !f.outcome).length,
+  };
+}
+
+export async function adminOverview(c: Config) {
+  const rows = (await Promise.all(PILOTS.map((p) => authorityRow(c, p)))).sort((a, b) => a.name.localeCompare(b.name)); // each row's street survey is its latest
+  const withStreet = rows.filter((r) => r.street);
+  const satisfied = withStreet.map((r) => r.street?.satisfied).filter((x): x is number => typeof x === "number");
+  const directions: Record<string, number> = {};
+  for (const r of rows) if (r.direction) directions[r.direction] = (directions[r.direction] || 0) + 1;
+  const regions = [...new Set(rows.map((r) => r.region))].sort().map((name) => ({ name, authorities: rows.filter((r) => r.region === name).length }));
+  const topics = [...new Set(withStreet.flatMap((r) => r.street?.topics.slice(0, TOP_TOPICS).map((t) => t.topic) ?? []))].sort().map((topic) => ({
+    topic,
+    regions: regions.map((g) => rows.filter((r) => r.region === g.name && r.street?.topics.slice(0, TOP_TOPICS).some((t) => t.topic === topic)).length),
+  }));
+  return {
+    authorities: rows, regions, topics, directions,
+    totals: {
+      using: rows.filter((r) => r.direction || r.surveys || r.notesThisMonth).length, authorities: rows.length, withSurvey: withStreet.length, surveys: rows.reduce((n, r) => n + r.surveys, 0),
+      replies: withStreet.reduce((n, r) => n + (r.street?.responses ?? 0), 0), middle: median(satisfied), lowest: satisfied.length ? Math.min(...satisfied) : null, highest: satisfied.length ? Math.max(...satisfied) : null,
+    },
+    use: { readings: rows.reduce((n, r) => n + r.readingsThisMonth, 0), notes: rows.reduce((n, r) => n + r.notesThisMonth, 0), forecastsDue: rows.reduce((n, r) => n + r.forecastsDue, 0), spend: await monthSpend(c), cap: c.monthlyCapUsd },
+  };
+}
+
+// What an authority sees of everyone else: one middle figure, with nobody named, once enough have results
+export function middleFigure(latest: Pick<StreetSummary, "satisfied" | "worse">[]): { authorities: number; satisfied: number | null; worse: number | null } | null {
+  if (latest.length < BENCHMARK_MIN) return null;
+  return { authorities: latest.length, satisfied: median(latest.map((x) => x.satisfied as number)), worse: median(latest.map((x) => x.worse).filter((x): x is number => typeof x === "number")) };
+}
+
+export const benchmark = (c: Config) => cached("benchmark", 10 * 60 * 1000, async () => {
+  const latest = (await Promise.all(PILOTS.map((p) => streetSummaries(c, p.code)))).map((x) => x[0]).filter((x): x is StreetSummary => !!x);
+  return middleFigure(latest);
+});
