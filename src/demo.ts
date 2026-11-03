@@ -4,7 +4,7 @@
 // demonstration can't drift from how Clarion works. Links are left blank, so nothing points at a made-up site.
 
 import {
-  FUNCTIONS, LEANINGS, PROMINENCE, RATE_MEASURES, REACH_BANDS, REACH_UNITS, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, summarise as summariseCoverage, withWeights,
+  FUNCTIONS, LEANINGS, PROMINENCE, RATE_MEASURES, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, summarise as summariseCoverage, withWeights,
   type Assessment, type Rate, type Source,
 } from "./coverage";
 import { packFrom, standFor, type SitesPack } from "./sites";
@@ -134,7 +134,7 @@ const SOURCES: Source[] = [
   source("s2", "Dale Valley Gazette", "Local Newspaper", "dalevalleygazette.example", null, "", "", "", "None shown", "Usually supportive", []),
   source("s3", "Northbridge Radio", "Local Radio", "northbridgeradio.example", 41000, "listeners", "", "Station figures", "None shown", "Balanced", []),
   source("s4", "Regional TV news", "Local Television", "", null, "", "Medium", "Officer's estimate", "None shown", "Balanced", []),
-  source("s5", "Moorside Community News", "Local Newsletter", "", 2400, "copies", "", "Editor's figure", "None shown", "Balanced", ["Flooding"]),
+  source("s5", "Moorside Community News", "Local Newsletter", "", 2400, "copies", "", "Editor's figure", "None shown", "Balanced", ["Flooding on minor roads"]),
   source("s6", "Northbridge Residents' Forum", "Social Media", "", null, "", "Medium", "Officer's estimate", "Not known", "Usually critical", ["Street lighting"]),
 ];
 const piece = (i: number, src: string, daysAgo: number, summary: string, topic: string, relevance: string, tone: string, prominence: string, functions: string[]): Assessment => {
@@ -148,7 +148,7 @@ const PIECES: Assessment[] = [
   piece(4, "s1", 8, "Repeat repairs on Bridge Street, with a call for answers", "Potholes", "High", "Critical", "Inside page", ["cw", "cl"]),
   piece(5, "s6", 10, "Long thread on street lights going off at midnight", "Street lighting", "Some", "Critical", "Passing mention", ["sl"]),
   piece(6, "s4", 12, "Regional news item on the road closure", "Relief Road closure", "Some", "Neutral", "Passing mention", ["nm"]),
-  piece(7, "s5", 15, "Note on blocked gullies after the wet weekend", "Flooding", "Some", "Neutral", "Inside page", ["dr"]),
+  piece(7, "s5", 15, "Note on blocked gullies after the wet weekend", "Flooding on minor roads", "Some", "Neutral", "Inside page", ["dr"]),
   piece(8, "s2", 19, "Praise for the speed of repairs after the storm", "Potholes", "Some", "Supportive", "Inside page", ["cw"]),
   piece(9, "s1", 24, "Editorial on the state of the county's roads", "Potholes", "High", "Critical", "Inside page", ["cw"]),
   piece(10, "s3", 33, "Interview on the winter gritting plan", "Winter service", "Some", "Neutral", "Inside page", ["ws"]),
@@ -165,7 +165,7 @@ function demoCoverage(census: Census) {
   const rows = withWeights(PIECES, SOURCES), today = COUNTY_DAY(0);
   return {
     ready: true, canEdit: true, today, searchReady: true, adults: ADULTS, sources: SOURCES, rows, summary: summariseCoverage(rows, today),
-    topics: COVERAGE.map((x) => x[0]), functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
+    topics: [...new Set([...COVERAGE.map((x) => x[0]), ...PIECES.map((x) => x.topic)])], functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachUnitFor: REACH_UNIT_FOR, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
     audiences: Object.fromEntries(SOURCE_TYPES.map((t) => [t, audienceFor(t, census, DEMO_RATES)])),
     automatic: [
       { name: "GOV.UK: DfT and National Highways", type: "Government announcement", last: "2026-10-29" }, { name: "Parliament: MPs' written questions", type: "Parliament", last: "2026-10-09" },

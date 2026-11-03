@@ -102,8 +102,34 @@ export async function cached<T>(key: string, ms: number, fn: () => Promise<T>): 
   memCache.set(key, { at: Date.now(), value });
   return value;
 }
+export function isCached(key: string, ms: number): boolean {
+  const hit = memCache.get(key);
+  return !!hit && Date.now() - hit.at < ms;
+}
 export function forget(prefix: string): void {
   for (const k of [...memCache.keys()]) if (k.startsWith(prefix)) memCache.delete(k);
+}
+
+// Something from outside that a page can do without. The page waits a moment and carries on without it, and the work
+// keeps going so the next visitor gets what it found. If it failed, it's left alone for a few minutes rather than being
+// tried again on every click.
+const BRIEF_MS = 3000;
+const REST_MS = 5 * 60 * 1000;
+const underway = new Map<string, Promise<unknown>>();
+const resting = new Map<string, number>();
+export function briefly<T, F>(key: string, without: F, fn: () => Promise<T>, failed: (v: T) => boolean = () => false, ms = BRIEF_MS): Promise<T | F> {
+  if ((resting.get(key) ?? 0) > Date.now()) return Promise.resolve(without);
+  let job = underway.get(key) as Promise<T | F> | undefined;
+  if (!job) {
+    const rest = () => { resting.set(key, Date.now() + REST_MS); };
+    job = fn().then((v) => { if (failed(v)) rest(); return v; }, () => { rest(); return without; }).finally(() => { underway.delete(key); });
+    underway.set(key, job);
+  }
+  const running = job;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(without), ms);
+    running.then((v) => { clearTimeout(timer); resolve(v); });
+  });
 }
 
 // One writer at a time for a shared file. The container runs as exactly one copy, so this is enough.

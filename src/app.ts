@@ -21,6 +21,7 @@
 //   POST /api/note/get             {code, id}
 //   POST /api/note/list            {code}
 //   POST /api/coverage/get         {code}: sources, assessments, and what's been read automatically
+//   POST /api/coverage/summary     {code}: the last four weeks' assessments, for the Summary page
 //   POST /api/coverage/source      {code, ...source}: add or change a source
 //   POST /api/coverage/unsource    {code, id}: take a source off
 //   POST /api/coverage/assess      {code, ...assessment}: record an assessment
@@ -56,8 +57,8 @@
 import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member } from "./accounts";
 import { adminOverview, benchmark } from "./admin";
 import {
-  FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
-  removeAssessment, removeSource, saveAssessment, saveSource, summarise, withWeights,
+  FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
+  removeAssessment, removeSource, saveAssessment, saveSource, summarise, withWeights, type Rate,
 } from "./coverage";
 import { monthSpend } from "./claude";
 import { getConfig, missingSettings, type Config } from "./config";
@@ -74,7 +75,7 @@ import {
   addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, createSurvey, formNumber, listSurveys, loadAnswers,
   loadCensus, loadSurvey, openSurvey, publicSurvey, readCsv, saveSurvey, surveyByAccess, surveyPage, textQuestionIds, validAccess, type Survey,
 } from "./surveys";
-import { FriendlyError, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
+import { FriendlyError, briefly, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
 
 const PAGE_HEADERS: Record<string, string> = {
   "content-type": "text/html; charset=utf-8",
@@ -155,24 +156,36 @@ async function handleCoverage(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
-  const [sources, assessments, census, rates, topics, gov, signals] = await Promise.all([
-    loadSources(c, p.code), loadAssessments(c, p.code), loadCensus(c, p.code), loadRates(c), sharedTopics(c),
-    announcements().catch(() => []), loadSignals(p).catch(() => null),
+  // The audience figures and the automatic sources are extras: a slow outside service mustn't hold up the page
+  const [sources, assessments, topics, census, rates, gov, signals] = await Promise.all([
+    loadSources(c, p.code), loadAssessments(c, p.code), sharedTopics(c),
+    briefly(`census|${p.code}`, null, () => loadCensus(c, p.code), (x) => x === null), briefly("audience-rates", [] as Rate[], () => loadRates(c), (x) => !x.length),
+    briefly("announcements", null, () => announcements()), briefly(`signals|${p.code}`, null, () => loadSignals(p), (x) => !x.fixMyStreet.ok || !x.petitions.ok || !x.questions.ok),
   ]);
   const rows = withWeights(assessments, sources);
   const faults = signals?.fixMyStreet.data, petitions = signals?.petitions.data, questions = signals?.questions.data;
+  const unread = "Couldn't be read just now";
   return json({
     ready: true, canEdit: canEdit(me, p), today: londonToday(), searchReady: !!c.searchKey, adults: census?.adults ?? null, sources, rows, summary: summarise(rows, londonToday()),
-    topics, functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
+    topics, functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachUnitFor: REACH_UNIT_FOR, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
     audiences: Object.fromEntries(SOURCE_TYPES.map((t) => [t, audienceFor(t, census, rates)])),
     automatic: [
-      { name: "GOV.UK: DfT and National Highways", type: "Government announcement", last: gov[0]?.date ?? "" },
-      { name: "Parliament: MPs' written questions", type: "Parliament", last: questions?.[0]?.date ?? "" },
-      { name: "Parliament: petitions", type: "Parliament", last: "", note: petitions?.length ? `${petitions.length} on road topics` : "" },
-      { name: "FixMyStreet public reports", type: "Public reports", last: faults?.to ?? "" },
+      { name: "GOV.UK: DfT and National Highways", type: "Government announcement", last: gov?.[0]?.date ?? "", note: gov ? "" : unread },
+      { name: "Parliament: MPs' written questions", type: "Parliament", last: questions?.[0]?.date ?? "", note: questions ? "" : unread },
+      { name: "Parliament: petitions", type: "Parliament", last: "", note: !petitions ? unread : petitions.length ? `${petitions.length} on road topics` : "" },
+      { name: "FixMyStreet public reports", type: "Public reports", last: faults?.to ?? "", note: faults ? "" : unread },
     ],
-    latest: gov.slice(0, 6),
+    latest: (gov ?? []).slice(0, 6),
   });
+}
+
+// Only what the Summary page needs, from Clarion's own storage, so it never waits on anyone else
+async function handleCoverageSummary(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const [sources, assessments] = await Promise.all([loadSources(c, p.code), loadAssessments(c, p.code)]);
+  return json({ summary: summarise(withWeights(assessments, sources), londonToday()) });
 }
 
 async function handleAdminOverview(c: Config, request: Request): Promise<Response> {
@@ -446,6 +459,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/facts/notes": return await handleFactsNotes(c, request);
         case "/api/attention": return await handleNotYet(c, request);
         case "/api/coverage/get": return await handleCoverage(c, request);
+        case "/api/coverage/summary": return await handleCoverageSummary(c, request);
         case "/api/coverage/source": { const { me, p, b } = await editor(c, request, 3000); return json({ source: await saveSource(c, me, p, b, await sharedTopics(c)) }); }
         case "/api/coverage/unsource": { const { p, b } = await editor(c, request, 1000); await removeSource(c, p, b.id); return json({ ok: true }); }
         case "/api/coverage/assess": { const { me, p, b } = await editor(c, request, 3000); return json({ assessment: await saveAssessment(c, me, p, b, await sharedTopics(c)) }); }

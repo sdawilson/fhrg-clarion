@@ -16,14 +16,19 @@ import type { Config } from "./config";
 import { refQuery } from "./library";
 import type { Pilot } from "./pilots";
 import { storageJson, savePretty } from "./storage";
+import { scrubContacts } from "./surveyai";
 import { AGES, cellKey, type Census } from "./surveys";
-import { FriendlyError, cached, cleanText, delay, fetchWithTimeout, londonToday, pickEnum, round, withLock } from "./util";
+import { FriendlyError, cached, cleanText, delay, fetchWithTimeout, isCached, londonToday, pickEnum, round, withLock } from "./util";
 
 export const SOURCE_TYPES = ["Local Newspaper", "Local News Website", "National Newspaper", "Local Newsletter", "Social Media", "Local Television", "Local Radio", "Community Event", "Trade Press", "Other"] as const;
 export const LEANINGS = ["Not known", "None shown", "Left", "Centre left", "Centre", "Centre right", "Right"] as const;
 export const STANCES = ["Balanced", "Usually supportive", "Usually critical"] as const;
 export const REACH_UNITS = ["copies", "readers", "listeners", "viewers", "members", "people"] as const;
 export const REACH_BANDS = ["Small", "Medium", "Large"] as const;
+export const REACH_UNIT_FOR: Record<typeof SOURCE_TYPES[number], typeof REACH_UNITS[number]> = {
+  "Local Newspaper": "copies", "Local News Website": "readers", "National Newspaper": "copies", "Local Newsletter": "copies", "Social Media": "members",
+  "Local Television": "viewers", "Local Radio": "listeners", "Community Event": "people", "Trade Press": "copies", Other: "people",
+};
 export const RELEVANCE = ["High", "Some", "Little", "None"] as const;
 export const TONES = ["Supportive", "Neutral", "Critical"] as const;
 export const PROMINENCE = ["Front page or lead", "Inside page", "Passing mention"] as const;
@@ -40,10 +45,15 @@ const PERIOD_DAYS = 28;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_KEYWORDS = 2;
 const MAX_CHECKS = 12; // searches in one go
-const CHECKS_A_DAY = 200; // for each authority
+const CHECKS_A_DAY = 200; // searches for each authority
 const CHECK_MS = 6 * 60 * 60 * 1000;
+const CHECK_RUN_MS = 45000; // one go stops asking after this long
+const FAILS_TO_STOP = 2; // or after this many failures in a row
 const SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
+const SEARCH_MS = 10000;
 const SEARCH_GAP_MS = 1100;
+// Sites shared by many sources. A keyword found on one says nothing about a particular page or programme.
+const SHARED_SITES = ["facebook.com", "instagram.com", "x.com", "twitter.com", "tiktok.com", "youtube.com", "linkedin.com", "reddit.com", "threads.net", "threads.com", "bsky.app", "nextdoor.com", "nextdoor.co.uk", "bbc.co.uk", "bbc.com", "itv.com", "itvx.com"];
 
 export type Source = {
   id: string; name: string; type: typeof SOURCE_TYPES[number]; domain: string;
@@ -72,19 +82,31 @@ export function cleanDomain(v: unknown): string {
   const d = String(v ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0];
   return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(d) ? d : "";
 }
-const wholeNumber = (v: unknown): number | null => {
-  const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/[,\s]/g, ""));
-  return v !== "" && v !== null && v !== undefined && Number.isFinite(n) && n >= 0 && n <= 1e8 ? Math.round(n) : null;
-};
+/** The site to check for a source. Blank is fine. A typing slip, or a site many sources share, is refused rather than lost. */
+function readDomain(v: unknown): string {
+  if (!String(v ?? "").trim()) return "";
+  const d = cleanDomain(v);
+  if (!d) throw new FriendlyError("That web address doesn't look right. Try something like northbridgecourier.co.uk, or leave it blank.");
+  if (SHARED_SITES.some((x) => d === x || d.endsWith(`.${x}`))) throw new FriendlyError(`Many sources share ${d}, so a check there wouldn't tell you about this one. Leave the web address blank and find its pieces yourself.`);
+  return d;
+}
+/** A reach as typed. Blank means not given, and anything else that isn't a number is refused rather than lost. */
+function readReach(v: unknown): number | null {
+  const typed = String(v ?? "").replace(/[,\s]/g, "");
+  if (!typed) return null;
+  const n = Number(typed);
+  if (!Number.isFinite(n) || n < 0 || n > 1e8) throw new FriendlyError("Give the reach as a plain number, such as 18,400.");
+  return Math.round(n);
+}
 
 export function readSource(b: any, was: Source | null, by: string, today: string, topics: string[]): Source {
   const name = cleanText(b?.name, 100);
   if (!name) throw new FriendlyError("Give the source a name.");
   const type = pickEnum(SOURCE_TYPES, b?.type);
   if (!type) throw new FriendlyError("Choose what kind of source this is.");
-  const reach = wholeNumber(b?.reach);
+  const reach = readReach(b?.reach);
   return {
-    id: was?.id ?? newId(), name, type, domain: cleanDomain(b?.domain), reach, reachUnit: reach === null ? "" : pickEnum(REACH_UNITS, b?.reachUnit) ?? "readers",
+    id: was?.id ?? newId(), name, type, domain: readDomain(b?.domain), reach, reachUnit: reach === null ? "" : pickEnum(REACH_UNITS, b?.reachUnit) ?? REACH_UNIT_FOR[type],
     reachBand: reach === null ? pickEnum(REACH_BANDS, b?.reachBand) ?? "" : "", reachFrom: cleanText(b?.reachFrom, 80),
     leaning: pickEnum(LEANINGS, b?.leaning) ?? "Not known", stance: pickEnum(STANCES, b?.stance) ?? "Balanced",
     campaign: (Array.isArray(b?.campaign) ? b.campaign : []).map((t: unknown) => cleanText(t, 80)).filter((t: string) => topics.includes(t)).slice(0, 5),
@@ -104,13 +126,14 @@ export async function saveSource(c: Config, me: Member, p: Pilot, b: any, topics
   });
 }
 
+// Holds both locks, assessments first, so an assessment can't be saved against a source as it goes
 export async function removeSource(c: Config, p: Pilot, id: unknown): Promise<void> {
-  await withLock(sourcesPath(c, p.code), async () => {
+  await withLock(assessmentsPath(c, p.code), () => withLock(sourcesPath(c, p.code), async () => {
     const held = await loadAssessments(c, p.code);
     if (held.some((a) => a.source === id)) throw new FriendlyError("This source has assessments, so it can't be taken off.");
     const all = await loadSources(c, p.code);
     await savePretty(c, sourcesPath(c, p.code), all.filter((s) => s.id !== id));
-  });
+  }));
 }
 
 export function readAssessment(b: any, sources: Source[], topics: string[], by: string, today: string): Assessment {
@@ -127,9 +150,9 @@ export function readAssessment(b: any, sources: Source[], topics: string[], by: 
   const relevance = pickEnum(RELEVANCE, b?.relevance), tone = pickEnum(TONES, b?.tone), prominence = pickEnum(PROMINENCE, b?.prominence);
   if (!relevance || !tone || !prominence) throw new FriendlyError("Choose its relevance, tone and prominence.");
   const known = new Set<string>(FUNCTIONS.map((f) => f[0]));
-  const reach = wholeNumber(b?.reach);
+  const reach = readReach(b?.reach);
   return {
-    id: newId(), source: source.id, date, summary: cleanText(raw, SUMMARY_CHARS), topic, relevance, tone, prominence,
+    id: newId(), source: source.id, date, summary: scrubContacts(cleanText(raw, SUMMARY_CHARS)), topic, relevance, tone, prominence,
     functions: (Array.isArray(b?.functions) ? b.functions : []).filter((f: string) => known.has(f)), reach: reach ?? source.reach, by, at: new Date().toISOString(),
   };
 }
@@ -283,7 +306,7 @@ const checksToday = new Map<string, number>();
 function countChecks(code: string, n: number): void {
   const key = `${code}|${londonToday()}`;
   const used = checksToday.get(key) ?? 0;
-  if (used + n > CHECKS_A_DAY) throw new FriendlyError("Your authority has used today's coverage checks. Try again tomorrow.", 429);
+  if (used + n > CHECKS_A_DAY) throw new FriendlyError("Your authority has used today's coverage checks. Try again tomorrow, or with fewer publications.", 429);
   checksToday.set(key, used + n);
 }
 
@@ -300,11 +323,15 @@ export function readKeywords(v: unknown): string[] {
  */
 async function searchSite(c: Config, domain: string, keyword: string, from: string, to: string): Promise<{ found: boolean; date: string }> {
   const url = `${SEARCH_URL}?${new URLSearchParams({ q: `site:${domain} "${keyword}"`, country: "GB", count: "10", freshness: `${from}to${to}` })}`;
-  const res = await fetchWithTimeout(url, { headers: { Accept: "application/json", "X-Subscription-Token": c.searchKey } }, 15000);
-  if (res.status === 401 || res.status === 403) throw new FriendlyError("The search service refused Clarion's key. Check SEARCH_KEY.", 502);
+  const res = await fetchWithTimeout(url, { headers: { Accept: "application/json", "X-Subscription-Token": c.searchKey } }, SEARCH_MS);
+  // A wrong key can come back as 422, which is also what the service says when it doesn't like a question
+  const refused = res.status === 401 || res.status === 403 || (res.status === 422 && /SUBSCRIPTION_TOKEN/.test(await res.text().catch(() => "")));
+  if (refused) throw new FriendlyError("The search service refused Clarion's key. Check SEARCH_KEY.", 502);
   if (!res.ok) throw new Error(`the search service answered ${res.status}`);
-  const d: any = await res.json();
-  const hits = (Array.isArray(d?.web?.results) ? d.web.results : []).filter((r: any) => {
+  const d: any = await res.json().catch(() => null);
+  // An answer with nothing found can leave out the results altogether, but it's still an answer. Anything else isn't.
+  if (!d || typeof d !== "object" || !(d.type === "search" || d.web || d.query)) throw new Error("the search service sent something unexpected");
+  const hits = (Array.isArray(d.web?.results) ? d.web.results : []).filter((r: any) => {
     try { const host = new URL(String(r?.url)).hostname; return host === domain || host.endsWith(`.${domain}`); } catch { return false; }
   });
   const dates = hits.map((r: any) => String(r?.page_age ?? "").slice(0, 10)).filter((x: string) => /^\d{4}-\d{2}-\d{2}$/.test(x) && x >= from && x <= to).sort();
@@ -316,24 +343,30 @@ export async function checkCoverage(c: Config, p: Pilot, b: any): Promise<{ read
   const to = londonToday(), from = shiftDays(to, -days);
   if (!c.searchKey) return { ready: false, why: "The search service isn't set up yet, so find pieces yourself and record them below.", from, to, checks: [] };
   const keywords = readKeywords(b?.keywords);
-  const sources = (await loadSources(c, p.code)).filter((s) => s.domain && (!Array.isArray(b?.sources) || !b.sources.length || b.sources.includes(s.id)));
+  const chosen: unknown[] | null = Array.isArray(b?.sources) ? b.sources : null;
+  if (chosen && !chosen.length) throw new FriendlyError("Tick at least one publication.");
+  const sources = (await loadSources(c, p.code)).filter((s) => s.domain && (!chosen || chosen.includes(s.id)));
   if (!sources.length) throw new FriendlyError("Add a web address to a source first, so Clarion knows where to look.");
-  const pairs = sources.flatMap((s) => keywords.map((keyword) => ({ s, keyword })));
+  const pairs = sources.flatMap((s) => keywords.map((keyword) => ({ s, keyword, key: `check|${s.domain}|${keyword.toLowerCase()}|${from}|${to}` })));
   if (pairs.length > MAX_CHECKS) throw new FriendlyError(`That's too many at once. Choose fewer publications: up to ${MAX_CHECKS} checks at a time.`);
-  countChecks(p.code, pairs.length);
-  const checks: Check[] = [];
-  for (const { s, keyword } of pairs) {
+  countChecks(p.code, pairs.filter((x) => !isCached(x.key, CHECK_MS)).length); // an answer already held costs nothing
+  const checks: Check[] = [], stopAt = Date.now() + CHECK_RUN_MS;
+  let fails = 0;
+  for (const { s, keyword, key } of pairs) {
     const row = { source: s.id, name: s.name, keyword };
+    if (fails >= FAILS_TO_STOP || Date.now() > stopAt) { checks.push({ ...row, result: "Not checked", date: "" }); continue; }
+    let asked = false;
     try {
-      let asked = false;
-      const r = await cached(`check|${s.domain}|${keyword.toLowerCase()}|${from}|${to}`, CHECK_MS, async () => { asked = true; return await searchSite(c, s.domain, keyword, from, to); });
+      const r = await cached(key, CHECK_MS, async () => { asked = true; return await searchSite(c, s.domain, keyword, from, to); });
       checks.push({ ...row, result: !r.found ? "No match" : r.date ? "Found" : "Found, no date", date: r.date });
-      if (asked) await delay(SEARCH_GAP_MS);
+      fails = 0;
     } catch (e) {
       if (e instanceof FriendlyError) throw e;
       console.log(`[warn] coverage check: ${(e as Error).message}`);
       checks.push({ ...row, result: "Not checked", date: "" });
+      fails++;
     }
+    if (asked) await delay(SEARCH_GAP_MS);
   }
   return { ready: true, why: "", from, to, checks };
 }

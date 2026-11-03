@@ -216,7 +216,8 @@ rate("complain/contact + petition: any civic participation in last 12 months (co
 rate("complain/contact: Contacted my local council (ever in last few years)", "2025", [[16, 24, 9], [25, 34, 22], [35, 44, 38], [45, 54, 33], [55, 64, 24], [65, null, 31]]);
 
 // The search service: what a site has on a keyword. Tests fill this in, and each call is noted.
-export const search = { calls: [], hits: {}, status: 200 };
+export const search = { calls: [], hits: {}, status: 200, body: null };
+export const slowStorage = { ms: 0 }; // to let two requests overlap
 
 export const lib = { queries: [], down: false };
 const OGL = "Contains public sector information licensed under the Open Government Licence v3.0.";
@@ -290,6 +291,7 @@ globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === "string" ? input : input.url;
   const method = (init.method || "GET").toUpperCase();
   if (url.startsWith("https://storage.bunnycdn.com/zone/")) {
+    if (slowStorage.ms) await new Promise((r) => setTimeout(r, slowStorage.ms));
     const path = decodeURIComponent(url.slice("https://storage.bunnycdn.com/zone/".length));
     if (method === "PUT") { store.set(path, { body: enc.encode(String(init.body)), type: (init.headers || {})["Content-Type"] || "" }); return new Response("{}", { status: 201 }); }
     if (method === "DELETE") { const had = store.delete(path); return new Response("", { status: had ? 200 : 404 }); }
@@ -311,10 +313,10 @@ globalThis.fetch = async (input, init = {}) => {
   }
   if (url.startsWith("https://builder.test")) return library(url, init);
   if (url.startsWith("https://api.search.brave.com/")) {
-    search.calls.push({ url, headers: init.headers });
-    if (search.status !== 200) return new Response("{}", { status: search.status });
-    const q = new URL(url).searchParams.get("q");
-    return new Response(JSON.stringify({ web: { results: search.hits[q] ?? [] } }), { status: 200, headers: { "content-type": "application/json" } });
+    search.calls.push({ url, headers: init.headers, at: Date.now() });
+    if (search.status !== 200 || search.body !== null) return new Response(search.body ?? "{}", { status: search.status });
+    const q = new URL(url).searchParams.get("q"), hits = search.hits[q];
+    return new Response(JSON.stringify({ type: "search", query: { original: q }, ...(hits ? { web: { type: "search", results: hits } } : {}) }), { status: 200, headers: { "content-type": "application/json" } }); // nothing found leaves out the results
   }
   if (/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(url)) return realFetch(input, init); // the server under test
   if (hooks.fetch) { const r = await hooks.fetch(url, init); if (r) return r; }

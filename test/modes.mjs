@@ -85,6 +85,8 @@ ok(/Demonstration: made-up data/.test(text(d.querySelector(".rail"))) && !button
 w.location.hash = "#said/NORTHBRIDGE";
 await see(d, /Latest assessments/);
 ok(/Front-page item on the Relief Road closure/.test(text(d.querySelector(".main"))), "What's being said shows made-up assessments");
+const demoSaid = pack.coverage;
+ok(demoSaid.rows.every((x) => demoSaid.topics.includes(x.topic)) && demoSaid.sources.every((x) => x.campaign.every((c) => demoSaid.topics.includes(c))), "every topic in the demonstration's coverage can be chosen");
 w.location.hash = "#attention/NORTHBRIDGE";
 await see(d, /What's driving it/);
 w.location.hash = "#evidence/NORTHBRIDGE";
@@ -219,7 +221,7 @@ ok(middle.satisfied === 40 && middle.worse === null && middle.authorities === 5 
 ok(t.middleFigure([{ satisfied: 20, worse: 61 }, ...[30, 40, 50, 60].map((satisfied) => ({ satisfied, worse: null }))]).worse === null, "and one authority's answer can't pass as the middle figure");
 r = await api("/api/authority", { code: WSX }, member);
 ok(r.benchmark === null && r.adults > 0, "an authority's page carries its adults, and no FHRG figure yet");
-ok((await api("/api/coverage/get", { code: WSX }, member)).ready === true && (await api("/api/coverage/get", { code: WSX }, kirk)).status === 403 && (await api("/api/attention", { code: WSX })).status === 401, "Media Watch's routes wait for it, and keep to the usual access rules");
+ok((await api("/api/coverage/get", { code: WSX }, member)).ready === true && (await api("/api/coverage/get", { code: WSX }, kirk)).status === 403 && (await api("/api/attention", { code: WSX })).status === 401, "what's being said and the comparison keep to the usual access rules");
 
 console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
 process.exit(failures ? 1 : 0);

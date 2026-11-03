@@ -370,7 +370,14 @@ const Demo = {
       case "/api/status": return P.status;
       case "/api/authority": return P.authority;
       case "/api/coverage/get": return P.coverage;
-      case "/api/coverage/check": return P.coverageCheck;
+      case "/api/coverage/summary": return { summary: P.coverage.summary };
+      case "/api/coverage/check": {
+        const words = b.keywords || [];
+        if (!words.length) throw new Error("Give one or two keywords.");
+        if (!b.sources?.length) throw new Error("Tick at least one publication.");
+        const said = P.coverageCheck.checks; // made up, and anything else that's typed finds nothing
+        return { ...P.coverageCheck, checks: b.sources.flatMap((id) => words.map((keyword) => said.find((x) => x.source === id && x.keyword.toLowerCase() === keyword.toLowerCase()) || { source: id, name: P.coverage.sources.find((x) => x.id === id).name, keyword, result: "No match", date: "" })) };
+      }
       case "/api/attention": return P.attention;
       case "/api/announcements": return { announcements: P.announcements };
       case "/api/note/list": return { notes: P.noteList };
@@ -458,7 +465,7 @@ function authScreen(message) {
 }
 
 // ---------------------------------------------------------------- shell ------
-// The address says where you are: #a/<code>, #evidence/<code>, #media/<code>, #attention/<code>, #about/<code>,
+// The address says where you are: #a/<code>, #evidence/<code>, #said/<code>/<part>, #attention/<code>, #about/<code>,
 // #notes/<code>, #note/<code>/<id>, #surveys/<code>, #survey/<code>/<id>/<part>, #print/<code>/<id>/<first>/<last>,
 // and #all for FHRG administrators.
 function route() {
@@ -542,10 +549,10 @@ async function summaryView(page, a) {
   page.append(body);
   const view = App.viewId;
   let d, coverage, att;
-  try { [d, coverage, att] = await Promise.all([API.call("/api/authority", { code: a.code }), API.call("/api/coverage/get", { code: a.code }), API.call("/api/attention", { code: a.code })]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { [d, coverage, att] = await Promise.all([API.call("/api/authority", { code: a.code }), API.call("/api/coverage/summary", { code: a.code }).catch(() => null), API.call("/api/attention", { code: a.code })]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
   if (view !== App.viewId) return;
   const street = d.evidence.streets[0] ?? null; // the latest
-  const assessed = coverage.summary;
+  const assessed = coverage?.summary ?? { pieces: 0, previous: 0 };
   const from = [street ? `${fmt(street.responses)} street survey replies` : null, assessed.pieces ? `${fmt(assessed.pieces)} assessed press and media pieces` : null, "published data"].filter(Boolean);
   const latest = d.evidence.surveys.filter((s) => s.year === d.evidence.surveys[0]?.year);
   const survey = (s) => stat(s.measure, `${s.score} / ${s.outOf}`, `${s.source}${s.responses ? `, ${fmt(s.responses)} replies` : ""}`);
@@ -654,7 +661,7 @@ function saidLatest(top, a, d) {
 function audienceCard(d, type) {
   const box = h("section", { class: "card" }, h("h3", {}, "Who this reaches"));
   const aud = d.audiences[type];
-  if (!aud) return add(box, h("p", { class: "note" }, "The audience figures aren't in the data library yet."));
+  if (!aud) return add(box, h("p", { class: "note" }, "The audience figures can't be read just now."));
   const most = Math.max(...aud.audience, ...aud.adults) || 1;
   const reachBars = (value, cls) => h("i", { class: cls, style: { width: `${(value / most) * 100}%` } });
   add(box, aud.known ? h("p", {}, `${fmt(aud.overFiftyFive.audience)}% of this kind of audience is over 55, compared with ${fmt(aud.overFiftyFive.adults)}% of adults here.`) : null,
@@ -673,8 +680,9 @@ function weightCard(source, tone, topic, reach) {
   const f = source.stance === "Usually critical" ? ({ Critical: 0.5, Supportive: 1.5 })[tone] : source.stance === "Usually supportive" ? ({ Critical: 1.5, Supportive: 0.5 })[tone] : undefined;
   const factor = f || (source.campaign.includes(topic) ? 0.5 : 1);
   const why = f ? `${source.stance}, ${tone.toLowerCase()} piece` : factor !== 1 ? "Campaigning on this topic" : "No adjustment";
-  const n = Number(String(reach).replace(/[,\s]/g, ""));
-  add(box, h("div", { class: "grid g3" }, stat("Raw reach", reach !== "" && Number.isFinite(n) ? fmt(n) : "Not given", "As published"), stat("Allowance", `× ${factor}`, why), stat("Adjusted reach", reach !== "" && Number.isFinite(n) ? fmt(n * factor) : "Not given", "Both are kept")),
+  const typed = String(reach ?? "").replace(/[,\s]/g, ""); // left blank, a piece takes the source's reach
+  const n = typed ? Number(typed) : source.reach ?? NaN, known = Number.isFinite(n) && n >= 0;
+  add(box, h("div", { class: "grid g3" }, stat("Raw reach", known ? fmt(Math.round(n)) : "Not given", "As published"), stat("Allowance", `× ${factor}`, why), stat("Adjusted reach", known ? fmt(Math.round(Math.round(n) * factor)) : "Not given", "Both are kept")),
     h("p", { class: "note" }, "A piece against a source's usual line tells you more, so a friendly paper turning critical counts for more. A piece on a topic the source is campaigning on counts half, as a campaign can make a topic seem bigger than it is. Stance and campaign are never both applied to one piece. These weights are a starting judgement, to be tested in the pilot."));
   return box;
 }
@@ -701,6 +709,7 @@ function saidAssess(top, a, d) {
       said(m1, "", "");
       clear(results).append(h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Publication"), h("th", {}, "Keyword"), h("th", {}, "Result"), h("th", {}, "Date"), h("th", {}, ""))),
         h("tbody", {}, r.checks.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.keyword), h("td", {}, h("span", { class: x.result === "Found" ? "pill serious" : "pill" }, x.result)), h("td", {}, x.date ? fmtDate(x.date) : ""), h("td", {}, /^Found/.test(x.result) ? h("button", { class: "btn small", type: "button", onclick: () => { pickSource(x.source, x.date); summary.focus(); } }, "Assess") : null)))))),
+        r.checks.some((x) => x.result === "Not checked") ? h("p", { class: "note" }, "\"Not checked\" means the search service didn't answer, so Clarion stopped asking. Try again later.") : null,
         h("p", { class: "note" }, "Clarion keeps only yes or no and the date: no headlines, extracts or links. \"No match\" doesn't mean no coverage, because paywalled and print-only pieces often won't show up."));
     } catch (e) { said(m1, e.message, "err"); } finally { ev.target.disabled = false; }
   }
@@ -715,12 +724,12 @@ function saidAssess(top, a, d) {
   const date = h("input", { type: "date", value: form.date, max: d.today, oninput: () => { form.date = date.value; } });
   const topic = h("select", { "aria-label": "Topic", onchange: () => { form.topic = topic.value; drawSide(); } }, d.topics.map((t) => h("option", { value: t }, t)));
   const reach = h("input", { inputmode: "numeric", value: form.reach === null ? "" : String(form.reach), oninput: () => { form.reach = reach.value; drawSide(); } });
-  const summary = h("input", { maxlength: 200, "aria-label": "In one line, what was it about?", oninput: () => { form.summary = summary.value; } });
+  const summary = h("input", { "aria-label": "In one line, what was it about?", oninput: () => { form.summary = summary.value; } }); // no maxlength: it would quietly keep the start of a pasted article
+  const sourceReach = () => { form.reach = srcOf().reach ?? ""; reach.value = form.reach === "" ? "" : String(form.reach); };
   function pickSource(id, when) {
     form.source = id; pick.value = id;
     if (when) { form.date = when; date.value = when; }
-    const x = srcOf();
-    form.reach = x.reach ?? ""; reach.value = form.reach === "" ? "" : String(form.reach);
+    sourceReach();
     drawSide();
   }
   const choice = (label, key, list) => {
@@ -733,14 +742,18 @@ function saidAssess(top, a, d) {
   const plates = h("div", { class: "plates" });
   const drawPlates = () => clear(plates).append(...d.functions.map(([id, name]) => h("button", { type: "button", "aria-pressed": String(form.functions.includes(id)), onclick: () => { form.functions = form.functions.includes(id) ? form.functions.filter((x) => x !== id) : [...form.functions, id]; drawPlates(); } }, name)));
   drawPlates();
+  let saving = false;
   async function saveIt(done) {
+    if (saving) return;
+    if (form.summary.trim().length > 200) { said(m2, "Keep it to one line in your own words: up to 200 letters. Please don't paste the article.", "err"); return; }
+    saving = true;
     try {
       await API.call("/api/coverage/assess", { code: a.code, ...form });
       if (done) { location.hash = `#said/${a.code}/latest`; return; }
       Object.assign(form, { summary: "", relevance: "", tone: "", prominence: "", functions: [] });
-      summary.value = ""; rel.draw(); tone.draw(); prom.draw(); drawPlates(); drawSide();
+      summary.value = ""; sourceReach(); rel.draw(); tone.draw(); prom.draw(); drawPlates(); drawSide();
       said(m2, "Saved. On to the next one.");
-    } catch (e) { said(m2, e.message, "err"); }
+    } catch (e) { said(m2, e.message, "err"); } finally { saving = false; }
   }
   top.append(h("div", { class: "grid g2" }, h("section", { class: "card" }, h("h2", {}, "2. Record your assessment"), h("p", { class: "note" }, "Read the piece in your own copy or subscription. Clarion never sees it."),
     h("div", { class: "form-grid" }, h("label", { class: "field" }, "Source", pick), h("label", { class: "field" }, "Date it appeared", date), h("label", { class: "field" }, "Topic", topic), h("label", { class: "field" }, "Reach this time", reach, h("span", { class: "hint" }, "From the source. Change it if this piece went further"))),
@@ -758,24 +771,27 @@ function saidSources(top, a, d) {
   const stancePill = (x) => h("span", { class: x === "Usually critical" ? "pill serious" : x === "Usually supportive" ? "pill good" : "pill" }, x);
   top.append(h("section", { class: "card" }, h("h2", {}, "Assessed by your officers"), h("p", { class: "note" }, "Clarion never reads these. It can check whether a keyword turns up for a publication with a web address, and your officer does the rest."),
     d.sources.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Source"), h("th", {}, "Type"), h("th", {}, "Search"), h("th", { class: "r" }, "Reach"), h("th", {}, "Reach from"), h("th", {}, "Political leaning"), h("th", {}, "Usual stance on the council"), h("th", {}, "Campaigning on"), d.canEdit ? h("th", {}, "") : null)),
-      h("tbody", {}, d.sources.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.type), h("td", {}, x.domain ? "Yes" : "No"), h("td", { class: "r" }, reachText(x.reach, x.reachUnit, x.reachBand) || (d.canEdit ? h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Add reach") : "")), h("td", {}, x.reachFrom), h("td", {}, x.leaning), h("td", {}, stancePill(x.stance)), h("td", {}, x.campaign.join(", ") || "None"),
+      h("tbody", {}, d.sources.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.type), h("td", {}, x.domain || "No"), h("td", { class: "r" }, reachText(x.reach, x.reachUnit, x.reachBand) || (d.canEdit ? h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Add reach") : "")), h("td", {}, x.reachFrom), h("td", {}, x.leaning), h("td", {}, stancePill(x.stance)), h("td", {}, x.campaign.join(", ") || "None"),
         d.canEdit ? h("td", {}, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Change"), held.has(x.id) ? null : h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/coverage/unsource", { code: a.code, id: x.id }); route(); } catch (e) { toast(e.message); } } }, "Remove"))) : null))))) : h("div", { class: "empty" }, "No sources yet."),
     h("p", { class: "note" }, "Leaning and stance are your officers' judgement, and could be asked for under freedom of information. Once a source has 10 assessments, its record shows how often it's been critical, so the judgement can be checked.")));
   const record = d.sources.flatMap((x) => { const list = d.rows.filter((r) => r.source === x.id); return list.length >= 10 ? [h("li", {}, `${x.name}: ${fmt(list.filter((r) => r.tone === "Critical").length)} critical and ${fmt(list.filter((r) => r.tone === "Supportive").length)} supportive, of ${fmt(list.length)} pieces.`)] : []; });
   if (record.length) top.append(h("section", { class: "card" }, h("h3", {}, "Each source's record"), h("ul", {}, record)));
   const formBox = h("section", { class: "card" });
   function drawForm(was) {
-    const f = { ...(was || {}) };
+    const f = { ...(was || {}) }, picks = {};
+    let unitChosen = !!f.reachUnit;
     const input = (key, label, attrs, hint) => { const el = h("input", { value: f[key] === null || f[key] === undefined ? "" : String(f[key]), ...attrs, oninput: () => { f[key] = el.value; } }); return h("label", { class: "field" }, label, el, hint ? h("span", { class: "hint" }, hint) : null); };
-    const select = (key, label, list, blank) => { const el = h("select", { "aria-label": label, onchange: () => { f[key] = el.value; } }, blank ? h("option", { value: "" }, blank) : null, list.map((v) => h("option", { value: v }, v))); el.value = f[key] ?? (blank ? "" : list[0]); f[key] = el.value; return h("label", { class: "field" }, label, el); };
+    const select = (key, label, list, blank, then) => { const el = picks[key] = h("select", { "aria-label": label, onchange: () => { f[key] = el.value; then?.(); } }, blank ? h("option", { value: "" }, blank) : null, list.map((v) => h("option", { value: v }, v))); el.value = f[key] || (blank ? "" : list[0]); f[key] = el.value; return h("label", { class: "field" }, label, el); };
+    const unitFollows = () => { if (!unitChosen) f.reachUnit = picks.reachUnit.value = d.reachUnitFor[f.type]; }; // radio is listeners, and so on, until an officer says otherwise
     const m = saveNote();
     const campaign = d.topics.map((t) => { const box = h("input", { type: "checkbox", value: t, checked: (f.campaign || []).includes(t) }); return { box, row: h("label", { class: "check" }, box, t) }; });
     clear(formBox).append(h("h3", {}, was ? `Change ${was.name}` : "Add a source"),
-      h("div", { class: "form-grid" }, input("name", "Name", { maxlength: 100 }), select("type", "Type", d.types), input("domain", "Web address, if it has one", { maxlength: 120, placeholder: "northbridgecourier.example" }, "Lets Clarion check for keywords on that site"),
-        input("reach", "Reach, if you have a figure", { inputmode: "numeric" }, "An ABC certificate, station figures or members"), select("reachUnit", "Reach is counted in", d.reachUnits), select("reachBand", "Or your estimate", d.reachBands, "Not needed"), input("reachFrom", "Where the reach comes from", { maxlength: 80, placeholder: "ABC certificate, June 2026" }),
+      h("div", { class: "form-grid" }, input("name", "Name", { maxlength: 100 }), select("type", "Type", d.types, null, unitFollows), input("domain", "Web address, if it has its own site", { maxlength: 120, placeholder: "northbridgecourier.example" }, "Clarion checks the whole site for keywords. Leave this blank for a page on Facebook or the BBC"),
+        input("reach", "Reach, if you have a figure", { inputmode: "numeric" }, "An ABC certificate, station figures or members"), select("reachUnit", "Reach is counted in", d.reachUnits, null, () => { unitChosen = true; }), select("reachBand", "Or your estimate", d.reachBands, "Not needed"), input("reachFrom", "Where the reach comes from", { maxlength: 80, placeholder: "ABC certificate, June 2026" }),
         select("leaning", "Political leaning", d.leanings), select("stance", "Usual stance on the council", d.stances)),
       h("div", { class: "field" }, "Campaigning on", h("div", { class: "row" }, campaign.map((x) => x.row))),
       m, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: async () => { try { await API.call("/api/coverage/source", { code: a.code, ...f, campaign: campaign.filter((x) => x.box.checked).map((x) => x.box.value) }); route(); } catch (e) { said(m, e.message, "err"); } } }, was ? "Save the change" : "Add this source"), was ? h("button", { class: "btn ghost", type: "button", onclick: () => drawForm(null) }, "Cancel") : null));
+    unitFollows();
     if (was) formBox.scrollIntoView?.({ block: "nearest" });
   }
   if (d.canEdit) { drawForm(null); top.append(formBox); }

@@ -1,7 +1,7 @@
 // What's being said: the rules on their own, then the routes and the screens against the simulators.
 import fs from "node:fs";
 import { JSDOM } from "jsdom";
-import { addUser, files, getText, search, until } from "./sim.mjs";
+import { addUser, files, getText, search, slowStorage, until } from "./sim.mjs";
 const { handleRequest } = await import("./.build/app.mjs");
 const t = await import("./.build/internals.mjs");
 
@@ -15,6 +15,13 @@ let threw = "";
 try { t.readKeywords("one, two, three"); } catch (e) { threw = e.message; }
 ok(/up to 2/.test(threw), "a check takes one or two keywords");
 ok(t.readKeywords('potholes, "Moor Lane"').join("|") === "potholes|Moor Lane", "and quote marks can't change the search");
+const asSource = (over) => { try { return t.readSource({ name: "X", type: "Local Radio", ...over }, null, "Lee", "2026-11-01", []); } catch (e) { return e.message; } };
+ok(/doesn't look right/.test(asSource({ domain: "not a site" })) && asSource({ domain: "" }).domain === "", "a mistyped web address is refused, and a blank one is fine");
+ok(/Many sources share facebook\.com/.test(asSource({ domain: "https://www.facebook.com/northbridgeforum" })) && /Many sources share bbc\.co\.uk/.test(asSource({ domain: "bbc.co.uk/news/england/sussex" })), "a site many sources share is refused, so \"Found\" means this source");
+ok(asSource({ domain: "https://www.courier.example/news" }).domain === "courier.example", "a publication's own page comes down to its site");
+ok(asSource({ reach: " " }).reach === null && asSource({ reach: "," }).reach === null && asSource({ reach: 0 }).reach === 0 && asSource({ reach: "41,000" }).reach === 41000, "blank reach isn't taken for nought");
+ok(/plain number/.test(asSource({ reach: "about 5000" })) && /plain number/.test(asSource({ reach: "12k" })) && /plain number/.test(asSource({ reach: -5 })), "and a reach that can't be read is refused, not lost");
+ok(asSource({ reach: "41,000" }).reachUnit === "listeners" && asSource({ reach: 9, type: "Local Television" }).reachUnit === "viewers" && asSource({ reach: 9, reachUnit: "people" }).reachUnit === "people", "with no unit given, reach is counted in the source's own kind of unit");
 
 const critical = { stance: "Usually critical", campaign: ["Potholes"] }, friendly = { stance: "Usually supportive", campaign: [] }, balanced = { stance: "Balanced", campaign: ["Potholes"] };
 const weight = (s, tone, topic = "Parking") => t.pieceWeight(s, { tone, topic }).factor;
@@ -46,9 +53,25 @@ const sources = [{ id: "a", reach: 500 }];
 const good = { source: "a", date: "2026-10-30", summary: "Item on repairs", topic: "Potholes", relevance: "High", tone: "Critical", prominence: "Inside page", functions: ["cw", "zz"] };
 const made = t.readAssessment(good, sources, ["Potholes"], "Lee", "2026-11-01");
 ok(made.reach === 500 && made.functions.join() === "cw" && made.by === "Lee", "an assessment takes the source's reach unless told otherwise");
+ok(t.readAssessment({ ...good, reach: "750" }, sources, ["Potholes"], "Lee", "2026-11-01").reach === 750 && t.readAssessment({ ...good, reach: "" }, sources, ["Potholes"], "Lee", "2026-11-01").reach === 500, "and blank means the source's");
+ok(t.readAssessment({ ...good, summary: "Call 01234 567890 or a.resident@example.com" }, sources, ["Potholes"], "Lee", "2026-11-01").summary === "Call [removed] or [removed]", "a phone number or email address in a summary is taken out");
 const refused = (over) => { try { t.readAssessment({ ...good, ...over }, sources, ["Potholes"], "Lee", "2026-11-01"); return ""; } catch (e) { return e.message; } };
 ok(/don't paste/.test(refused({ summary: "x".repeat(201) })), "a pasted article is refused");
 ok(/future/.test(refused({ date: "2026-12-01" })) && /topic/.test(refused({ topic: "Nonsense" })) && /source/.test(refused({ source: "b" })) && /relevance/.test(refused({ tone: "Angry" })), "and so is anything that isn't a real choice");
+ok(/plain number/.test(refused({ reach: "12k" })), "including a reach that can't be read");
+
+// waiting for something from outside
+const never = new Promise(() => {});
+let started = 0, began = Date.now();
+ok(await t.briefly("test-hung", "without", () => { started++; return never; }, undefined, 20) === "without" && Date.now() - began < 500, "a page carries on without something slow");
+ok(await t.briefly("test-hung", "without", () => { started++; return never; }, undefined, 20) === "without" && started === 1, "and doesn't start it a second time while it's running");
+ok(await t.briefly("test-fine", "without", async () => "found") === "found", "what's ready in time is used");
+let tries = 0;
+await t.briefly("test-broken", "without", async () => { tries++; throw new Error("down"); });
+await t.briefly("test-broken", "without", async () => { tries++; throw new Error("down"); });
+await t.briefly("test-empty", "without", async () => { tries++; return null; }, (x) => x === null);
+await t.briefly("test-empty", "without", async () => { tries++; return null; }, (x) => x === null);
+ok(tries === 2, "and something that's failing is left alone for a while, rather than tried on every click");
 
 // ---- through the API
 await addUser(1, "lead@westsussex.gov.uk", "Lee Lead", 30, "lead");
@@ -84,6 +107,18 @@ const assessed = r.rows[0].id;
 ok((await api("/api/coverage/unsource", { code: WSX, id: courier.id }, lead)).status === 400, "a source with assessments can't be taken off");
 ok((await api("/api/coverage/unsource", { code: WSX, id: radio.id }, lead)).status === 200 && (await api("/api/coverage/get", { code: WSX }, lead)).sources.length === 1, "one without can");
 ok((await api("/api/coverage/get", { code: KIRK }, kirk)).sources.length === 0, "and another authority sees none of it");
+const brief = await (async () => { const real = globalThis.fetch, outside = []; globalThis.fetch = (u, i) => { if (!String(u.url ?? u).includes("storage.bunnycdn.com")) outside.push(String(u.url ?? u)); return real(u, i); }; const res = await api("/api/coverage/summary", { code: WSX }, member); globalThis.fetch = real; return { res, outside }; })();
+ok(brief.res.summary.topics.length === 1 && !brief.outside.some((u) => /gov\.uk|parliament|fixmystreet|\/query|\/ref/i.test(u)), "the Summary page's figures come from Clarion's own storage, so it waits on nobody else");
+ok((await api("/api/coverage/summary", { code: WSX }, kirk)).status === 403 && (await api("/api/coverage/summary", { code: WSX })).status === 401, "and they keep to the usual access rules");
+const spare = (await api("/api/coverage/source", { code: WSX, name: "Short-lived", type: "Local Radio" }, lead)).source;
+slowStorage.ms = 15;
+const [added, gone] = await Promise.all([api("/api/coverage/assess", { code: WSX, source: spare.id, date: "2026-10-30", summary: "Overlap", topic: "Potholes", relevance: "High", tone: "Neutral", prominence: "Inside page" }, lead), api("/api/coverage/unsource", { code: WSX, id: spare.id }, lead)]);
+slowStorage.ms = 0;
+const after = await api("/api/coverage/get", { code: WSX }, lead), heldNow = JSON.parse(getText(files("").find((k) => k.endsWith(`${WSX}/assessments.json`))));
+ok(added.status === 200 && gone.status === 400 && after.sources.some((x) => x.id === spare.id) && after.rows.some((x) => x.summary === "Overlap"), "saving a piece as its source is taken off can't lose the piece");
+ok(heldNow.every((x) => after.sources.some((s) => s.id === x.source)), "and every assessment still has its source");
+await api("/api/coverage/unassess", { code: WSX, id: after.rows.find((x) => x.summary === "Overlap").id }, lead);
+await api("/api/coverage/unsource", { code: WSX, id: spare.id }, lead);
 
 // the search service
 r = await api("/api/coverage/check", { code: WSX, keywords: ["potholes"] }, lead);
@@ -97,7 +132,7 @@ ok(r.ready && r.checks.length === 2 && r.checks[0].result === "Found" && r.check
 ok(r.checks[1].result === "Found, no date", "or found with no date");
 ok(!/SECRET|https?:/.test(JSON.stringify(r)), "and no headline, extract or link comes back");
 ok(search.calls[0].headers["X-Subscription-Token"] === "search-key-123" && /country=GB/.test(search.calls[0].url), "the key goes only to the search service");
-ok(![...files().keys()].some((k) => k.includes("check")) && !JSON.stringify([...files().values()].map((v) => v)).includes("SECRET"), "and nothing from a search is stored");
+ok(files("").some((k) => k.endsWith("sources.json")) && !files("").some((k) => k.includes("check")) && !files("").some((k) => getText(k)?.includes("SECRET")), "and nothing from a search is stored");
 r = await api("/api/coverage/check", { code: WSX, keywords: ["flooding"] }, lead);
 ok(r.checks[0].result === "No match", "nothing found says no match");
 const before = search.calls.length;
@@ -105,25 +140,54 @@ await api("/api/coverage/check", { code: WSX, keywords: ["flooding"] }, lead);
 ok(search.calls.length === before, "the same check isn't asked twice in a morning");
 ok((await api("/api/coverage/check", { code: WSX, keywords: ["flooding"] }, member)).status === 403, "members can't run checks");
 ok((await api("/api/coverage/check", { code: KIRK, keywords: ["flooding"] }, kirk)).status === 400, "a source needs a web address before it can be checked");
+r = await api("/api/coverage/check", { code: WSX, keywords: ["flooding"], sources: [] }, lead);
+ok(r.status === 400 && /Tick at least one/.test(r.error) && search.calls.length === before, "with nothing ticked, nothing is searched");
 search.status = 401;
 r = await api("/api/coverage/check", { code: WSX, keywords: ["gritting"] }, lead);
 ok(r.status === 502 && /SEARCH_KEY/.test(r.error), "a refused key is explained");
-search.status = 500;
+search.status = 422; search.body = JSON.stringify({ type: "ErrorResponse", error: { status: 422, code: "SUBSCRIPTION_TOKEN_INVALID", detail: "The provided subscription token is invalid." } });
+r = await api("/api/coverage/check", { code: WSX, keywords: ["gritting"] }, lead);
+ok(r.status === 502 && /SEARCH_KEY/.test(r.error), "and so is the way the search service really says it");
+search.body = JSON.stringify({ type: "ErrorResponse", error: { status: 422, code: "VALIDATION", detail: "Unable to validate request parameter(s)" } });
+r = await api("/api/coverage/check", { code: WSX, keywords: ["gritting"] }, lead);
+ok(r.ready && r.checks[0].result === "Not checked", "but it doesn't blame the key for anything else");
+search.status = 500; search.body = null;
 r = await api("/api/coverage/check", { code: WSX, keywords: ["cycling"] }, lead);
 ok(r.ready && r.checks[0].result === "Not checked", "and a search that fails says it wasn't checked, not that nothing was found");
 search.status = 200;
+for (const body of ["{}", "not json", JSON.stringify({ type: "ErrorResponse" })]) {
+  search.body = body;
+  r = await api("/api/coverage/check", { code: WSX, keywords: ["cycling"] }, lead);
+  ok(r.ready && r.checks[0].result === "Not checked", `an odd answer (${body.slice(0, 12)}) isn't taken for no match`);
+}
+search.body = null;
+r = await api("/api/coverage/check", { code: WSX, keywords: ["cycling"] }, lead);
+ok(r.checks[0].result === "No match", "and isn't remembered, so the next check asks again");
+const second = (await api("/api/coverage/source", { code: WSX, name: "Second paper", type: "Local Newspaper", domain: "second.example" }, lead)).source;
+search.status = 429;
+const asked = search.calls.length;
+r = await api("/api/coverage/check", { code: WSX, keywords: ["signs", "lines"] }, lead);
+const tried = search.calls.slice(asked);
+ok(r.checks.length === 4 && r.checks.every((x) => x.result === "Not checked") && tried.length === 2, "after two failures in a row Clarion stops asking");
+ok(tried[1].at - tried[0].at >= 1000, "and it waits between tries even when they fail");
+search.status = 200;
+await api("/api/coverage/unsource", { code: WSX, id: second.id }, lead);
+const already = search.calls.length;
+let bought = true;
+for (let i = 0; i < 210; i++) bought = bought && (await api("/api/coverage/check", { code: WSX, keywords: ["cycling"] }, lead)).status === 200;
+ok(bought && search.calls.length === already, "an answer already held doesn't use up the day's allowance");
 ok((await api("/api/coverage/unassess", { code: WSX, id: assessed }, member)).status === 403 && (await api("/api/coverage/unassess", { code: WSX, id: assessed }, lead)).status === 200, "only a lead can remove an assessment");
 
 // ---- the screens
 await api("/api/coverage/assess", { code: WSX, source: courier.id, date: "2026-10-30", summary: "Front-page item on repairs", topic: "Potholes", relevance: "High", tone: "Critical", prominence: "Front page or lead", functions: ["cw"] }, lead);
 const page = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-async function open(token, hash) {
+async function open(token, hash, refuse = "") {
   const dom = new JSDOM(page, {
     url: `https://clarion.test/${hash}`, runScripts: "dangerously", pretendToBeVisual: true,
     beforeParse(w) {
       w.localStorage.setItem("clarion_token", token);
       w.scrollTo = () => {};
-      w.fetch = async (url, opts = {}) => { const res = await handleRequest(new Request(new URL(url, "https://clarion.test").href, opts)); const text = await res.text(); return { ok: res.ok, status: res.status, json: async () => JSON.parse(text) }; };
+      w.fetch = async (url, opts = {}) => { if (refuse && url === refuse) return { ok: false, status: 500, json: async () => ({ error: "Out of order" }) }; const res = await handleRequest(new Request(new URL(url, "https://clarion.test").href, opts)); const text = await res.text(); return { ok: res.ok, status: res.status, json: async () => JSON.parse(text) }; };
     },
   });
   await until(() => dom.window.document.querySelector(".main .page > *"), "the page to start");
@@ -132,6 +196,7 @@ async function open(token, hash) {
 const text = (el) => el.textContent.replace(/\s+/g, " ");
 const button = (d, name) => [...d.querySelectorAll("button")].find((b) => b.textContent === name);
 const see = (d, pattern) => until(() => pattern.test(text(d.querySelector(".main"))), `the page to show ${pattern}`);
+const typeIn = (w, el, value) => { el.value = value; el.dispatchEvent(new w.Event("input")); };
 let dom = await open(lead, `#said/${WSX}`), d = dom.window.document, w = dom.window;
 await see(d, /Latest assessments/);
 let main = text(d.querySelector(".main"));
@@ -147,13 +212,34 @@ field("Type").value = "Local Newsletter"; field("Type").dispatchEvent(new w.Even
 button(d, "Add this source").click();
 await see(d, /Moorside News/);
 ok(/Add reach/.test(text(d.querySelector(".main"))), "a source with no reach is asked for it");
+ok(/testhavencourier\.example/.test(text(d.querySelector(".main"))), "and the sources list shows which site is checked");
+field("Name").value = "Moorside Radio"; field("Name").dispatchEvent(new w.Event("input"));
+field("Type").value = "Local Radio"; field("Type").dispatchEvent(new w.Event("change"));
+ok(field("Reach is counted in").value === "listeners", "choosing radio counts its reach in listeners");
+field("Reach is counted in").value = "people"; field("Reach is counted in").dispatchEvent(new w.Event("change"));
+field("Type").value = "Local Television"; field("Type").dispatchEvent(new w.Event("change"));
+ok(field("Reach is counted in").value === "people", "until an officer chooses otherwise");
+typeIn(w, field("Name"), ""); field("Type").value = "Local Newspaper"; field("Type").dispatchEvent(new w.Event("change"));
+button(d, "Add reach").click();
+ok(field("Reach is counted in").value === "copies" && field("Name").value === "Moorside News", "adding a reach starts from the right unit, not a blank");
+button(d, "Cancel").click();
 w.location.hash = `#said/${WSX}/assess`;
 await see(d, /Record your assessment/);
 main = text(d.querySelector(".main"));
 ok(/Who this reaches/.test(main) && /Likely|Drives \(holds a licence\)/.test(main) && !/Likely to vote/.test(main), "assessing shows who the source reaches");
 ok(/× 0\.5/.test(main) && /Campaigning on this topic/.test(main) && /9,200/.test(main), "and what allowing for the source does");
 const check = button(d, "Check");
+const reachBox = () => [...d.querySelectorAll(".field")].find((x) => x.firstChild?.textContent === "Reach this time").querySelector("input");
+typeIn(w, reachBox(), "");
+await see(d, /18,400/);
+ok(/18,400/.test(text(d.querySelector(".g3"))), "left blank, a piece shows the source's reach, as it will be saved");
+typeIn(w, reachBox(), "18400");
 d.querySelector('input[aria-label="Keywords"]').value = "potholes";
+const ticked = [...d.querySelectorAll('.check input[type="checkbox"]')];
+ticked.forEach((x) => { x.checked = false; });
+check.click();
+await see(d, /Tick at least one/);
+ticked.forEach((x) => { x.checked = true; });
 check.click();
 await see(d, /Found/);
 ok(/keeps only yes or no and the date/.test(text(d.querySelector(".main"))) && /doesn't mean no coverage/.test(text(d.querySelector(".main"))), "a check explains what it can't show");
@@ -167,12 +253,27 @@ button(d, "Some").click(); button(d, "Critical").click(); button(d, "Inside page
 await see(d, /Usually critical, critical piece/);
 button(d, "Save and next").click();
 await see(d, /On to the next one/);
-ok(summary.value === "" && d.querySelectorAll('.plates button[aria-pressed="true"]').length === 0, "saving clears the form for the next piece");
+ok(summary.value === "" && d.querySelectorAll('.plates button[aria-pressed="true"]').length === 0 && reachBox().value === "18400", "saving clears the form for the next piece, with the source's reach back");
 const saved = await api("/api/coverage/get", { code: WSX }, lead);
-ok(saved.rows.length === 2 && saved.rows.some((x) => x.summary === "A second item" && x.functions.join() === "cw" && x.relevance === "Some"), "and the assessment is saved");
+ok(saved.rows.length === 2 && saved.rows.some((x) => x.summary === "A second item" && x.functions.join() === "cw" && x.relevance === "Some" && x.reach === 18400), "and the assessment is saved");
+ok(summary.maxLength < 0, "the one-line box doesn't quietly cut anything off");
+typeIn(w, summary, "An article pasted in. ".repeat(40));
+button(d, "Some").click(); button(d, "Critical").click(); button(d, "Inside page").click();
+button(d, "Save and next").click();
+await see(d, /Please don't paste the article/);
+ok((await api("/api/coverage/get", { code: WSX }, lead)).rows.length === 2, "so a pasted article is refused, not saved in part");
+typeIn(w, summary, "Clicked twice");
+typeIn(w, reachBox(), "99999");
+const again = button(d, "Save and next"), waiting = (await api("/api/coverage/get", { code: WSX }, lead)).rows.length;
+again.click(); again.click();
+await see(d, /On to the next one/);
+ok((await api("/api/coverage/get", { code: WSX }, lead)).rows.length === waiting + 1 && reachBox().value === "18400", "a double click saves once, and a reach typed for one piece doesn't carry over");
 dom = await open(member, `#said/${WSX}`); d = dom.window.document;
 await see(d, /Latest assessments/);
 ok(!button(d, "Search and assess") && !button(d, "Remove") && button(d, "Sources"), "a member can read but not assess");
+dom = await open(member, `#a/${WSX}`, "/api/coverage/summary"); d = dom.window.document;
+await see(d, /how people feel about their roads/);
+ok(!/Out of order/.test(text(d.querySelector(".main"))), "the Summary page still opens if the assessments can't be read");
 
 console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
 process.exit(failures ? 1 : 0);
