@@ -85,7 +85,7 @@ function fail(res: http.ServerResponse, e: unknown): void {
 }
 
 // Started directly (node dist/server.js); the tests import startServer instead
-if (process.argv[1] && /server\.(js|ts|mjs)$/.test(process.argv[1])) {
+if (process.argv[1] && /dist[\\/]server\.js$/.test(process.argv[1])) {
   const server = startServer(Number(process.env.PORT) || 8080);
   const stop = () => { console.log("[info] stopping"); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 10_000).unref(); };
   process.on("SIGTERM", stop);
