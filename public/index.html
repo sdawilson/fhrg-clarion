@@ -991,7 +991,9 @@ function setupPart(top, a, d) {
   }
   const suggestList = (j) => {
     const list = j.result || [];
-    add(help, h("h3", {}, "Suggested questions"), list.length ? list.map((q) => h("div", { class: "local" }, h("div", {}, q.text), q.options.length ? h("div", { class: "note" }, q.options.join(" / ")) : h("div", { class: "note" }, "A written answer"), q.why ? h("div", { class: "note" }, q.why) : null,
+    add(help, h("h3", {}, "Suggested from what's being reported"), h("p", { class: "note" }, "Each suggestion shows what prompted it and what the answer would tell you. You decide what goes in."), list.length ? list.map((q) => h("div", { class: "local" },
+      q.reason ? h("div", { class: "row" }, h("span", { class: "eyebrow" }, q.reason), q.topic ? h("strong", {}, q.topic) : null) : null, h("div", {}, q.text), q.options.length ? h("div", { class: "note" }, q.options.join(" / ")) : h("div", { class: "note" }, "A written answer"), q.why ? h("div", { class: "note" }, q.why) : null,
+      (q.basedOn || []).length ? h("div", { class: "row" }, q.basedOn.map((x) => h("span", { class: "pill" }, x))) : null,
       h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: (ev) => { if (locals.length >= d.maxLocal) return said(m2, `A survey can have up to ${d.maxLocal} local questions.`, "err"); locals.push({ text: q.text, kind: q.kind, options: q.options }); drawLocals(); ev.target.disabled = true; } }, "Add this question")))) : h("p", { class: "muted" }, "No suggestions came back."));
   };
   const wordingList = (j) => {

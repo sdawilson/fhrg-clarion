@@ -135,7 +135,7 @@ function anthropic(body) {
     return message([use(finish, assessment())]);
   }
   if (finish === "submit_review") return message([use(finish, review())]);
-  if (finish === "submit_questions") return message([use(finish, { questions: [{ text: "Have you noticed the work on the A27?", kind: "choice", options: ["Yes", "No", "Don't know"], why: "Shows how far the scheme has reached people." }, { text: "What would you change first?", kind: "text", options: [], why: "Priorities in people's own words." }] })]);
+  if (finish === "submit_questions") return message([use(finish, { questions: [{ text: "Have you noticed the work on the A27?", kind: "choice", options: ["Yes", "No", "Don't know"], why: "Shows how far the scheme has reached people.", reason: "Loud: has it reached people?", topic: "A27 works", based_on: ["Impact note", "Fault reports", "Press"] }, { text: "What would you change first?", kind: "text", options: [], why: "Priorities in people's own words." }] })]);
   if (finish === "submit_wording") return message([use(finish, { verdicts: [{ id: "l1", verdict: "leading", reason: "It assumes the roads are bad.", better: "How are the roads near you?" }, { id: "l9", verdict: "Fine", reason: "", better: "" }] })]);
   if (finish === "submit_forms") return message([use(finish, { forms: [
     { form_number: "71", site: "Market Square", answers: [{ id: "c1", answer: "fairly satisfied" }, { id: "c2", answer: "Worse" }, { id: "c3", answer: "Saw a big hole. Jane Smith told me." }, { id: "zz", answer: "not a question" }], unclear: ["c2"] },
