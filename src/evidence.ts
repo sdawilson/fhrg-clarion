@@ -49,7 +49,7 @@ export async function saveNotes(c: Config, code: string, notes: unknown, by: str
   });
 }
 
-export type Evidence = { figures: Figures; signals: Signals; surveys: SurveyResult[]; streets: StreetSummary[]; said?: Said[]; contacts?: Contacts[]; gaps: string[]; gathered: string };
+export type Evidence = { figures: Figures; signals: Signals; surveys: SurveyResult[]; streets: StreetSummary[]; said?: Said[]; contacts?: Contacts[]; publicJobs?: number; gaps: string[]; gathered: string };
 
 export function findGaps(p: Pilot, surveys: SurveyResult[], signals: Signals, figures: Figures, hasStreetSurvey = false, hasEnquiries = false): string[] {
   const gaps = [...p.needed.filter((n) => !(surveys.length && /survey/i.test(n)) && !(hasEnquiries && /fault report/i.test(n)))];
@@ -67,8 +67,8 @@ export async function loadEvidence(c: Config, p: Pilot, facts: Facts): Promise<E
   const surveys: SurveyResult[] = [...p.surveys, ...facts.surveys].sort((a, b) => b.year - a.year);
   // read fresh each time, because answers arrive through the day
   const streets = await streetSummaries(c, p.code).catch((e) => { console.log(`[warn] street surveys: ${(e as Error).message}`); return [] as StreetSummary[]; });
-  const { said, contacts } = await ownSignals(c, p).catch((e) => { console.log(`[warn] own signals: ${(e as Error).message}`); return { said: [] as Said[], contacts: [] as Contacts[] }; });
-  return { figures, signals, surveys, streets, said, contacts, gaps: findGaps(p, surveys, signals, figures, streets.length > 0, contacts.length > 0), gathered: new Date().toISOString() };
+  const { said, contacts, publicJobs } = await ownSignals(c, p).catch((e) => { console.log(`[warn] own signals: ${(e as Error).message}`); return { said: [] as Said[], contacts: [] as Contacts[], publicJobs: 0 }; });
+  return { figures, signals, surveys, streets, said, contacts, publicJobs, gaps: findGaps(p, surveys, signals, figures, streets.length > 0, contacts.length > 0), gathered: new Date().toISOString() };
 }
 
 // Enough to count as a kind of signal. One piece, or a few contacts, can't be half of a change in mood. A starting judgement
@@ -83,7 +83,7 @@ export function kindsHeld(e: Evidence): string[] {
   return [
     ...(e.surveys.length ? ["survey"] : []),
     ...(e.streets?.some((x) => x.current) ? ["street survey"] : []),
-    ...((s.fixMyStreet.ok && s.fixMyStreet.data?.reports) || contacts >= MIN_CONTACTS ? ["actions"] : []),
+    ...((s.fixMyStreet.ok && s.fixMyStreet.data?.reports) || contacts >= MIN_CONTACTS || (e.publicJobs ?? 0) >= MIN_CONTACTS ? ["actions"] : []),
     ...((s.petitions.ok && s.petitions.data?.some((p) => p.localShare > p.fairShare)) || (s.questions.ok && s.questions.data?.length) ? ["representatives"] : []),
     ...(pieces >= MIN_PIECES ? ["open talk"] : []),
   ];
@@ -102,6 +102,7 @@ export function briefing(p: Pilot, e: Evidence, facts: Facts): Record<string, un
     public_signals: { fix_my_street: e.signals.fixMyStreet.data, petitions: e.signals.petitions.data, mps_written_questions: e.signals.questions.data },
     ...(e.said?.length ? { assessed_press_and_media_last_four_weeks: e.said } : {}),
     ...(e.contacts?.length ? { enquiries_and_complaints_latest_month: e.contacts } : {}),
+    ...(e.publicJobs ? { maintenance_jobs_reported_by_the_public_last_four_weeks: e.publicJobs } : {}),
     missing_evidence: e.gaps,
     ...(facts.notes ? { officer_notes: facts.notes } : {}),
   };

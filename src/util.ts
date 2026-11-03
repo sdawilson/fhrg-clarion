@@ -117,6 +117,7 @@ const BRIEF_MS = 3000;
 const REST_MS = 5 * 60 * 1000;
 const underway = new Map<string, Promise<unknown>>();
 const resting = new Map<string, { until: number; value: unknown }>();
+export const tryAgainNow = (key: string) => { resting.delete(key); };
 export function briefly<T, F>(key: string, without: F, fn: () => Promise<T>, failed: (v: T) => boolean = () => false, ms = BRIEF_MS): Promise<T | F> {
   const rest = resting.get(key);
   if (rest && rest.until > Date.now()) return Promise.resolve(rest.value as T | F);

@@ -12,6 +12,7 @@ import type { Pilot } from "./pilots";
 import { sharedTopics } from "./surveyai";
 import { loadCensus, streetSummaries } from "./surveys";
 import { londonToday } from "./util";
+import { loadWorks, publicJobs } from "./works";
 
 const SURVEY_DAYS = 365; // a street survey counts as a signal for a year
 const ENQUIRY_MONTHS = 3; // enquiries older than this don't speak for now
@@ -58,13 +59,14 @@ export function compare(said: Said[], street: Street[], contacts: Contacts[]) {
 }
 
 /** The authority's own signals, as figures and topic counts only. An officer's words stay on their own page. */
-export async function ownSignals(c: Config, p: Pilot): Promise<{ said: Said[]; contacts: Contacts[] }> {
-  const [sources, assessments, held, census, topics] = await Promise.all([loadSources(c, p.code), loadAssessments(c, p.code), loadEnquiries(c, p.code), loadCensus(c, p.code), sharedTopics(c)]);
+export async function ownSignals(c: Config, p: Pilot): Promise<{ said: Said[]; contacts: Contacts[]; publicJobs: number }> {
+  const [sources, assessments, held, census, topics, works] = await Promise.all([loadSources(c, p.code), loadAssessments(c, p.code), loadEnquiries(c, p.code), loadCensus(c, p.code), sharedTopics(c), loadWorks(c, p.code)]);
   const view = enquiriesView(held, census?.adults ?? null, topics), today = londonToday();
   const oldest = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - ENQUIRY_MONTHS, 1)).toISOString().slice(0, 7);
   return {
     said: summariseCoverage(withWeights(assessments, sources), today).topics.map(({ topic, pieces, adjusted, critical, supportive }) => ({ topic, pieces, adjusted, critical, supportive })),
     contacts: view.ready && view.latest >= oldest ? view.rows.filter((x) => x.enquiries + x.complaints > 0).map(({ topic, enquiries, complaints, trend }) => ({ topic, enquiries, complaints, trend })) : [],
+    publicJobs: publicJobs(works, today),
   };
 }
 

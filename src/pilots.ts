@@ -19,6 +19,7 @@ export type Pilot = {
   fixMyStreetArea: string; // the area name in FixMyStreet's public feed address
   newsPage: string; // the council's news page; an officer can change it
   ownSites: string[]; // the only sites Clarion will read for its news
+  websiteName: string; // its name on the FHRG website, exactly. isMember matches loosely, which is too loose for reaching its records
   reportingRoute: string;
   constituencies: Constituency[];
   surveys: SurveyResult[];
@@ -38,7 +39,7 @@ export const PILOTS: Pilot[] = [
     code: "E10000019", name: "Lincolnshire", kind: "County council", region: "East Midlands", strategicAuthority: "Greater Lincolnshire Combined Authority",
     fundingRoute: "DfT's highways maintenance money is paid through the combined authority, not directly to the county council.",
     rating: { overall: "Amber", condition: "Amber", spend: "Amber", bestPractice: "Amber", published: "January 2026", url: RATINGS_URL },
-    fixMyStreetArea: "Lincolnshire", newsPage: "https://www.lincolnshire.gov.uk/news", ownSites: ["lincolnshire.gov.uk"], reportingRoute: "FixMyStreet is the council's own reporting system, so its public feed shows most reports.",
+    fixMyStreetArea: "Lincolnshire", websiteName: "Lincolnshire County Council", newsPage: "https://www.lincolnshire.gov.uk/news", ownSites: ["lincolnshire.gov.uk"], reportingRoute: "FixMyStreet is the council's own reporting system, so its public feed shows most reports.",
     constituencies: [
       { name: "Boston and Skegness" }, { name: "Gainsborough" }, { name: "Grantham and Bourne" }, { name: "Lincoln" }, { name: "Louth and Horncastle" },
       { name: "Rutland and Stamford", shared: "also covers Rutland and part of Leicestershire" }, { name: "Sleaford and North Hykeham" }, { name: "South Holland and The Deepings" },
@@ -51,7 +52,7 @@ export const PILOTS: Pilot[] = [
     code: "E08000034", name: "Kirklees", kind: "Metropolitan borough", region: "Yorkshire and The Humber", strategicAuthority: "West Yorkshire Combined Authority",
     fundingRoute: "DfT's highways maintenance money is paid through West Yorkshire Combined Authority's settlement, not directly to Kirklees.",
     rating: { overall: "Amber", condition: "Amber", spend: "Green", bestPractice: "Amber", published: "January 2026", url: RATINGS_URL },
-    fixMyStreetArea: "Kirklees", newsPage: "https://kirkleestogether.co.uk/", ownSites: ["kirklees.gov.uk", "kirkleestogether.co.uk"], reportingRoute: "Few reports reach FixMyStreet's public feed, so its counts aren't a good signal here. Clarion needs the council's own fault report counts.",
+    fixMyStreetArea: "Kirklees", websiteName: "Kirklees Council", newsPage: "https://kirkleestogether.co.uk/", ownSites: ["kirklees.gov.uk", "kirkleestogether.co.uk"], reportingRoute: "Few reports reach FixMyStreet's public feed, so its counts aren't a good signal here. Clarion needs the council's own fault report counts.",
     constituencies: [
       { name: "Colne Valley" }, { name: "Dewsbury and Batley" }, { name: "Huddersfield" }, { name: "Spen Valley" },
       { name: "Ossett and Denby Dale", shared: "also covers part of Wakefield" },
@@ -64,7 +65,7 @@ export const PILOTS: Pilot[] = [
     code: "E10000032", name: "West Sussex", kind: "County council", region: "South East", strategicAuthority: "",
     fundingRoute: "DfT pays West Sussex directly: £28.303m for 2026/27, of which £7.583m is incentive funding.",
     rating: { overall: "Amber", condition: "Amber", spend: "Green", bestPractice: "Amber", published: "January 2026", url: RATINGS_URL },
-    fixMyStreetArea: "West+Sussex", newsPage: "https://www.westsussex.gov.uk/news/", ownSites: ["westsussex.gov.uk"], reportingRoute: "The main reporting route is Love West Sussex, so FixMyStreet's public feed shows only part of the picture. Clarion needs the council's own fault report counts.",
+    fixMyStreetArea: "West+Sussex", websiteName: "West Sussex County Council", newsPage: "https://www.westsussex.gov.uk/news/", ownSites: ["westsussex.gov.uk"], reportingRoute: "The main reporting route is Love West Sussex, so FixMyStreet's public feed shows only part of the picture. Clarion needs the council's own fault report counts.",
     constituencies: [
       { name: "Arundel and South Downs" }, { name: "Bognor Regis and Littlehampton" }, { name: "Chichester" }, { name: "Crawley" },
       { name: "East Grinstead and Uckfield", shared: "also covers part of East Sussex" }, { name: "East Worthing and Shoreham" }, { name: "Horsham" }, { name: "Mid Sussex" }, { name: "Worthing West" },
