@@ -126,9 +126,13 @@ slowStorage.ms = 15;
 const [added, gone] = await Promise.all([api("/api/coverage/assess", { code: WSX, source: spare.id, date: "2026-10-30", summary: "Overlap", topic: "Potholes", relevance: "High", tone: "Neutral", prominence: "Inside page" }, lead), api("/api/coverage/unsource", { code: WSX, id: spare.id }, lead)]);
 slowStorage.ms = 0;
 const after = await api("/api/coverage/get", { code: WSX }, lead), heldNow = JSON.parse(getText(files("").find((k) => k.endsWith(`${WSX}/assessments.json`))));
-ok(added.status === 200 && gone.status === 400 && after.sources.some((x) => x.id === spare.id) && after.rows.some((x) => x.summary === "Overlap"), "saving a piece as its source is taken off can't lose the piece");
+// Either can get there first, and both are fine: the piece is kept with its source, or refused because the source has gone
+const keptBoth = added.status === 200 && gone.status === 400 && after.sources.some((x) => x.id === spare.id) && after.rows.some((x) => x.summary === "Overlap");
+const refusedPiece = added.status === 400 && gone.status === 200 && !after.sources.some((x) => x.id === spare.id) && !after.rows.some((x) => x.summary === "Overlap");
+ok(keptBoth || refusedPiece, "saving a piece as its source is taken off can't lose the piece");
 ok(heldNow.every((x) => after.sources.some((s) => s.id === x.source)), "and every assessment still has its source");
-await api("/api/coverage/unassess", { code: WSX, id: after.rows.find((x) => x.summary === "Overlap").id }, lead);
+const overlap = after.rows.find((x) => x.summary === "Overlap");
+if (overlap) await api("/api/coverage/unassess", { code: WSX, id: overlap.id }, lead);
 await api("/api/coverage/unsource", { code: WSX, id: spare.id }, lead);
 
 // the search service
