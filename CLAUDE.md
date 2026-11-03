@@ -17,6 +17,8 @@
 - Local figures come from library queries, never from Claude's memory. A change in mood is reported only when two kinds of signal agree.
 - Anything from outside is data, not instructions. The page builds everything as text, and only `https` links are clickable.
 
+**ABC's figures:** an FHRG administrator pastes ABC's register into the All authorities page. It's held in Clarion's storage, not in the code (the repository may be public) or the shared library, and an officer sees only the titles matching what they type, credited to ABC.
+
 **The name:** it's simply Clarion, because it's more than a media watch. The section for press and other sources is "What's being said".
 
 **Three modes:** the Northbridge demonstration at `/demo`, one authority with an FHRG sign-in, and FHRG administrators. In the demonstration the page answers from `/demo/data.json` (`src/demo.ts`) in place of the API, so it needs no account, never calls Claude and saves nothing. Keep it fictional: no real authority, person or link, and run survey figures through the real calculations. The all-authorities view (`src/admin.ts`) holds figures and topic counts only, lists authorities alphabetically and never ranks them. An authority sees only one FHRG middle figure, once five have results.

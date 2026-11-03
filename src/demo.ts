@@ -275,7 +275,7 @@ export function buildPack() {
       { text: "How would you rate the condition of the pavements near where you live?", kind: "choice", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], reason: "Quiet: is it wider than it looks?", topic: "Pavements", basedOn: ["Fault reports"], why: "Few press items, but fault reports are rising." },
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
-    coverage: demoCoverage(census), coverageCheck: DEMO_CHECK,
+    coverage: demoCoverage(census), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
     attention: { ready: true, topics, earlySigns: topics.filter((x) => x.early).map((x) => ({ topic: x.topic, concern: x.concern, attention: x.attention, why: x.topic === "Pavements" ? "Fault reports are up by a quarter." : "Named by people on the same few roads." })) },
   };
 }

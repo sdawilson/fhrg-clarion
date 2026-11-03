@@ -27,6 +27,9 @@
 //   POST /api/coverage/assess      {code, ...assessment}: record an assessment
 //   POST /api/coverage/unassess    {code, id}: remove an assessment
 //   POST /api/coverage/check       {code, keywords, sources, days}: does a keyword turn up for these publications?
+//   POST /api/abc/find             {code, q}: titles in ABC's register that match what's been typed
+//   POST /api/abc/status           ABC titles held (site administrators)
+//   POST /api/abc/save             {text}: ABC's table, pasted (site administrators)
 //   POST /api/attention            {code}: the comparison, which comes in a later stage
 //   POST /api/admin/overview       site administrators: the position across all authorities
 //   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: leads and admins
@@ -55,6 +58,7 @@
 //   POST /api/s/submit             {access, forms}
 
 import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member } from "./accounts";
+import { findTitles, saveTitles, titlesHeld } from "./abc";
 import { adminOverview, benchmark } from "./admin";
 import {
   FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
@@ -192,6 +196,14 @@ async function handleAdminOverview(c: Config, request: Request): Promise<Respons
   const me = await signedIn(c, request);
   if (!me.siteAdmin) throw new FriendlyError("Only FHRG site administrators can see this.", 403);
   return json(await adminOverview(c));
+}
+
+async function handleAbc(c: Config, request: Request, what: "find" | "status" | "save"): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, what === "save" ? 2000000 : 1000);
+  if (what === "find") { pilotFor(me, b.code); return json({ titles: await findTitles(c, b.q) }); }
+  if (!me.siteAdmin) throw new FriendlyError("Only FHRG site administrators can do this.", 403);
+  return json(what === "save" ? await saveTitles(c, me, b.text) : await titlesHeld(c));
 }
 
 async function handleReadingStart(c: Config, request: Request): Promise<Response> {
@@ -458,6 +470,9 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/facts/survey": return await handleFactsSurvey(c, request);
         case "/api/facts/notes": return await handleFactsNotes(c, request);
         case "/api/attention": return await handleNotYet(c, request);
+        case "/api/abc/find": return await handleAbc(c, request, "find");
+        case "/api/abc/status": return await handleAbc(c, request, "status");
+        case "/api/abc/save": return await handleAbc(c, request, "save");
         case "/api/coverage/get": return await handleCoverage(c, request);
         case "/api/coverage/summary": return await handleCoverageSummary(c, request);
         case "/api/coverage/source": { const { me, p, b } = await editor(c, request, 3000); return json({ source: await saveSource(c, me, p, b, await sharedTopics(c)) }); }

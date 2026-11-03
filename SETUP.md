@@ -109,6 +109,10 @@ From now on, every change Claude makes reaches the container by itself.
 - **The demonstration:** anyone can open `https://clarion.fhrg.co.uk/demo` without an account. It uses Northbridge, a fictional authority, saves nothing and doesn't use Claude. To turn it off, add a variable `DEMO` set to `off` and click **Update Container**.
 - **Street surveys:** Clarion's Census figures come from the data library's `census_age_sex_la` table, and proposed survey sites from its `neighbourhoods`, `towns` and `neighbourhood_shapes` tables, which need loading once on the App Builder's Admin page (Reference data). Until then an officer adds sites by hand. The map shows street pictures from OpenStreetMap in the officer's browser, which needs no setting. Each authority can ask Claude for help with surveys up to 100 times a day, and a scan counts as one. Scans aren't kept. What Claude read from a scan goes as soon as it reaches the person who asked, or within a day if nobody comes back for it.
 
+## ABC circulation figures
+
+When ABC publishes new figures, copy the rows from its register and paste them into **All authorities → ABC circulation figures**, then choose **Save the list**. This replaces the list held. Officers then see a matching title's figure as they add a source.
+
 ## If something isn't right
 
 | What you see | What to do |
