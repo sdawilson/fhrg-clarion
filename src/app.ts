@@ -58,11 +58,14 @@
 //   POST /api/setup/save           {code, part, service, list}: leads and admins
 //   POST /api/setup/weights        {...weights}: site administrators
 //   POST /api/briefing/officers    {code, service, month, word}: the officers' briefing, or as a Word file
-//   POST /api/campaign/get         {code, service}: issues and campaign events, held back by the election setting
+//   POST /api/campaign/get         {code, service}: issues, campaigns and actions, held back by the election setting. Money is for the authority's own members
 //   POST /api/issue/set            {code, service, topic, status, key, own}: confirm, set aside or change a key message
 //   POST /api/issue/drop           {code, service, topic}
-//   POST /api/campaign/item        {code, service, id, title, date, channel, topics, origin, survey}: add or change an event
-//   POST /api/campaign/remove      {code, id}
+//   POST /api/campaign/save        {code, service, id, name, topic, messages, start, end, ongoing, review, budget, budgets}
+//   POST /api/campaign/remove      {code, service, id}
+//   POST /api/action/save          {code, service, id, title, date, channel, topics, origin, survey, campaign, planned, actual}: add or change an action
+//   POST /api/action/remove        {code, id}
+//   POST /api/action/actual        {code, id, actual}: what an action already held cost, allowed under the election setting
 //   POST /api/note/effect          {code, id, effect, topic}: what an officer expects a note to do to mood
 //   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: leads and admins
 //   POST /api/facts/notes          {code, notes}: leads and admins
@@ -115,7 +118,7 @@ import { loadMapData } from "./mapdata";
 import { buildMap, readFilters } from "./mood";
 import { officersBriefing, officersWord } from "./officers";
 import { DEFAULT_SERVICE, SERVICES, loadSetup, loadWeights, saveSetup, saveWeights, serviceId, standardFunctions } from "./setup";
-import { dropIssue, held as heldCampaign, loadCampaign, removeItem, saveItem, setIssue, syncTell } from "./campaign";
+import { dropIssue, held as heldPlans, loadPlans, removeAction, removeCampaign, saveAction, saveCampaign, setActual, setIssue, syncTell, type Action, type Campaign } from "./campaign";
 import { canEdit, canSee, isMember, isOwnLead, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
 import { areaOf, outcodeOf, whereIs } from "./postcodes";
@@ -198,8 +201,8 @@ async function handleAuthority(c: Config, request: Request): Promise<Response> {
 
 // The shared topics, and any an authority has added as its own high-impact issue
 async function topicsHere(c: Config, code: string): Promise<string[]> {
-  const [shared, campaign] = await Promise.all([sharedTopics(c), loadCampaign(c, code)]);
-  return [...shared, ...campaign.issues.filter((x) => x.own && !shared.includes(x.topic)).map((x) => x.topic)];
+  const [shared, plans] = await Promise.all([sharedTopics(c), loadPlans(c, code)]);
+  return [...shared, ...plans.issues.filter((x) => x.own && !shared.includes(x.topic)).map((x) => x.topic)];
 }
 
 async function handleMap(c: Config, request: Request): Promise<Response> {
@@ -231,19 +234,27 @@ async function handleOfficers(c: Config, request: Request): Promise<Response> {
   const [readings, comparison] = await Promise.all([latestReadings(c, p.code), briefly(`comparison|${p.code}`, { ready: false as const }, () => loadComparison(c, p))]);
   const signs = comparison.ready ? comparison.earlySigns.map((x: { topic: string }) => x.topic) : [];
   const roads = map.service === DEFAULT_SERVICE, reading = roads ? readings.find((r) => r.status === "ready") ?? null : null;
-  const issues = data.campaign.issues.filter((x) => x.status === "confirmed" && x.service === map.service);
-  const briefing = officersBriefing(map, issues, reading, roads ? signs : [], data.today);
+  const issues = data.plans.issues.filter((x) => x.status === "confirmed" && x.service === map.service), campaigns = data.plans.campaigns.filter((x) => x.service === map.service);
+  const briefing = officersBriefing(map, issues, campaigns, reading, roads ? signs : [], data.today);
   return json(b.word === true ? officersWord(briefing) : { briefing });
 }
+
+// Money stays with the authority's own members, in every reply
+const campaignFor = (x: Campaign, money: boolean) => (money ? x : { ...x, budget: null, budgets: {} });
+const actionFor = (x: Action, money: boolean) => (money ? x : { ...x, planned: null, actual: null });
 
 async function handleCampaign(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
   const service = serviceId(b.service);
-  const [campaign, setup, election] = await Promise.all([loadCampaign(c, p.code), loadSetup(c, p.code), loadElection(c, p.code)]);
-  const now = heldCampaign(campaign, election.on);
-  return json({ issues: now.issues.filter((x) => x.service === service), items: now.items.filter((x) => x.service === service), channels: setup.channels, election: election.on, canEdit: canEdit(me, p) });
+  const [plans, setup, election] = await Promise.all([loadPlans(c, p.code), loadSetup(c, p.code), loadElection(c, p.code)]);
+  const now = heldPlans(plans, election.on), money = isMember(me, p), today = londonToday(), mine = (x: { service: string }) => x.service === service;
+  return json({
+    today, money, election: election.on, canEdit: canEdit(me, p), channels: setup.channels, issues: now.issues.filter(mine),
+    campaigns: now.campaigns.filter(mine).map((x) => campaignFor(x, money)), actions: now.actions.filter(mine).map((x) => actionFor(x, money)),
+    held: election.on && money && canEdit(me, p) ? plans.actions.filter((x) => mine(x) && x.date <= today).map(({ id, title, date, planned, actual }) => ({ id, title, date, planned, actual })) : [], // actions already held still need their costs
+  });
 }
 
 async function handleAttention(c: Config, request: Request): Promise<Response> {
@@ -707,8 +718,11 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/campaign/get": return await handleCampaign(c, request);
         case "/api/issue/set": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); return json({ issue: await setIssue(c, p.code, b, serviceId(b.service), me.name) }); }
         case "/api/issue/drop": { const { p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await dropIssue(c, p.code, b.topic, serviceId(b.service)); return json({ ok: true }); }
-        case "/api/campaign/item": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); return json({ item: await saveItem(c, p.code, b, serviceId(b.service), me.name) }); }
-        case "/api/campaign/remove": { const { p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await removeItem(c, p.code, b.id); return json({ ok: true }); }
+        case "/api/campaign/save": { const { me, p, b } = await editor(c, request, 6000); await notInElection(c, p.code); const money = isMember(me, p); return json({ campaign: campaignFor(await saveCampaign(c, p.code, b, serviceId(b.service), me.name, money), money) }); }
+        case "/api/campaign/remove": { const { me, p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await removeCampaign(c, p.code, b.id, isMember(me, p)); return json({ ok: true }); }
+        case "/api/action/save": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); const money = isMember(me, p); return json({ action: actionFor(await saveAction(c, p.code, b, serviceId(b.service), me.name, money), money) }); }
+        case "/api/action/remove": { const { me, p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await removeAction(c, p.code, b.id, isMember(me, p)); return json({ ok: true }); }
+        case "/api/action/actual": { const { me, p, b } = await editor(c, request, 1000); if (!isMember(me, p)) throw new FriendlyError("Costs stay with the authority, so only its own members can add them.", 403); const x = await setActual(c, p.code, b.id, b.actual); return json({ action: { id: x.id, actual: x.actual } }); }
         case "/api/note/effect": { const { p, b } = await editor(c, request, 1000); if (!validId(b.id)) throw new FriendlyError("That note wasn't found.", 404); return json({ note: await setEffect(c, p.code, b.id, b.effect, b.topic) }); }
         case "/api/enquiries/get": return await handleEnquiries(c, request);
         case "/api/enquiries/import": { const { me, p, b } = await editor(c, request, 3000000); return json({ import: await saveImport(c, me, p, b) }); }
