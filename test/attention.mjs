@@ -119,11 +119,12 @@ dom = await open(member, `#dash/${WSX}`, { "/api/attention": () => ({ ok: false,
 await see(d, /can't be worked out just now/);
 ok(!/Out of order/.test(text(d.querySelector(".main"))), "the Dashboard still opens if the comparison can't be read");
 const long = (topic, concern) => ({ topic, concern, attention: 1, early: false, action: "Keep watching", kinds: "" });
-const many = { ready: true, usesSurvey: true, usesEnquiries: false, earlySigns: [], topics: [long("A", 1), long("Potholes and road condition", 2), ...[3, 4, 5, 6, 7, 8].map((n) => long(`T${n}`, n))] };
+const many = { ready: true, usesSurvey: true, usesEnquiries: false, earlySigns: [], topics: [long("A", 1), long("Potholes and road condition", 2), ...[3, 4, 5, 6].map((n) => long(`T${n}`, n)), long("Flooding on the minor roads", 7), long("B", 8)] };
 dom = await open(member, `#attention/${WSX}`, { "/api/attention": () => ({ ok: true, status: 200, json: async () => many }) }); d = dom.window.document;
 await see(d, /What's driving it/);
-const name = [...d.querySelectorAll(".q-name")].find((x) => x.textContent.startsWith("Potholes"));
-ok(name.getAttribute("text-anchor") === "start", "a long topic name isn't turned back off the edge of the chart");
+const nameOf = (words) => [...d.querySelectorAll(".q-name")].find((x) => x.textContent.startsWith(words));
+ok(nameOf("Potholes").getAttribute("text-anchor") === "end", "a long topic name near the right edge sits to the left of its dot");
+ok(nameOf("Flooding").getAttribute("text-anchor") === "start", "and one near the left edge sits to the right, so neither is turned off the edge of the chart");
 await addUser(5, "lead@lincolnshire.gov.uk", "Lin Lead", 10, "lead");
 const lin = await login("lead@lincolnshire.gov.uk");
 dom = await open(lin, "#attention/E10000019"); d = dom.window.document;
