@@ -31,3 +31,5 @@ export { demoMap, demoOfficers } from "../src/demo";
 export { officersBriefing } from "../src/officers";
 export { publicSelf, publicSurvey, readTell, allQuestions, pointOf } from "../src/surveys";
 export { readChannels, readFunctions, readPartners, serviceId, standardFunctions } from "../src/setup";
+export { merged as mergedMonths } from "../src/mapdata";
+export { ownSignals } from "../src/comparison";

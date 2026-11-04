@@ -11,7 +11,7 @@
 
 import type { Member } from "./accounts";
 import type { Config } from "./config";
-import { FUNCTIONS, loadAssessments } from "./coverage";
+import { FUNCTIONS, loadAssessments, roadsOnly } from "./coverage";
 import { looksPersonal } from "./enquiries";
 import { canEdit, isOwnLead, sameAuthority, type Pilot } from "./pilots";
 import { latestReadings } from "./reading";
@@ -274,7 +274,7 @@ export function worksFigures(held: Held, pressByWeek: Tally, readings: { created
 }
 
 export async function worksPage(c: Config, me: Member, p: Pilot, held: Held, names: Record<string, string>) {
-  const [assessments, readings, streets] = await Promise.all([loadAssessments(c, p.code), latestReadings(c, p.code), streetSummaries(c, p.code).then(interviewedOnly)]);
+  const [assessments, readings, streets] = await Promise.all([loadAssessments(c, p.code).then(roadsOnly), latestReadings(c, p.code), streetSummaries(c, p.code).then(interviewedOnly)]);
   const press: Tally = {};
   for (const a of assessments) if (a.relevance !== "None") press[mondayOf(a.date)] = (press[mondayOf(a.date)] ?? 0) + 1;
   return {

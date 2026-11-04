@@ -177,14 +177,16 @@ table.heat { border-collapse: separate; border-spacing: 2px; font-size: 0.84rem;
 /* attention against concern */
 .quad-wrap { overflow-x: auto; }
 .quad { width: 100%; min-width: 540px; height: auto; display: block; }
-.q-zone { fill: color-mix(in srgb, var(--s2) 10%, transparent); }
+.q-red { stop-color: #e8b9ae; } .q-yellow { stop-color: #f5e6b0; } .q-green { stop-color: #bfdcbc; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .q-red { stop-color: #5e322c; } :root:not([data-theme="light"]) .q-yellow { stop-color: #524829; } :root:not([data-theme="light"]) .q-green { stop-color: #2a4a33; } }
+:root[data-theme="dark"] .q-red { stop-color: #5e322c; } :root[data-theme="dark"] .q-yellow { stop-color: #524829; } :root[data-theme="dark"] .q-green { stop-color: #2a4a33; }
 .q-line { stroke: var(--line-2); stroke-width: 1; }
 .q-dot { fill: var(--s1); stroke: var(--surface); stroke-width: 2; }
 .q-dot.early { fill: var(--s2); }
 .q-name { fill: var(--ink); font-size: 12.5px; }
 .q-name.early { font-weight: 700; }
 .q-zone-name { fill: var(--ink-2); font-size: 12.5px; font-weight: 700; }
-.q-zone-name.early { fill: var(--serious-ink); }
+.q-zone-name.early { fill: color-mix(in srgb, var(--serious-ink) 75%, var(--ink)); }
 .q-axis { fill: var(--ink-3); font-size: 12px; }
 .quiet-row { display: grid; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .quiet-row:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -306,6 +308,7 @@ tr.selected td { background: var(--surface-2); }
 .tbl-wrap.plain { border: 0; } .fn { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(110px, 2fr) 64px 76px 110px; gap: 10px; align-items: center; min-width: 560px; padding: 4px 0; font-size: 0.88rem; } .fn.head { color: var(--ink-3); font-size: 0.8rem; }
 .fn-bar { position: relative; display: block; height: 14px; } .fn-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); } .fn-fill { position: absolute; top: 0; bottom: 0; } .fn-fill.lean-down { background: var(--lean-down); border-radius: 4px 0 0 4px; } .fn-fill.lean-up { background: var(--lean-up); border-radius: 0 4px 4px 0; } .fn-fill.lean-mixed { background: var(--lean-mixed); }
 .heat-grid { display: grid; grid-template-columns: minmax(120px, 1.5fr) repeat(5, minmax(52px, 1fr)); gap: 6px; align-items: center; min-width: 410px; } .heat-h { font-size: 0.8rem; color: var(--ink-3); text-align: center; } .heat-l { font-weight: 700; font-size: 0.88rem; }
+.heat-c small { font-size: 0.68rem; font-weight: 600; } .mrow-raw { grid-column: 1 / -1; text-align: right; margin-top: -6px; }
 .heat-c { display: grid; place-items: center; min-height: 42px; border-radius: 8px; font-weight: 800; text-decoration: none; color: var(--ink); } .heat-c.lean-down { background: var(--lean-down); color: var(--lean-down-ink); } .heat-c.lean-up { background: var(--lean-up); color: var(--lean-up-ink); } .heat-c.lean-mixed { background: var(--lean-mixed); color: var(--lean-mixed-ink); } .heat-c.lean-none { background: var(--surface); color: var(--ink-2); border: 1.5px dashed var(--line-2); }
 .meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .mtr { display: grid; gap: 2px; font-size: 0.92rem; }
 .cal-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); } .cal { display: grid; min-width: 820px; }
@@ -499,7 +502,7 @@ const Demo = {
       case "/api/survey/qr": return P.qr;
       case "/api/survey/selfday": return { ok: true };
       case "/api/survey/list": return { ...P.surveyList, paused: Demo.election.on };
-      case "/api/survey/get": return { ...Demo.survey(b.id), sorting: null, dropped: 0, paused: Demo.election.on };
+      case "/api/survey/get": { const p = Demo.survey(b.id), on = Demo.election.on, asked = (q) => !/^k\d/.test(q.id); return { ...p, ...(on ? { survey: { ...p.survey, tell: [] }, questions: p.questions.filter(asked), results: { ...p.results, questions: p.results.questions.filter(asked) }, self: p.self ? { ...p.self, results: p.self.results ? { ...p.self.results, questions: p.self.results.questions.filter(asked) } : null } : null } : {}), sorting: null, dropped: 0, paused: on }; }
       case "/api/survey/save": return { survey: Demo.survey(b.id).survey };
       case "/api/survey/export": return P.exports[b.id];
       case "/api/survey/sites": return P.sites;
@@ -670,6 +673,7 @@ const mapAsk = (a) => ({ code: a.code, ...App.filters, bias: App.map.bias, view:
 // Every other page reads the authority's own position, whatever the map happens to be showing
 async function loadMap(a, own) {
   const d = await API.call("/api/map", own ? { code: a.code, ...App.filters } : mapAsk(a));
+  if (App.code !== a.code) return d; // an administrator has moved on to another authority
   App.filters.month = d.month; App.meta = d;
   fillPickers();
   return d;
@@ -694,12 +698,14 @@ function pickerRow() {
 const planOn = (d, id) => d.planned.filter((p) => p.nodes.includes(id));
 const NEXT_TUESDAY = () => { const x = new Date(`${App.meta?.today ?? new Date().toISOString().slice(0, 10)}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + ((9 - x.getUTCDay()) % 7 || 7)); return x.toISOString().slice(0, 10); };
 async function planFrom(a, topic, origin, survey = "") {
+  if (App.planning) return; // a double click makes one event
+  App.planning = true;
   try {
     const channels = (await API.call("/api/campaign/get", { code: a.code, service: App.filters.service })).channels;
     const { item } = await API.call("/api/campaign/item", { code: a.code, service: App.filters.service, title: topic ? `Response on ${topic.toLowerCase()}` : "New response", date: NEXT_TUESDAY(), channel: channels[0]?.id ?? "", topics: topic ? [topic] : [], origin, survey });
     App.cal.open = item.id; App.filters.topic = "all";
     if (location.hash === `#campaign/${a.code}`) route(); else location.hash = `#campaign/${a.code}`;
-  } catch (e) { toast(e.message); }
+  } catch (e) { toast(e.message); } finally { App.planning = false; }
 }
 
 // ---------------------------------------------------------------- the map
@@ -739,6 +745,7 @@ const trailOf = (tree, path) => { const out = [tree]; for (const id of path) { c
 const sourcesUnder = (node) => (node.source ? [{ id: node.source, label: node.label }] : node.kids.flatMap(sourcesUnder));
 
 async function mapView(page, a) {
+  App.map.form = null; App.map.formEl = null;
   const box = h("div", { class: "split" }, loading("Drawing the map…"));
   page.append(h("h1", { class: "screen-only" }, `${a.name}: the map of mood`), box);
   const view = App.viewId;
@@ -748,6 +755,7 @@ async function mapView(page, a) {
 
 function drawMap(box, a, d, ask) {
   const m = App.map, redraw = () => drawMap(box, a, d, ask), again = () => ask().catch((e) => toast(e.message));
+  m.redraw = redraw;
   if (!d.partners.some((p) => p.id === m.partner)) m.partner = d.partners[0]?.id ?? "";
   const adults = d.public.adults, allAdults = adults ? adults.reduce((x, y) => x + y, 0) : 0, everyone = (rates) => Math.round(rates.reduce((sum, n, i) => sum + n * adults[i], 0) / allAdults);
   if (!m.age || (m.age === "all" && !allAdults)) m.age = d.public.ages[3] ?? d.public.ages[0] ?? "";
@@ -794,10 +802,13 @@ function drawMap(box, a, d, ask) {
     stage = stageEl(nodes, hubEl(hub), false, 34, 30);
   }
   const main = h("div", { class: "col-main" }, seg, tools, crumbs, stage, mapLegend());
-  const panel = h("aside", { class: "panel", "aria-label": "Details" }, m.form === "mention" ? mentionForm(a, d, cur, redraw, again) : m.form === "source" ? sourceForm(a, d, cur, redraw, again) : isPublic ? publicPanel(a, d) : nodePanel(a, d, cur, root, rootName, redraw, go));
+  const formKey = m.form ? `${m.form}|${cur.id}` : "", redrawNow = () => m.redraw(); // a form keeps what's been typed while a filter changes behind it
+  if (m.formEl?.key !== formKey) m.formEl = formKey ? { key: formKey, el: (m.form === "mention" ? mentionForm : sourceForm)(a, d, cur, redrawNow, again) } : null;
+  const panel = h("aside", { class: "panel", "aria-label": "Details" }, m.formEl ? m.formEl.el : isPublic ? publicPanel(a, d) : nodePanel(a, d, cur, root, rootName, redraw, go));
   add(clear(box), main, panel);
 }
 
+const changeWords = (c) => (c > 0 ? `up ${fmt(c)}%` : c < 0 ? `down ${fmt(Math.abs(c))}%` : "no change");
 const moodFmt = (v) => (v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : "0");
 const moodName = (v) => (v <= -40 ? "very negative" : v <= -10 ? "negative" : v < 10 ? "mixed" : v < 40 ? "positive" : "very positive");
 const leanName = (v) => (v <= -10 ? "down" : v >= 10 ? "up" : "mixed");
@@ -853,7 +864,7 @@ function nodePanel(a, d, cur, root, rootName, redraw, go) {
     cur.notes.map((t) => h("p", { class: "note" }, t)),
     acts.length ? h("div", { class: "row" }, acts) : null,
     h("div", { class: "how" }, h("h3", {}, "How this is worked out"), h("p", { class: "note" }, cur.how), cur.has.length ? h("div", { class: "tags" }, cur.has.map((t) => h("span", { class: "tag" }, t))) : null),
-    cur.made.length ? [h("h3", {}, "What makes up this mood"), h("div", { class: "made" }, cur.made.map((r) => [h("span", {}, r.label), h("strong", {}, r.txt), h("span", { class: "note" }, r.share)]))] : null,
+    cur.made.length ? [h("h3", {}, "What makes up this mood"), h("div", { class: "made" }, cur.made.map((r) => [h("span", {}, r.label), h("strong", {}, r.txt), h("span", { class: "note" }, r.raw === null || r.raw === undefined ? r.share : `${r.share}, ${moodFmt(r.raw)} before weighting`)]))] : null,
     leftOut.map((q) => h("div", { class: "left-out" }, h("span", {}, `${q.n} ${q.n === 1 ? "piece" : "pieces"} about ${q.name} left out`), h("button", { class: "btn small ghost", type: "button", onclick: () => { m.include = [...m.include, q.id]; route(); } }, "Add them"))),
     planned.length ? [h("h3", {}, `Campaign events${topic ? ` on ${topic}` : ""}`), h("div", { class: "rows" }, planned.map((p) => h("a", { class: "row-link", href: `#campaign/${a.code}`, onclick: () => { App.cal.open = p.id; } }, h("strong", {}, p.title), h("span", { class: "note" }, `${p.channel}, ${fmtDate(p.date)}`))))] : null,
     cur.facts.length ? h("div", { class: "rows" }, cur.facts.map((f) => h("div", { class: "fact" }, h("strong", {}, f.title), h("span", { class: "note" }, f.sub), f.tags ? h("div", { class: "tags" }, f.tags.map((t) => h("span", { class: "tag" }, t))) : null,
@@ -921,18 +932,18 @@ function moodCard(a, d) {
   return h("section", { class: "card" }, h("h3", {}, "Mood"),
     h("div", { class: `mood-big lean-${t.mood.lean}` }, h("span", { class: "bub" }, t.mood.txt), h("div", {}, h("div", { class: "mood-w" }, cap(t.mood.word)), h("p", { class: "note" }, topic ? `${topic} only` : `${d.direction.word}. ${d.direction.note}`))),
     h("div", { class: "gauge" }, h("i", { class: "gauge-mid" }), v === null ? null : h("i", { class: "gauge-m", style: { left: `${(v + 100) / 2}%` } })), h("div", { class: "gauge-l" }, h("span", {}, "−100"), h("span", {}, "0"), h("span", {}, "+100")),
-    h("h4", {}, "What makes it up"), t.kids.map((k) => h("a", { class: "mrow", href: `#a/${a.code}`, title: k.mood.tip || null, onclick: () => { App.map.view = "authority"; App.map.path = [k.id]; } }, h("span", {}, k.label), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(k.mood.v)), h("strong", {}, k.mood.txt), h("span", { class: "note" }, k.pct === null ? "–" : `${k.pct}%`))));
+    h("h4", {}, "What makes it up"), t.kids.map((k) => h("a", { class: "mrow", href: `#a/${a.code}`, title: k.mood.tip || null, onclick: () => { App.map.view = "authority"; App.map.path = [k.id]; } }, h("span", {}, k.label), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(k.mood.v)), h("strong", {}, k.mood.txt), h("span", { class: "note" }, k.pct === null ? "–" : `${k.pct}%`), k.mood.raw === undefined || k.mood.raw === null ? null : h("span", { class: "note mrow-raw" }, `${moodFmt(k.mood.raw)} before weighting`))));
 }
 function functionCard(d) {
   const used = d.functions.filter((f) => f.pieces || f.survey !== null).sort((x, y) => (x.mood ?? 999) - (y.mood ?? 999)), empty = d.functions.filter((f) => !f.pieces && f.survey === null).map((f) => f.name);
-  return h("section", { class: "card" }, h("h3", {}, "By function"), h("div", { class: "tbl-wrap plain" }, h("div", { class: "fn head" }, h("span", {}, "Function"), h("span", {}, "Media mood, from −100 to +100"), h("span", {}, "Mood"), h("span", {}, "Before weighting"), h("span", {}, "Street survey")),
+  return h("section", { class: "card" }, h("h3", {}, "By function"), h("div", { class: "tbl-wrap plain" }, h("div", { class: "fn head" }, h("span", {}, "Function"), h("span", {}, "Media mood, from −100 to +100"), h("span", {}, "Mood"), h("span", {}, "Before weighting"), h("span", {}, "Street survey, indicative")),
     used.map((f) => h("div", { class: "fn" }, h("span", {}, f.name), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(f.mood)), h("span", {}, f.mood === null ? `${f.pieces} ${f.pieces === 1 ? "piece" : "pieces"}` : moodFmt(f.mood)), h("span", {}, f.raw === null || f.raw === undefined ? "–" : moodFmt(f.raw)), h("span", {}, f.survey === null ? "–" : `${fmt(f.survey)}% satisfied`)))),
     empty.length ? h("p", { class: "note" }, `Nothing yet for: ${empty.join(", ")}.`) : null);
 }
 function heatCard(a, d) {
   return h("section", { class: "card" }, h("h3", {}, "Month by month"), h("div", { class: "tbl-wrap plain" }, h("div", { class: "heat-grid" }, h("div", {}), d.heatMonths.map((m) => h("div", { class: "heat-h" }, m.id === d.today?.slice(0, 7) ? "So far" : m.label.split(" ")[0])),
-    d.heat.map((r) => [h("div", { class: "heat-l" }, r.label), r.cells.map((c) => h("a", { class: `heat-c lean-${c.lean}`, href: `#a/${a.code}`, title: c.tip || null, "aria-label": `${r.label}, ${c.month}: ${c.txt}`, onclick: () => { App.filters.month = c.month; App.map.view = "authority"; App.map.path = r.id === "root" ? [] : [r.id]; } }, c.txt))]))),
-    h("p", { class: "note" }, "A dashed box means too little to read. Click any box to open that part of the map for that month."));
+    d.heat.map((r) => [h("div", { class: "heat-l" }, r.label), r.cells.map((c) => h("a", { class: `heat-c lean-${c.lean}`, href: `#a/${a.code}`, title: c.tip || null, "aria-label": `${r.label}, ${c.month}: ${c.txt}${c.raw === null ? "" : `, ${moodFmt(c.raw)} before weighting`}`, onclick: () => { App.filters.month = c.month; App.map.view = "authority"; App.map.path = r.id === "root" ? [] : [r.id]; } }, c.txt, c.raw === null ? null : h("small", {}, `${moodFmt(c.raw)} before`)))]))),
+    h("p", { class: "note" }, "A dashed box means too little to read. Where a box has a second figure, that's before weighting. Click any box to open that part of the map for that month."));
 }
 async function dashView(page, a) {
   const body = h("div", { class: "stack gap" }, loading("Gathering the evidence…"));
@@ -944,7 +955,7 @@ async function dashView(page, a) {
   const month = map.months.find((x) => x.id === map.month)?.label, service = map.services.find((x) => x.id === map.service)?.label, roads = map.service === "highways";
   const head = pageHead(`${a.name}: ${service}, ${month}`, "The figures behind the map, and what they mean.");
   if (!roads) { add(clear(body), head, h("div", { class: "callout" }, `Nothing collected yet. ${service} needs its keywords and published figures first, and readings, enquiries and fault reports are about roads for now.`), h("div", { class: "grid g2 top-align" }, moodCard(a, map), heatCard(a, map)), functionCard(map)); return; }
-  const later = !map.street ? d.evidence.streets.find((x) => !x.selfOnly) ?? null : null, street = map.street ?? later, ofIt = later ? "Latest street survey" : "Street survey", kid = (id) => { const find = (n) => (n.id === id ? n : n.kids.map(find).find(Boolean)); return find(map.tree); }, enq = kid("enquiries")?.mood, faults = kid("faults")?.mood;
+  const later = !map.street ? d.evidence.streets.find((x) => !x.selfOnly) ?? null : null, street = map.street ?? later, ofIt = later ? "Latest street survey" : "Street survey", fig = map.figures;
   const middle = d.benchmark, survey = d.evidence.surveys[0];
   const tiles = [
     street ? stat("Satisfied with roads and pavements", `${fmt(street.satisfied)}%`, `${ofIt}, ${fmt(street.responses)} replies. Indicative`) : stat("Street survey", "None yet", "Plan one under Surveys"),
@@ -952,8 +963,8 @@ async function dashView(page, a) {
     stat("FHRG middle figure", middle?.satisfied === null || middle?.satisfied === undefined ? "Not yet" : `${fmt(middle.satisfied)}%`, middle ? "Satisfied, with no authority named" : "Needs five authorities with results"),
     survey ? stat(survey.measure, `${survey.score} / ${survey.outOf}`, survey.source) : stat("Residents' survey", "None held", "Add one in Published evidence"),
     stat("Media pieces", fmt(map.pieces.length), `${fmt(map.pieces.filter((p) => p.tone === "Critical").length)} critical, ${fmt(map.pieces.filter((p) => p.tone === "Supportive").length)} supportive`),
-    stat("Enquiries and complaints", enq?.v === null && enq?.unit !== "contacts" ? "–" : enq?.tip?.split(" this month")[0] || enq?.txt || "–", enq?.tip?.split(", ")[1] || "Counts only"),
-    stat("Fault reports", faults?.tip?.split(" reports")[0] || faults?.txt || "–", "A sample from FixMyStreet"),
+    stat("Enquiries and complaints", fig.enquiries === null ? "–" : fmt(fig.enquiries), fig.enquiryChange === null ? "Counts only" : `${changeWords(fig.enquiryChange)} on the three months before`),
+    stat("Fault reports", fig.faults === null ? "–" : fmt(fig.faults), fig.faultChange === null ? "A sample from FixMyStreet" : `A sample, ${changeWords(fig.faultChange)} on the month before`),
     stat("Adults in the authority", d.adults ? fmt(d.adults) : "–", "Census 2021, aged 16 and over"),
   ];
   add(clear(body), head, h("div", { class: "grid g2" }, moodCard(a, map), readingCard(a, d)), h("div", { class: "grid g4" }, tiles), h("div", { class: "grid g2" }, functionCard(map), heatCard(a, map)));
@@ -1056,7 +1067,14 @@ function listEditor(rows, fields, addWords, save, canEdit, tagOf) {
       canEdit ? h("button", { class: "btn small ghost", type: "button", "aria-label": `Take out ${r[fields[0][0]]}`, onclick: () => { rows.splice(i, 1); saveNow().then(draw); } }, "Take out") : null)));
     if (canEdit) { const name = h("input", { placeholder: addWords, "aria-label": addWords, maxlength: 80 }); box.append(h("div", { class: "er" }, name, h("button", { class: "btn small", type: "button", onclick: () => { if (!name.value.trim()) return; rows.push({ [fields[0][0]]: name.value }); saveNow().then(draw); } }, "Add"))); }
   };
-  const saveNow = async () => { clear(msg); try { const next = await save(rows); rows.splice(0, rows.length, ...next); } catch (e) { msg.append(failure(e)); } };
+  const saveNow = async () => {
+    clear(msg);
+    try {
+      const next = await save(rows.map((r) => ({ ...r })));
+      if (next.length === rows.length) rows.forEach((r, i) => Object.assign(r, next[i])); // the boxes on the page stay tied to these rows
+      else { rows.splice(0, rows.length, ...next); draw(); }
+    } catch (e) { msg.append(failure(e)); }
+  };
   draw();
   return [box, msg];
 }
@@ -1116,7 +1134,9 @@ function attentionCard(att) {
   const midX = (X(1) + X(n)) / 2, midY = (Y(1) + Y(n)) / 2;
   const label = (x, y, text, cls, anchor = "start") => svg("text", { x, y, class: cls, "text-anchor": anchor }, text);
   const chart = svg("svg", { class: "quad", viewBox: "0 0 620 430", role: "img", "aria-label": `Topics placed by public concern and media attention. Early signs: ${att.earlySigns.map((x) => x.topic).join(", ") || "none"}.` },
-    svg("rect", { class: "q-zone", x: 60, y: midY, width: midX - 60, height: 390 - midY }),
+    // Shaded out from the corner where people are concerned and nobody's reporting it. The labels and positions carry the meaning, so nothing rests on colour
+    svg("defs", {}, svg("radialGradient", { id: "q-heat", gradientUnits: "userSpaceOnUse", cx: 60, cy: 390, r: 644 }, svg("stop", { offset: "0%", class: "q-red" }), svg("stop", { offset: "50%", class: "q-yellow" }), svg("stop", { offset: "100%", class: "q-green" }))),
+    svg("rect", { class: "q-back", x: 60, y: 40, width: 540, height: 350, fill: "url(#q-heat)" }),
     svg("line", { class: "q-line", x1: 60, y1: midY, x2: 600, y2: midY }), svg("line", { class: "q-line", x1: midX, y1: 40, x2: midX, y2: 390 }), svg("line", { class: "q-line", x1: 60, y1: 390, x2: 600, y2: 390 }), svg("line", { class: "q-line", x1: 60, y1: 40, x2: 60, y2: 390 }),
     label(70, 58, "Felt and reported", "q-zone-name"), label(590, 58, "Loud, not widely felt", "q-zone-name", "end"), label(70, 380, "Early signs: felt, not reported", "q-zone-name early"), label(590, 380, "Quiet and minor", "q-zone-name", "end"));
   for (const t of att.topics) {
@@ -1214,7 +1234,7 @@ async function saidView(page, a, part) {
   page.append(pageHead(`${a.name}: sources and what's being said`, "Each source is graded for political leaning and friendliness to the authority."), body);
   const view = App.viewId;
   let d;
-  try { d = await API.call("/api/coverage/get", { code: a.code }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
+  try { d = await API.call("/api/coverage/get", { code: a.code, service: App.filters.service }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
   const parts = [["latest", "Latest"], ...(d.canEdit ? [["assess", "Search and assess"]] : []), ["sources", "Sources"], ["enquiries", "Enquiries and website"]];
   const on = parts.some((x) => x[0] === part) ? part : "sources";
@@ -2132,7 +2152,7 @@ function setupPart(top, a, d) {
   };
   const coreList = (list, from) => h("ol", { class: "q-list", start: from }, list.map((q) => h("li", {}, q.text, q.options.length ? h("span", { class: "note" }, ` (${q.options.join(" / ")})`) : null)));
   const qCard = h("section", { class: "card" }, h("h2", {}, "Questions"),
-    h("h3", {}, "Core questions"), h("p", { class: "note" }, "Every survey asks these, so results compare across time and between authorities."), coreList(d.core, 1));
+    h("h3", {}, "Core questions"), h("p", { class: "note" }, "Every survey asks these, so results compare across time and between authorities."), (s.service || "highways") === "highways" ? null : h("p", { class: "note" }, "These are written for roads. For this service, mood comes from your local questions, so ask at least one about satisfaction."), coreList(d.core, 1));
   if (draft) {
     drawLocals();
     qCard.append(h("h3", {}, "Local questions"), h("p", { class: "note" }, `Up to ${d.maxLocal}. Claude can suggest some from what you want to find out, and check the wording. You sign them off.`), editor, m2,
@@ -2289,7 +2309,7 @@ function planPart(top, a, d, save) {
   const st = { sure: s.plan.sure || 95, margin: s.plan.margin || 5, by: s.plan.by || "whole", perSite: s.plan.perSite || 30, perHour: s.plan.perHour || 8 };
   const target = h("input", { type: "number", min: 30, max: 5000, value: String(s.plan.target), oninput: () => { if (pack) drawSites(); drawSize(); } });
   const perHour = h("input", { type: "number", min: 1, max: 60, value: String(st.perHour), oninput: () => { st.perHour = Number(perHour.value) || 8; drawSize(); } });
-  let sites = s.plan.sites.map((x) => ({ ...x })), pack = null, map = null, picks = [], proposed = false, spotting = null;
+  let sites = s.plan.sites.map((x) => ({ ...x })), pack = null, map = null, picks = [], proposed = false, spotting = null, spotFor = null;
   const spotBox = h("div", { class: "stack" });
   const sameName = (x, y) => x.trim().toLowerCase() === y.trim().toLowerCase();
   const onMap = (x) => (pack && x.name ? pack.towns.findIndex((t) => sameName(t.name, x.name)) : -1);
@@ -2359,7 +2379,7 @@ function planPart(top, a, d, save) {
   // Sites from the map, then any added by hand. Their share and age targets follow the choice.
   function drawSites() {
     const row = (x, i, extra) => {
-      const bind = (key, label, placeholder) => { const el = h("input", { value: x[key] || "", maxlength: 80, placeholder, disabled: closed, oninput: () => { x[key] = el.value; } }); return h("label", { class: "field" }, label, el); };
+      const bind = (key, label, placeholder) => { const el = h("input", { value: x[key] || "", maxlength: 80, placeholder, disabled: closed, oninput: () => { x[key] = el.value; proposed = false; } }); return h("label", { class: "field" }, label, el); };
       return h("div", { class: "site-entry" }, extra ? h("div", { class: "site-head" }, extra) : bind("name", "Site", "Market Square, Horsham"), h("div", { class: "site-row" }, bind("when", extra ? "Exact spot and day" : "When", extra ? "The market square on a Saturday" : "Saturday 10am to 2pm"), bind("interviewers", "Interviewers", "2"), closed ? null : h("button", { class: "btn small ghost", type: "button", onclick: () => removeSite(i) }, "Remove")));
     };
     if (!pack) { add(clear(siteBox), ...sites.map((x, i) => row(x, i))); return; }
@@ -2391,8 +2411,7 @@ function planPart(top, a, d, save) {
       st.by === "sites" ? seg("People at each site", [[30, "30"], [40, "40"], [50, "50"]], st.perSite, (n) => { st.perSite = n; aimFromSites(); drawSites(); drawSize(); }) : null,
       proposed ? null : h("button", { class: "btn small", type: "button", onclick: () => { propose(picks.length || 4); aimFromSites(); drawSites(); drawSize(); } }, "Go back to the proposed sites"));
     if (spotting && !sites.includes(spotting)) spotting = null;
-    clear(spotBox);
-    if (spotting && spotting.lat !== undefined) spotBox.append(pinpoint(spotting, !!pack.tiles, closed, (typing) => { if (!typing) drawSites(); }));
+    if (spotFor !== spotting) { spotFor = spotting; add(clear(spotBox), spotting && spotting.lat !== undefined ? pinpoint(spotting, !!pack.tiles, closed, (typing) => { proposed = false; if (!typing) drawSites(); }) : null); }
     add(clear(mapBox), map.el, h("p", { class: "note" }, "Colours show which site stands for each neighbourhood: the nearest one. Click a town to add it, or a numbered site to take it off."), left.length ? h("div", { class: "row" }, h("span", { class: "note" }, "Other towns:"), left.map((o) => h("button", { class: "btn small", type: "button", onclick: () => toggle(o.t) }, o.town.name))) : null);
   }
 
@@ -2427,11 +2446,11 @@ function tellPart(top, a, d) {
   const preview = () => add(clear(phone), h("strong", {}, "Thank you for your time"), h("span", { class: "note" }, `Here's what ${s.collector} would like you to know.`), ...list.filter((m) => m.how.some((x) => x !== d.howTold[0] && x !== d.howTold[2])).map((m) => h("div", { class: "fact" }, h("strong", {}, m.topic || "General"), h("span", { class: "note" }, m.text))));
   function draw() {
     add(clear(box), ...list.map((m, i) => {
-      const text = h("textarea", { rows: 2, maxlength: 240, disabled: !canAct, "aria-label": `Message ${i + 1}`, oninput: () => { m.text = text.value; preview(); } });
+      const text = h("textarea", { rows: 3, disabled: !canAct, "aria-label": `Message ${i + 1}`, oninput: () => { m.text = text.value; preview(); } });
       text.value = m.text;
       const aware = h("input", { type: "checkbox", checked: m.aware, disabled: !canAct, onchange: () => { m.aware = aware.checked; } });
       return h("div", { class: "local field" }, h("div", { class: "row spread" }, h("strong", {}, m.topic || "General"), canAct ? h("button", { class: "btn small ghost", type: "button", "aria-label": `Take out message ${i + 1}`, onclick: () => { list.splice(i, 1); draw(); } }, "Take out") : null),
-        h("label", { class: "field" }, "The message", text),
+        h("label", { class: "field" }, "The message", text, h("span", { class: "hint" }, "Up to 240 letters, so people read all of it.")),
         h("div", { class: "field" }, "How it reaches people", chipRow(d.howTold.map((x) => [x, x]), (x) => m.how.includes(x), (x) => { if (!canAct) return; m.how = m.how.includes(x) ? m.how.filter((y) => y !== x) : [...m.how, x]; draw(); })),
         h("label", { class: "check" }, aware, "Also ask \"Did you know?\" before telling them, to measure whether the message is landing"));
     }));
@@ -2711,7 +2730,7 @@ function resultsPart(top, a, d) {
   if (told.length) top.append(h("section", { class: "card" }, h("h2", {}, "What people were told"), h("div", { class: "rows" }, told.map((m) => {
     const q = r.questions.find((x) => x.id === `k${m.id}`), knew = q && !q.held ? q.options.find((o) => o.label === "Yes")?.pct : undefined;
     return h("div", { class: "fact" }, h("strong", {}, m.topic || "General"), h("span", { class: "note" }, m.text), h("span", { class: "note" }, m.how.join(", ")), q ? h("span", {}, knew === undefined ? `Did you know? ${fmt(q.answered)} replies so far. Results appear at 30.` : `${fmt(knew)}% already knew, before being told. ${fmt(q.answered)} replies.`) : null);
-  })), d.paused ? null : null));
+  }))));
   top.append(answersOf(r, h("section", { class: "card" }, h("div", { class: "row spread" }, h("h2", {}, "Answers"), canPlan ? planIt("", s.title) : null)), canPlan ? (q) => { const topic = d.questions.find((x) => x.id === q.id)?.topic; return topic ? planIt(topic, `${q.text.slice(0, 80)}`) : null; } : null));
   if (d.self) top.append(selfResults(d, answersOf));
   const shown = r.groups.filter((g) => g.answered >= 30);

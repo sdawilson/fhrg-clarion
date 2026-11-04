@@ -385,6 +385,9 @@ async function searchSite(c: Config, domain: string, keyword: string, from: stri
   return { found: hits.length > 0, date: dates.at(-1) ?? "" };
 }
 
+/** Pieces about roads, which are what every figure about roads stands on. A piece on another service shows only under that service. */
+export const roadsOnly = <T extends { service?: string }>(list: T[]) => list.filter((a) => (a.service ?? DEFAULT_SERVICE) === DEFAULT_SERVICE);
+
 // A petition or an MP's question has no direction of its own, so an officer rates it. Only the rating is kept here.
 const ratingsPath = (c: Config, code: string) => `${c.root}authorities/${code}/ratings.json`;
 export const loadRatings = (c: Config, code: string) => storageJson<Record<string, string>>(c, ratingsPath(c, code), {});

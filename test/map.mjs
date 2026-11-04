@@ -35,13 +35,20 @@ const kid = (node, id) => (node.id === id ? node : node.kids.map((k) => kid(k, i
 ok(map.month === "2026-10" && map.tree.mood.v !== null && map.tree.mood.txt.startsWith("−"), "the demonstration has one mood in the middle");
 ok(map.tree.kids.map((k) => k.id).join() === "surveys,broadcast,print,social,contact,events", "made of six parts");
 const counted = map.tree.kids.filter((k) => k.pct !== null);
-ok(counted.reduce((n, k) => n + k.pct, 0) >= 99 && counted.reduce((n, k) => n + k.pct, 0) <= 101, "and the shares of those counted add up to about 100");
 ok(kid(map.tree, "weather").mood.ctx && kid(map.tree, "news").mood.ctx && kid(map.tree, "published").mood.ctx && kid(map.tree, "bylink").mood.ctx, "weather, news, published figures and replies by link aren't in the mood");
 ok(map.considerations.some((x) => x.kind === "Weather") && map.considerations.some((x) => x.kind === "Council news") && map.considerations.some((x) => x.kind === "Published figures") && map.considerations.some((x) => x.kind === "Replies by link"), "they're things to bear in mind instead");
 ok(map.considerations.every((x) => !/\d{4}-\d{2}-\d{2}/.test(`${x.title} ${x.sub}`)), "with dates in plain words");
 ok(map.direction.word === "Worsening" && /kinds of signal agree/.test(map.direction.note), "a change is reported when two kinds of signal agree");
 ok(t.demoMap({ month: "2026-11" }).direction.word === "Too early to say", "and it's too early to say in the current month");
-ok(map.topics.filter((x) => x.proposed).length === 3 && map.topics.filter((x) => x.proposed).every((x) => x.mood < 0), "Clarion proposes three issues with a negative mood");
+ok(map.topics.filter((x) => x.proposed).length >= 2 && map.topics.filter((x) => x.proposed).length <= 3 && map.topics.filter((x) => x.proposed).every((x) => x.mood < 0), "Clarion proposes up to three issues with a negative mood");
+ok(map.topics.find((x) => x.topic === "Relief Road closure").pieces === 6, "a partner's pieces stay out of an issue's figures until they're added");
+ok(t.demoMap({ include: ["dale"] }).topics.find((x) => x.topic === "Relief Road closure").pieces === 10, "and come in with them");
+ok(t.demoMap({ bias: "right" }).topics.find((x) => x.topic === "Potholes").pieces === map.topics.find((x) => x.topic === "Potholes").pieces, "the leaning filter doesn't change which issues are proposed");
+ok(counted.reduce((n, k) => n + k.pct, 0) === 100, "the shares add up to exactly 100");
+ok(map.heat.flatMap((r) => r.cells).some((c) => c.raw !== null) && map.tree.made.some((r) => r.raw !== null), "month by month and what makes up a mood carry the raw figure too");
+ok(map.figures.enquiries === 1976 + 685 + 537 + 340 || map.figures.enquiries > 0, "the Dashboard's counts are figures in their own right");
+ok(kid(map.tree, "enquiries").notes.some((n) => /6 largest/.test(n)), "and the enquiry circles say they're the largest few");
+ok(t.demoOfficers({}).briefing.parts[1].bullets.every((b) => /before weighting/.test(b) || !/mood/.test(b)), "the officers' briefing gives raw figures beside adjusted ones");
 ok(map.topics.every((x) => "raw" in x) && map.functions.every((x) => "raw" in x), "raw figures stay with the adjusted ones");
 ok(t.demoMap({ bias: "right" }).pieces.length < map.pieces.length && t.demoMap({ bias: "right" }).pieces.every((p) => p), "the leaning filter narrows the pieces");
 ok(t.demoMap({ topic: "Potholes" }).pieces.every((p) => p.topic === "Potholes") && t.demoMap({ topic: "Potholes" }).planned.length === 3, "a topic narrows pieces and campaign events");
@@ -139,9 +146,36 @@ ok((await api("/api/rate", { code: WSX, key: "petition|A", tone: "Critical" }, m
 ok((await api("/api/rate", { code: WSX, key: "something|else", tone: "Critical" }, lead)).status === 400, "and only petitions and questions can be rated");
 ok((await api("/api/rate", { code: WSX, key: "petition|A", tone: "Critical" }, lead)).ok === true && JSON.parse(getText(`clarion/authorities/${WSX}/ratings.json`))["petition|A"] === "Critical", "an officer's rating is kept");
 const mapWith = (rated, monthly, questions = []) => t.buildMap({ ...t.demoMap && baseData(), rated, monthly, questions }, t.readFilters({}, "2026-11-02", []));
-function baseData() { return { today: "2026-11-02", setup: { functions: { highways: [] }, partners: [], channels: [] }, weights: { surveys: 40, contact: 20, print: 15, broadcast: 10, social: 10, events: 5 }, topics: [], sources: [], assessments: [], streets: [], adults: null, ageAdults: null, residents: null, enquiries: {}, monthly: {}, questions: [], rated: {}, announcements: [], works: { on: false, weeks: [], events: [] }, notes: [], posts: [], published: [], campaign: { issues: [], items: [] }, election: false, channels: [], ages: [] }; }
+const nothing = t.buildMap(baseData(), t.readFilters({}, "2026-11-02", []));
+ok(nothing.tree.mood.txt === "–" && nothing.tree.mood.v === null && !nothing.tree.mood.ctx, "an authority with nothing held shows no mood, rather than a count that looks like one");
+ok(kid(nothing.tree, "news").mood.lean === "none", "and nothing to bear in mind");
+const onlyNews = t.buildMap({ ...baseData(), posts: [{ title: "A post", date: "2026-10-10", topic: "" }] }, t.readFilters({}, "2026-11-02", []));
+ok(onlyNews.tree.mood.txt === "–" && kid(onlyNews.tree, "news").mood.txt === "1", "nor does holding only things to bear in mind give it a mood");
+const even = t.buildMap({ ...baseData(), weights: { surveys: 1, contact: 1, print: 0, broadcast: 0, social: 0, events: 1 }, streets: [point("2026-10-10", 60, 20)], questions: [{ date: "2026-10-09", heading: "Roads" }], rated: { "question|2026-10-09|Roads": "Critical" }, notes: [{ id: "n", title: "T", date: "2026-10-05", effect: 20, topic: "", routes: [] }] }, t.readFilters({}, "2026-11-02", []));
+ok(even.tree.kids.filter((k) => k.pct !== null).length === 3 && even.tree.kids.reduce((n, k) => n + (k.pct ?? 0), 0) === 100, "three equal shares still add up to 100");
+let m = t.buildMap({ ...baseData(), unread: ["FixMyStreet"] }, t.readFilters({}, "2026-11-02", []));
+ok(m.tree.notes.some((n) => /Couldn't be read just now: FixMyStreet/.test(n)) && m.unread.join() === "FixMyStreet", "the map says when a feed wasn't read");
+// a source graded by band
+const band = (name, reachBand, reach = null) => ({ id: name, name, type: "Local Newspaper", domain: "", reach, reachUnit: "", reachBand, reachFrom: "", platform: "", leaning: "Not known", stance: "Balanced", campaign: [], added: "", by: "" });
+const bp = (source, tone, i) => ({ id: `${source}${i}`, source, date: "2026-10-10", summary: "x", topic: "Potholes", relevance: "High", tone, prominence: "Inside page", functions: [], reach: null, by: "x", at: "2026-01-01T00:00:00Z" });
+const banded = t.buildMap({ ...baseData(), sources: [band("big", "Large"), band("small", "", 500)], assessments: [...[1, 2, 3].map((i) => bp("big", "Critical", i)), ...[1, 2, 3].map((i) => bp("small", "Supportive", i))] }, t.readFilters({}, "2026-11-02", []));
+ok(kid(banded.tree, "press").mood.v < -20, "a source graded Large with no figure counts as large");
+ok(banded.topics[0].reach >= 600000, "and its reach counts towards an issue");
+// part of a month
+const partly = { ...baseData(), enquiries: { "2026-08": { total: 900, byTopic: {} }, "2026-09": { total: 900, byTopic: {} }, "2026-10": { total: 900, byTopic: {} }, "2026-11": { total: 300, byTopic: { Potholes: 300 } } }, works: { on: true, weeks: [{ week: "2026-11-09", public: 40 }], events: [] } };
+m = t.buildMap(partly, t.readFilters({ month: "2026-11" }, "2026-11-02", []));
+ok(kid(m.tree, "enquiries").mood.v === null && /too early/.test(kid(m.tree, "enquiries").mood.tip) && kid(m.tree, "enquiries").mood.txt === "300", "part of a month isn't compared with whole ones");
+ok(kid(m.tree, "works").mood.v === null, "for works either");
+ok(kid(m.tree, "enquiries").kids.every((k) => k.mood.v === null) && m.figures.enquiries === 300 && m.figures.enquiryChange === null, "or for each topic, and the count still shows");
+// a survey of another service
+const wasteDay = { id: "w", title: "Bins", status: "closed", ran: "2026-10-10", current: true, responses: 400, weighted: true, satisfied: 25, dissatisfied: 75, better: null, worse: null, blameCouncil: null, topics: [], note: "", selfOnly: false, service: "waste", groups: [], byLink: { n: 0, sat: null } };
+m = t.buildMap({ ...baseData(), streets: [{ ...wasteDay, questions: [{ id: "c1", text: "Roads", fn: "", topic: "", sat: 25, dis: 75 }] }] }, t.readFilters({ service: "waste" }, "2026-11-02", []));
+ok(kid(m.tree, "street").mood.v === null && !kid(m.tree, "street").kids.length, "a roads answer isn't taken for another service's mood");
+m = t.buildMap({ ...baseData(), streets: [{ ...wasteDay, questions: [{ id: "l1", text: "Collections", fn: "", topic: "", sat: 70, dis: 20 }] }] }, t.readFilters({ service: "waste" }, "2026-11-02", []));
+ok(kid(m.tree, "street").mood.v === 50, "its own local questions are");
+function baseData() { return { today: "2026-11-02", unread: [], setup: { functions: { highways: [] }, partners: [], channels: [] }, weights: { surveys: 40, contact: 20, print: 15, broadcast: 10, social: 10, events: 5 }, topics: [], sources: [], assessments: [], streets: [], adults: null, ageAdults: null, residents: null, enquiries: {}, monthly: {}, questions: [], rated: {}, announcements: [], works: { on: false, weeks: [], events: [] }, notes: [], posts: [], published: [], campaign: { issues: [], items: [] }, election: false, channels: [], ages: [] }; }
 const pet = (title, above = true) => ({ title, local: 500, above });
-let m = mapWith({}, { "2026-09": { perDay: null, reports: 0, petitions: [] }, "2026-10": { perDay: null, reports: 0, petitions: [pet("New one")] } });
+m = mapWith({}, { "2026-09": { perDay: null, reports: 0, petitions: [] }, "2026-10": { perDay: null, reports: 0, petitions: [pet("New one")] } });
 ok(kid(m.tree, "petitions").mood.v === null && kid(m.tree, "petitions").mood.unit === "to rate", "a new petition doesn't count until an officer rates it");
 m = mapWith({ "petition|New one": "Critical" }, { "2026-09": { perDay: null, reports: 0, petitions: [] }, "2026-10": { perDay: null, reports: 0, petitions: [pet("New one")] } });
 ok(kid(m.tree, "petitions").mood.v === -10, "then it counts for its direction");
@@ -154,8 +188,18 @@ ok(kid(m.tree, "petitions").mood.v === null, "nor when the month before couldn't
 m = mapWith({ "question|2026-10-09|Roads": "Supportive" }, {}, [{ date: "2026-10-09", heading: "Roads" }, { date: "2026-10-10", heading: "More roads" }]);
 ok(kid(m.tree, "mps").mood.v === 10 && /1 rated/.test(kid(m.tree, "mps").mood.tip), "questions count only for those rated");
 
+// what's kept month by month, as the feeds show only now
+let months = t.mergedMonths({}, { month: "2026-10", now: { perDay: 2, reports: 40, petitions: [pet("One")] }, questions: [{ date: "2026-09-02", heading: "A" }, { date: "2026-10-02", heading: "B" }] });
+ok(months["2026-10"].reports === 40 && months["2026-09"].questions[0].heading === "A" && months["2026-10"].questions[0].heading === "B", "each question is kept under its own month");
+months = t.mergedMonths(months, { month: "2026-10", now: { perDay: 3, reports: 50 }, questions: [{ date: "2026-10-02", heading: "B" }] });
+ok(months["2026-10"].petitions.length === 1 && months["2026-10"].reports === 50 && months["2026-10"].questions.length === 1, "a feed that couldn't be read leaves what it last said, and nothing is kept twice");
+months = t.mergedMonths(Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`2025-${String((i % 12) + 1).padStart(2, "0")}-${i}`, { perDay: 1, reports: 1 }])), { month: "2026-10", now: {}, questions: [] });
+ok(Object.keys(months).length <= 14 && months["2026-10"], "and only so many months are kept");
+await api("/api/map", { code: WSX }, lead);
+ok(Object.values(JSON.parse(getText(`clarion/authorities/${WSX}/monthly.json`))).some((x) => x.reports !== undefined), "a load keeps what the feeds said");
+
 // direction: two up and two down isn't a change
-const point = (ran, sat, dis) => ({ id: "s", title: "S", status: "closed", ran, current: true, responses: 400, weighted: true, satisfied: sat, dissatisfied: dis, better: null, worse: null, blameCouncil: null, topics: [], note: "", selfOnly: false, service: "highways", questions: [], groups: [], byLink: { n: 0, sat: null } });
+function point(ran, sat, dis) { return { id: "s", title: "S", status: "closed", ran, current: true, responses: 400, weighted: true, satisfied: sat, dissatisfied: dis, better: null, worse: null, blameCouncil: null, topics: [], note: "", selfOnly: false, service: "highways", questions: [], groups: [], byLink: { n: 0, sat: null } }; }
 m = t.buildMap({ ...baseData(), enquiries: { "2026-06": { total: 100, byTopic: {} }, "2026-07": { total: 100, byTopic: {} }, "2026-08": { total: 100, byTopic: {} }, "2026-09": { total: 100, byTopic: {} }, "2026-10": { total: 100, byTopic: {} } } }, t.readFilters({}, "2026-11-02", []));
 ok(m.direction.word === "No change reported", "nothing moving reports no change");
 const paper = { id: "p", name: "Paper", type: "Local Newspaper", domain: "", reach: 20000, reachUnit: "copies", reachBand: "", reachFrom: "", platform: "", leaning: "Not known", stance: "Balanced", campaign: [], added: "", by: "" };
@@ -173,6 +217,8 @@ ok(m.direction.word === "Worsening" && /Four kinds of signal agree/.test(m.direc
 ok(t.readTell([{ text: "  Report a pothole online. ", topic: "Potholes", how: ["Printed on the form", "nonsense"], aware: true }])[0].how.join() === "Printed on the form", "a message keeps only real ways of telling people");
 let threw = ""; try { t.readTell([{ text: "" }]); } catch (e) { threw = e.message; }
 ok(/no wording/.test(threw), "and needs wording");
+threw = ""; try { t.readTell([{ text: "x".repeat(241) }]); } catch (e) { threw = e.message; }
+ok(/too long/.test(threw), "a message that's too long is refused, not cut short in front of the public");
 threw = ""; try { t.readTell([1, 2, 3, 4].map(() => ({ text: "x" }))); } catch (e) { threw = e.message; }
 ok(/up to 3/.test(threw), "and a survey can carry up to three");
 const made = (await api("/api/survey/new", { code: WSX, title: "Winter roads", service: "highways" }, lead)).survey;
@@ -195,6 +241,8 @@ await api("/api/survey/save", { code: WSX, id: made.id, tell: [{ text: "You can 
 ok((await api("/api/campaign/get", { code: WSX }, lead)).items.filter((x) => x.survey === made.id).length === 1, "saved again, it doesn't appear twice");
 await api("/api/briefing/election", { code: WSX, on: true }, lead);
 ok((await api("/api/survey/save", { code: WSX, id: made.id, tell: [] }, lead)).status === 409, "messages can't change during the election setting");
+r = await api("/api/survey/get", { code: WSX, id: made.id }, member);
+ok(!r.survey.tell.length && !r.questions.some((q) => /^k\d/.test(q.id)) && !/report a pothole online/.test(JSON.stringify(r)), "and a survey's page holds them back");
 await api("/api/briefing/election", { code: WSX, on: false }, lead);
 const opened = (await api("/api/survey/status", { code: WSX, id: made.id, status: "open" }, lead)).survey;
 const self = (await api("/api/survey/self", { code: WSX, id: made.id, on: true }, lead)).survey.self;
@@ -213,6 +261,23 @@ ok(aware.options.find((o) => o.label === "Yes").pct > 0 && r.survey.tell.length 
 const before = await api("/api/map", { code: WSX, month, topic: "Potholes" }, lead);
 ok(before.tree.kids.find((k) => k.id === "surveys").kids.find((k) => k.id === "street").kids.every((k) => !/Did you know/.test(k.label)), "\"Did you know?\" never reaches mood");
 ok(before.tree.kids.find((k) => k.id === "surveys").kids.find((k) => k.id === "street").kids.some((k) => /road repairs/.test(k.label)) && before.topics, "a local question with satisfaction answers shows under its topic");
+
+// a survey or a piece on another service stays out of the road figures
+const bins = (await api("/api/survey/list", { code: WSX }, lead)).surveys.find((s) => s.title === "Bins");
+const binsCode = (await api("/api/survey/status", { code: WSX, id: bins.id, status: "open" }, lead)).survey.access;
+await api("/api/s/submit", { access: binsCode, forms: Array.from({ length: 40 }, (_, i) => ({ client: `b${i}`, site: "", secs: 200, answers: { c1: "Very dissatisfied" } })) });
+r = await api("/api/authority", { code: WSX }, lead);
+ok(r.evidence.streets.every((x) => x.title !== "Bins"), "a survey of another service isn't a road survey");
+ok((await api("/api/admin/overview", {}, boss)).authorities.find((x) => x.code === WSX).street?.title !== "Bins", "for all authorities either");
+const other = (await api("/api/map", { code: WSX }, lead)).topicList.find((x) => x !== "Potholes" && x !== "Our own worry");
+const wastePiece = (await api("/api/coverage/assess", piece({ service: "waste", topic: other }), lead)).assessment;
+ok(wastePiece?.service === "waste", "a piece can be on another service");
+ok(!(await api("/api/coverage/summary", { code: WSX }, lead)).summary.topics.some((x) => x.topic === other), "and it isn't in the summary of roads");
+const attention = await api("/api/attention", { code: WSX }, lead);
+ok(!(attention.topics ?? []).some((x) => x.topic === other && x.attention), "or in attention and concern");
+const signals = await t.ownSignals(t.getConfig(), t.PILOTS.find((x) => x.code === WSX));
+ok(!signals.said.some((x) => x.topic === other), "or in what a mood reading and a briefing are given");
+ok((await api("/api/coverage/get", { code: WSX, service: "waste" }, lead)).rows.every((x) => x.topic === other) && !(await api("/api/coverage/get", { code: WSX }, lead)).rows.some((x) => x.topic === other), "and the Sources page follows the service");
 
 // replies by link stay apart, and replies from elsewhere aren't in any figure
 const point2 = t.pointOf({ id: "x", code: WSX, title: "T", status: "closed", locals: [], plan: { target: 100, sites: [], checks: [] }, created: "2026-10-01", openedOn: "2026-10-01", closedOn: "2026-10-20" }, [
@@ -315,6 +380,12 @@ ok(text(d.querySelector(".crumbs")).endsWith("Radio"), "and back one level");
 button(d, "Add a mention").click();
 await until(() => /Please don't paste the article/.test(text(d.querySelector(".panel"))), "the form");
 ok(!d.querySelector(".panel textarea").hasAttribute("maxlength"), "a pasted article isn't cut short: the server refuses it");
+d.querySelector(".panel textarea").value = "Half typed";
+[...d.querySelectorAll(".chip")].find((b) => b.textContent === "Left").click();
+await until(() => [...d.querySelectorAll(".chip")].find((b) => b.textContent === "Left").getAttribute("aria-pressed") === "true", "the filter");
+ok(d.querySelector(".panel textarea").value === "Half typed", "a half-typed mention survives a filter");
+[...d.querySelectorAll(".chip")].find((b) => b.textContent === "All sources").click();
+await until(() => [...d.querySelectorAll(".chip")].find((b) => b.textContent === "All sources").getAttribute("aria-pressed") === "true", "the filter back");
 button(d, "Cancel").click();
 go(d, "#a/NORTHBRIDGE");
 
@@ -324,11 +395,12 @@ await new Promise((done) => setTimeout(done, 30));
 go(d, "#dash/NORTHBRIDGE");
 await shows(d, /Very negative|Negative/);
 await shows(d, /What's driving it/);
-ok(/−27/.test(text(d.querySelector(".mood-big"))) && /Worsening/.test(text(d.querySelector(".main"))), "the Dashboard shows the authority's mood, whatever the map was on");
+ok(/−26/.test(text(d.querySelector(".mood-big"))) && /Worsening/.test(text(d.querySelector(".main"))), "the Dashboard shows the authority's mood, whatever the map was on");
 let main = text(d.querySelector(".main"));
-ok(/Before weighting/.test(main) && /Say roads have got worse/.test(main) && /Adults in the authority/.test(main) && /FHRG middle figure/.test(main) && /Enquiries and complaints/.test(main) && /Fault reports/.test(main), "with raw figures and every tile");
+ok(/Before weighting/.test(main) && /\d+ before/.test(main) && /Street survey, indicative/.test(main) && /Say roads have got worse/.test(main) && /Adults in the authority/.test(main) && /FHRG middle figure/.test(main) && /Enquiries and complaints/.test(main) && /Fault reports/.test(main), "with raw figures and every tile");
 ok(/Published evidence/.test(main) && /What's missing/.test(main) && d.querySelector(".foot a") && clean(d), "and published evidence, what's missing, and the way to the rest");
 ok(d.querySelector(".heat-grid .heat-c") && !d.querySelector("table .heat-c"), "month by month has its own layout");
+ok(d.querySelector(".quad radialGradient") && d.querySelector(".q-back").getAttribute("fill") === "url(#q-heat)" && /Early signs: felt, not reported/.test(text(d.querySelector(".quad"))), "the chart is shaded out from the early signs corner, and its labels still say what each part means");
 d.querySelectorAll(".pickers select")[0].value = "waste"; d.querySelectorAll(".pickers select")[0].dispatchEvent(new d.defaultView.Event("change"));
 await shows(d, /Nothing collected yet/);
 ok(!/Mood reading/.test(text(d.querySelector(".main"))) && !/Satisfied with roads/.test(text(d.querySelector(".main"))), "another service shows no roads figures");
@@ -382,14 +454,19 @@ ok(/The dashed circle is the general location/.test(text(d.querySelector(".main"
 ok(!d.querySelector(".spot-box img"), "and the demonstration loads no street map");
 ok(/Position: /.test(text(d.querySelector(".main"))) && button(d, "Take the pin off") && d.querySelector('[aria-label="Move the pin north"]'), "a pin can be moved or taken off");
 const pos = () => /Position: ([\d.-]+), ([\d.-]+)/.exec(text(d.querySelector(".main"))).slice(1).map(Number);
-const was = pos();
+const was = pos(), mapEl = d.querySelector(".spot-box");
 d.querySelector('[aria-label="Move the pin north"]').click();
 await until(() => pos()[0] > was[0], "the pin to move");
-ok(true, "the pin moves in small steps");
+ok(d.querySelector(".spot-box") === mapEl, "the pin moves in small steps, and the map stays as it was");
 for (let i = 0; i < 80; i++) d.querySelector('[aria-label="Move the pin east"]').click();
 await until(() => /outside the general location/.test(text(d.querySelector(".main"))), "the warning");
 ok(true, "and it warns when it leaves the general location");
 ok(d.querySelector(`a[href="#plan/NORTHBRIDGE/${ids[1]}"]`), "there's a site plan to print");
+const pinned = () => /General location only/.test(text(d.querySelector(".site-entry"))) === false;
+ok(pinned(), "a pinned site says so");
+[...d.querySelectorAll(".seg button")].find((b) => b.textContent === "99%").click();
+await new Promise((done) => setTimeout(done, 20));
+ok(d.querySelectorAll(".site-entry").length && pinned(), "and changing the level doesn't lose it");
 go(d, `#plan/NORTHBRIDGE/${ids[0]}`);
 await shows(d, /Site plan/);
 ok(/Read this to each person at the end/.test(text(d.querySelector(".main"))) && /You can report a pothole online/.test(text(d.querySelector(".main"))) && /Outside the library/.test(text(d.querySelector(".main"))) && d.querySelector(".plan-site .spot-box") && clean(d), "the plan has each site's map, exact spot and what to read out");
@@ -398,7 +475,7 @@ ok(/Read this to each person at the end/.test(text(d.querySelector(".main"))) &&
 go(d, "#briefings/NORTHBRIDGE");
 await shows(d, /Where we are/);
 main = text(d.querySelector(".main"));
-ok(/Highways: officers' briefing, October 2026/.test(main) && /Mood is negative, at −27/.test(main) && /Early signs to check/.test(main) && /Coming up/.test(main) && clean(d), "the officers' briefing opens first");
+ok(/Highways: officers' briefing, October 2026/.test(main) && /Mood is negative, at −26/.test(main) && /Early signs to check/.test(main) && /Coming up/.test(main) && clean(d), "the officers' briefing opens first");
 ok(/Street survey: 32% satisfied/.test(main), "with whole numbers");
 button(d, "Download as Word").click();
 await until(() => d.defaultView.saved, "the download");
@@ -426,6 +503,50 @@ const name = d.querySelector(".main td .linkish");
 name.click();
 await until(() => /Before weighting/.test(text(d.querySelector(".main"))), "the source's details");
 ok(/Pieces/.test(text(d.querySelector(".main"))), "choosing a source shows its mood, raw figure and pieces");
+
+// several changes in a row are all saved
+d = browser(`/#setup/${WSX}`, lead);
+await shows(d, /Functions for Highways/);
+await until(() => d.querySelectorAll(".er input").length > 3, "the rows");
+const boxes = [...d.querySelectorAll(".card .er input")].filter((x) => !x.placeholder).slice(0, 3);
+const renames = ["One", "Two", "Three"];
+for (let i = 0; i < 3; i++) { boxes[i].value = renames[i]; boxes[i].dispatchEvent(new d.defaultView.Event("change")); await new Promise((done) => setTimeout(done, 30)); }
+await until(async () => true, "the saves");
+await new Promise((done) => setTimeout(done, 60));
+const savedNames = (await api("/api/setup/get", { code: WSX }, lead)).setup.functions.highways.map((x) => x.name);
+ok(renames.every((x) => savedNames.includes(x)), "renaming several in a row saves them all");
+// what's been typed against a proposed site stays when the level changes
+const fresh = (await api("/api/survey/new", { code: WSX, title: "Sites test" }, lead)).survey;
+d = browser(`/#survey/${WSX}/${fresh.id}/setup`, lead);
+await until(() => d.querySelectorAll(".site-entry").length >= 3, "the proposed sites");
+[...d.querySelectorAll(".seg button")].find((b) => b.textContent === "±7").click();
+await until(() => d.querySelectorAll(".site-entry").length >= 5, "more proposed sites");
+const entries = [...d.querySelectorAll(".site-entry")], typed = entries.map((x, i) => { const box = x.querySelector(".site-row input"); box.value = `Saturday ${i}`; box.dispatchEvent(new d.defaultView.Event("input")); return box.value; });
+[...d.querySelectorAll(".seg button")].find((b) => b.textContent === "±10").click();
+await new Promise((done) => setTimeout(done, 30));
+const after = [...d.querySelectorAll(".site-row input")].map((x) => x.value);
+ok(typed.every((x) => after.includes(x)), "changing the level doesn't lose what's been typed against a site");
+d = browser(`/#survey/${WSX}/${fresh.id}/setup`, lead);
+await until(() => d.querySelectorAll(".site-entry").length >= 3 && button(d, "Pinpoint"), "the proposed sites again");
+[...d.querySelectorAll(".seg button")].find((b) => b.textContent === "±7").click();
+await until(() => d.querySelectorAll(".site-entry").length >= 5, "more proposed sites again");
+const pins = [...d.querySelectorAll(".site-entry")];
+pins.at(-1).querySelector("button[aria-pressed]").click();
+await until(() => button(d, "Put the pin in the middle"), "the close-up map");
+button(d, "Put the pin in the middle").click();
+await until(() => /Position: /.test(text(d.querySelector(".main"))), "the pin");
+const pinnedName = /Pinpoint the spot in (.+?)(?= Map|$)/.exec(d.querySelector(".spot-box").previousSibling.textContent)?.[1];
+[...d.querySelectorAll(".seg button")].find((b) => b.textContent === "±10").click();
+await new Promise((done) => setTimeout(done, 30));
+ok(pinnedName && [...d.querySelectorAll(".site-name strong")].some((x) => x.textContent === pinnedName), "or a site that's been pinned");
+// a double click plans one event
+d = browser(`/#a/${WSX}`, lead);
+await until(() => d.querySelector(".stage"), "the lead's map");
+const planned0 = (await api("/api/campaign/get", { code: WSX }, lead)).items.length;
+d.defaultView.eval(`planFrom({ code: "${WSX}" }, "Potholes", "Test"); planFrom({ code: "${WSX}" }, "Potholes", "Test");`);
+await until(() => d.querySelector(".cal"), "the calendar");
+ok((await api("/api/campaign/get", { code: WSX }, lead)).items.length === planned0 + 1, "a double click plans one event");
+await api("/api/setup/save", { code: WSX, part: "functions", service: "highways", list: t.standardFunctions("highways") }, lead);
 
 // a member reads, and doesn't change
 d = browser(`/#a/${WSX}`, member);

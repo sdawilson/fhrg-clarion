@@ -19,11 +19,11 @@ export function officersBriefing(map: MapPage, issues: Issue[], reading: Reading
   const where = [root.v === null ? "There isn't enough yet to give a mood for this month." : `Mood is ${root.word}, at ${root.txt}. ${map.direction.word}. ${map.direction.note}`];
   if (map.street) where.push(`Street survey: ${map.street.satisfied === null ? "–" : Math.round(map.street.satisfied)}% satisfied, from ${map.street.responses.toLocaleString("en-GB")} replies. Indicative: a street sample isn't random.`);
   if (reading) where.push(`Clarion's latest reading, written on ${day(reading.created)}: ${reading.headline} How sure: ${reading.confidenceReason}`);
-  const held = map.election, coming = map.planned.filter((x) => x.date >= today).sort((x, y) => x.date.localeCompare(y.date)).slice(0, 6);
+  const held = map.election, ahead = map.planned.filter((x) => x.date >= today).sort((x, y) => x.date.localeCompare(y.date)), coming = ahead.slice(0, 6);
   const none = (list: unknown[], words: string) => (list.length ? [] : [words]);
   const onIssue = (i: Issue) => {
     const t = map.topics.find((x) => x.topic === i.topic), planned = map.planned.filter((x) => x.topics.includes(i.topic)).length;
-    const mood = t && t.mood !== null ? `: mood ${t.mood > 0 ? "+" : t.mood < 0 ? "−" : ""}${Math.abs(t.mood)}` : "", asked = t?.enquiries ? `, ${t.enquiries.toLocaleString("en-GB")} ${t.enquiries === 1 ? "enquiry" : "enquiries"}` : "";
+    const sign = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v)}`, mood = t && t.mood !== null ? `: mood ${sign(t.mood)} (${sign(t.raw ?? 0)} before weighting)` : "", asked = t?.enquiries ? `, ${t.enquiries.toLocaleString("en-GB")} ${t.enquiries === 1 ? "enquiry" : "enquiries"}` : "";
     return `${i.topic}${mood}${asked}, ${planned} planned${i.key ? `. Key message: ${i.key}` : ""}`;
   };
   return {
@@ -32,9 +32,9 @@ export function officersBriefing(map: MapPage, issues: Issue[], reading: Reading
       { heading: "Where we are", paras: where, bullets: [] },
       { heading: "High-impact issues", paras: none(issues, "None confirmed yet."), bullets: issues.map(onIssue) },
       { heading: "Early signs to check", paras: none(signs, "None this month."), bullets: signs.map((t) => `${t}: a pointer to check, not a finding.`) },
-      { heading: "Coming up", paras: held ? ["Held back by the election setting."] : none(coming, "Nothing planned yet."), bullets: coming.map((x) => `${day(x.date)}: ${x.title} (${x.channel})`) },
+      { heading: "Coming up", paras: held ? ["Held back by the election setting."] : ahead.length > 6 ? [`The next 6 of ${ahead.length}.`] : none(coming, "Nothing planned yet."), bullets: coming.map((x) => `${day(x.date)}: ${x.title} (${x.channel})`) },
       { heading: "Bear in mind for campaigns", paras: none(map.considerations, "Nothing to note this month."), bullets: map.considerations.map((x) => `${x.title}${x.sub ? `. ${x.sub}` : ""}`) },
-      { heading: "What's missing", paras: reading?.gaps.length ? [] : ["A mood reading lists what's missing. Write one on the Dashboard."], bullets: reading?.gaps ?? [] },
+      { heading: "What's missing", paras: reading?.gaps.length ? [] : ["A mood reading lists what's missing. Write one on the Dashboard."], bullets: [...(reading?.gaps ?? []), ...map.unread.map((x) => `${x}: couldn't be read just now`)] },
     ],
   };
 }

@@ -144,6 +144,7 @@ export function readTell(v: unknown): Message[] {
   const list = Array.isArray(v) ? v : [];
   if (list.length > MAX_TOLD) throw new FriendlyError(`A survey can carry up to ${MAX_TOLD} messages.`);
   return list.map((m: any, i: number) => {
+    if (String(m?.text ?? "").trim().length > TOLD_CHARS) throw new FriendlyError(`Message ${i + 1} is too long: keep it to ${TOLD_CHARS} letters, so people read all of it.`);
     const text = cleanText(m?.text, TOLD_CHARS);
     if (!text) throw new FriendlyError(`Message ${i + 1} has no wording.`);
     const how = HOW_TOLD.filter((x) => Array.isArray(m?.how) && m.how.includes(x));
@@ -718,8 +719,9 @@ export async function streetPoints(c: Config, code: string): Promise<StreetPoint
   return out.sort((a, b) => b.ran.localeCompare(a.ran));
 }
 
+/** Road surveys, which are what every figure about roads stands on. A survey of another service shows only under that service. */
 export async function streetSummaries(c: Config, code: string): Promise<StreetSummary[]> {
-  const surveys = (await listSurveys(c, code)).filter((s) => s.status !== "draft");
+  const surveys = (await listSurveys(c, code)).filter((s) => s.status !== "draft" && (s.service ?? DEFAULT_SERVICE) === DEFAULT_SERVICE);
   if (!surveys.length) return [];
   const census = await loadCensus(c, code);
   const out: StreetSummary[] = [];
@@ -740,6 +742,13 @@ function selfDays(rows: Answer[]): { day: string; replies: number; left: number;
     days.set(day, x);
   }
   return [...days.values()].sort((a, b) => b.day.localeCompare(a.day));
+}
+
+// While the election setting is on, what a survey tells people is held back with the rest of a campaign
+const notAsked = (q: { id: string }) => !/^k\d/.test(q.id);
+export function withoutMessages(page: ReturnType<typeof surveyPage>) {
+  const less = <T extends { questions: { id: string }[] }>(r: T | null): T | null => (r ? { ...r, questions: r.questions.filter(notAsked) } : r);
+  return { ...page, survey: { ...page.survey, tell: [] }, questions: page.questions.filter(notAsked), results: less(page.results) as typeof page.results, self: page.self ? { ...page.self, results: less(page.self.results) } : null };
 }
 
 export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edit: boolean, own: boolean, areas = 0, tally: AreaTally = {}) {

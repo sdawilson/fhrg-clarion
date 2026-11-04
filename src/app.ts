@@ -103,7 +103,7 @@ import { MAX_LISTED, PAUSED, approveBriefing, canApprove, copyBriefing, forReade
 import { loadComparison } from "./comparison";
 import {
   FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, adultsByAge, audienceFor, channelsFrom, checkCoverage, loadAssessments, loadChecks, loadRates, loadSources,
-  removeAssessment, removeSource, saveAssessment, saveRating, saveSource, summarise, withWeights, type Rate,
+  removeAssessment, removeSource, roadsOnly, saveAssessment, saveRating, saveSource, summarise, withWeights, type Rate,
 } from "./coverage";
 import { monthSpend } from "./claude";
 import { getConfig, missingSettings, type Config } from "./config";
@@ -125,7 +125,7 @@ import { loadSites } from "./sites";
 import { MAX_SCAN_CHARS, getHelp, sharedTopics, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
   AGES, addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, changeDay, closeSurvey, countArea, createSurvey, formNumber, listSurveys, loadAnswers, loadAreas,
-  loadCensus, loadSurvey, openSurvey, publicSelf, publicSurvey, readAnswers, readCsv, saveSurvey, setSelf, surveyByAccess, surveyBySelf, surveyPage, textQuestionIds, validAccess, validSelf, type Survey,
+  loadCensus, loadSurvey, openSurvey, publicSelf, publicSurvey, withoutMessages, readAnswers, readCsv, saveSurvey, setSelf, surveyByAccess, surveyBySelf, surveyPage, textQuestionIds, validAccess, validSelf, type Survey,
 } from "./surveys";
 import { FriendlyError, briefly, tryAgainNow, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
 
@@ -263,7 +263,7 @@ async function handleCoverage(c: Config, request: Request): Promise<Response> {
     briefly("announcements", null, () => announcements()), briefly(`signals|${p.code}`, null, () => loadSignals(p), (x) => !x.fixMyStreet.ok || !x.petitions.ok || !x.questions.ok), loadEnquiries(c, p.code),
   ]);
   const posts = await councilNews(p, enquiries.page || p.newsPage, topics);
-  const rows = withWeights(assessments, sources);
+  const rows = withWeights(assessments.filter((x) => (x.service ?? DEFAULT_SERVICE) === serviceId(b.service)), sources);
   const faults = signals?.fixMyStreet.data, petitions = signals?.petitions.data, questions = signals?.questions.data;
   const unread = "Couldn't be read just now";
   return json({
@@ -286,7 +286,7 @@ async function handleCoverageSummary(c: Config, request: Request): Promise<Respo
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
-  const [sources, assessments] = await Promise.all([loadSources(c, p.code), loadAssessments(c, p.code)]);
+  const [sources, assessments] = await Promise.all([loadSources(c, p.code), loadAssessments(c, p.code).then(roadsOnly)]);
   return json({ summary: summarise(withWeights(assessments, sources), londonToday()) });
 }
 
@@ -465,9 +465,10 @@ async function handleSurveyGet(c: Config, request: Request): Promise<Response> {
   const { me, p, s } = await reader(c, request);
   const edit = canEdit(me, p);
   const [rows, census, sorting, election, tally] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id), loadElection(c, p.code), loadAreas(c, p.code, s.id)]);
+  const page = surveyPage(s, rows, census, edit, isMember(me, p), p.constituencies.length, tally);
   return json({
     paused: election.on,
-    ...surveyPage(s, rows, census, edit, isMember(me, p), p.constituencies.length, tally),
+    ...(election.on ? withoutMessages(page) : page),
     sorting: sorting?.status === "working" ? sorting : null, dropped: edit && sorting?.status === "ready" ? sorting.result?.dropped ?? 0 : 0,
   });
 }
@@ -553,6 +554,7 @@ async function handleSurveyExport(c: Config, request: Request): Promise<Response
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_WRONG = 30, MAX_FORMS = 1500, MAX_SELF_PER_ADDRESS = 20, MAX_SELF_PER_BLOCK = 200, MAX_SELF_REPLIES = 600;
 const tallies = new Map<string, { from: number; n: number }>();
+const MAX_DEMO = 600; // the demonstration's calculations, in the window below, as they need no sign-in
 function countOf(key: string): { from: number; n: number } {
   const now = Date.now();
   if (tallies.size > 20_000) for (const [k, v] of tallies) if (now - v.from > WINDOW_MS) tallies.delete(k);
@@ -666,6 +668,8 @@ export async function handleRequest(request: Request): Promise<Response> {
       if (path === "/api/config") return json({ websiteUrl: c.websiteUrl, demo: c.demo });
       if (path === "/demo/map" || path === "/demo/officers") {
         if (!c.demo) return json({ error: "Not found." }, 404);
+        const used = countOf(`demo|${networkOf(request)}`);
+        if (used.n++ >= MAX_DEMO) throw new FriendlyError("Too many requests. Please wait a few minutes.", 429);
         const b = await readJsonBody(request, 2000);
         return json(path === "/demo/map" ? demoMap(b) : demoOfficers(b));
       }

@@ -6,7 +6,7 @@
 //   Concern is the topic's share of street survey comments and of enquiries, averaged over whichever of the two are held.
 
 import type { Config } from "./config";
-import { loadAssessments, loadSources, summarise as summariseCoverage, withWeights } from "./coverage";
+import { loadAssessments, loadSources, roadsOnly, summarise as summariseCoverage, withWeights } from "./coverage";
 import { enquiriesView, loadEnquiries } from "./enquiries";
 import type { Pilot } from "./pilots";
 import { sharedTopics } from "./surveyai";
@@ -64,7 +64,7 @@ export async function ownSignals(c: Config, p: Pilot): Promise<{ said: Said[]; c
   const view = enquiriesView(held, census?.adults ?? null, topics), today = londonToday();
   const oldest = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - ENQUIRY_MONTHS, 1)).toISOString().slice(0, 7);
   return {
-    said: summariseCoverage(withWeights(assessments, sources), today).topics.map(({ topic, pieces, adjusted, critical, supportive }) => ({ topic, pieces, adjusted, critical, supportive })),
+    said: summariseCoverage(withWeights(roadsOnly(assessments), sources), today).topics.map(({ topic, pieces, adjusted, critical, supportive }) => ({ topic, pieces, adjusted, critical, supportive })),
     contacts: view.ready && view.latest >= oldest ? view.rows.filter((x) => x.enquiries + x.complaints > 0).map(({ topic, enquiries, complaints, trend }) => ({ topic, enquiries, complaints, trend })) : [],
     publicJobs: publicJobs(works, today),
   };

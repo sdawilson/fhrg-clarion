@@ -16,10 +16,10 @@ import type { StreetPoint } from "./surveys";
 
 export type Filters = { service: string; month: string; topic: string; bias: string; view: "authority" | "public" | "partners"; partner: string; include: string[] };
 export type MapData = {
-  today: string; setup: Setup; weights: Weights; topics: string[]; sources: Source[]; assessments: Assessment[]; streets: StreetPoint[];
+  today: string; unread: string[]; setup: Setup; weights: Weights; topics: string[]; sources: Source[]; assessments: Assessment[]; streets: StreetPoint[];
   residents: { score: number; outOf: number; year: number; source: string } | null;
   enquiries: Record<string, { total: number; byTopic: Record<string, number> }>; adults: number | null; ageAdults: number[] | null;
-  monthly: Record<string, { perDay: number | null; reports: number; petitions?: { title: string; local: number; above: boolean }[] }>; // an unread feed leaves its part out
+  monthly: Record<string, { perDay: number | null; reports: number; petitions?: { title: string; local: number; above: boolean }[]; questions?: { date: string; heading: string }[] }>; // an unread feed leaves its part out
   questions: { date: string; heading: string }[]; rated: Record<string, string>; announcements: { title: string; date: string }[];
   works: { on: boolean; weeks: { week: string; public: number }[]; events: { label: string; start: string; end: string; detail?: string }[] };
   notes: { id: string; title: string; date: string; effect: number | null; topic: string; routes: string[] }[];
@@ -96,10 +96,21 @@ export const fmtMood = (v: number | null | undefined) => (v === null || v === un
 export const leanOf = (v: number | null | undefined) => (v === null || v === undefined ? "none" : v <= -10 ? "down" : v >= 10 ? "up" : "mixed");
 export const moodWord = (v: number | null | undefined) => (v === null || v === undefined ? "too little to read" : v <= -40 ? "very negative" : v <= -10 ? "negative" : v < 10 ? "mixed" : v < 40 ? "positive" : "very positive");
 const fromChange = (pct: number) => { const v = Math.round(pct * 2); return v === 0 ? 0 : -Math.max(-40, Math.min(40, v)); };
-const changeWords = (c: number) => (c > 0 ? `up ${c}%` : c < 0 ? `down ${Math.abs(c)}%` : "no change");
+export const changeWords = (c: number) => (c > 0 ? `up ${c}%` : c < 0 ? `down ${Math.abs(c)}%` : "no change");
 const mean = (l: number[]) => (l.length ? Math.round(l.reduce((a, b) => a + b, 0) / l.length) : null);
 const shareOf = (part: number, whole: number) => (whole ? Math.round((100 * part) / whole) : 0);
-const reachBand = (r: number | null | undefined) => ((r ?? 0) >= 100000 ? 3 : (r ?? 0) >= 20000 ? 2 : 1);
+// A source graded Small, Medium or Large with no figure counts as that band
+const BAND_WEIGHT: Record<string, number> = { Small: 1, Medium: 2, Large: 3 };
+const BAND_PEOPLE: Record<string, number> = { Small: 5000, Medium: 50000, Large: 200000 }; // only to put topics in order
+const reachBand = (p: Row) => { const n = p.reach ?? p.src.reach; return n === null || n === undefined ? BAND_WEIGHT[p.src.reachBand] ?? 1 : n >= 100000 ? 3 : n >= 20000 ? 2 : 1; };
+const peopleOf = (p: Row) => p.reach ?? p.src.reach ?? BAND_PEOPLE[p.src.reachBand] ?? 0;
+// Whole percentages that add up to exactly 100
+const wholeShares = (weights: number[]) => {
+  const total = weights.reduce((a, b) => a + b, 0), exact = weights.map((w) => (total ? (100 * w) / total : 0)), out = exact.map(Math.floor);
+  let left = total ? 100 - out.reduce((a, b) => a + b, 0) : 0;
+  for (const [, i] of exact.map((e, k) => [e - out[k], k]).sort((a, b) => b[0] - a[0])) { if (left-- <= 0) break; out[i]++; }
+  return out;
+};
 const biasGroup = (l: string) => (/left/i.test(l) ? "left" : /right/i.test(l) ? "right" : l === "Centre" ? "centre" : "none");
 const toneOf = (a: Pick<Assessment, "tone">) => (a.tone === "Critical" ? -1 : a.tone === "Supportive" ? 1 : 0);
 const MIN_PIECES = 5;
@@ -131,14 +142,14 @@ type Ctx = { d: MapData; f: Filters; byId: Map<string, Source> };
 type Row = Assessment & { src: Source };
 type Mood = { v: number | null; ctx?: boolean; txt: string; unit: string; lean: string; word: string; tip: string; raw?: number | null; n?: number };
 
-function piecesFor(x: Ctx, o: { month?: string; anyTopic?: boolean; allAbout?: boolean } = {}): Row[] {
+function piecesFor(x: Ctx, o: { month?: string; anyTopic?: boolean; allAbout?: boolean; anyBias?: boolean } = {}): Row[] {
   const month = o.month ?? x.f.month, partner = x.f.partner;
   return x.d.assessments.flatMap((a) => {
     const src = x.byId.get(a.source);
     if (!src || a.relevance === "None" || (a.service ?? DEFAULT_SERVICE) !== x.f.service || a.date.slice(0, 7) !== month) return [];
     if (x.f.topic !== "all" && !o.anyTopic && a.topic !== x.f.topic) return [];
     if (o.allAbout) return [{ ...a, src }];
-    if (x.f.bias !== "all" && biasGroup(src.leaning) !== x.f.bias) return [];
+    if (!o.anyBias && x.f.bias !== "all" && biasGroup(src.leaning) !== x.f.bias) return [];
     const about = x.d.setup.partners.some((q) => q.id === a.about) ? a.about ?? "" : ""; // a partner taken out of Set-up keeps nothing apart
     if (x.f.view === "partners") return about && about === partner ? [{ ...a, src }] : [];
     return !about || x.f.include.includes(about) ? [{ ...a, src }] : [];
@@ -147,7 +158,7 @@ function piecesFor(x: Ctx, o: { month?: string; anyTopic?: boolean; allAbout?: b
 function scoreOf(list: Row[], least = MIN_PIECES) {
   let rawTop = 0, rawAll = 0, adjTop = 0, adjAll = 0;
   for (const p of list) {
-    const w = reachBand(p.reach ?? p.src.reach), a = w * pieceWeight(p.src, p).factor, t = toneOf(p);
+    const w = reachBand(p), a = w * pieceWeight(p.src, p).factor, t = toneOf(p);
     rawTop += w * t; rawAll += w; adjTop += a * t; adjAll += a;
   }
   const enough = list.length >= least && rawAll > 0;
@@ -189,6 +200,10 @@ function leaf(x: Ctx, d: Def, month: string): Mood {
       const r = streetFor(x, month);
       if (!r) return NONE;
       if (t) { const q = r.questions.find((y) => y.topic === t); return q ? show(q.sat - q.dis, "indicative", `${q.sat}% satisfied, ${q.dis}% dissatisfied`) : NONE; }
+      if (f.service !== DEFAULT_SERVICE) { // the core questions are about roads, so only its local ones say anything here
+        const own = r.questions.filter((q) => q.id.startsWith("l")), v = mean(own.map((q) => q.sat - q.dis));
+        return v === null ? NONE : show(v, "indicative", `From ${own.length} local ${own.length === 1 ? "question" : "questions"}, ${r.responses} replies`);
+      }
       return r.satisfied === null || r.dissatisfied === null ? NONE : show(Math.round(r.satisfied - r.dissatisfied), "indicative", `${Math.round(r.satisfied)}% satisfied, ${Math.round(r.dissatisfied)}% dissatisfied, ${r.responses} replies`);
     }
     case "residents": {
@@ -204,6 +219,7 @@ function leaf(x: Ctx, d: Def, month: string): Mood {
     case "enquiries": {
       const { now, chg } = enquiryChange(x, month, t);
       if (now === undefined) return NONE;
+      if (month === data.today.slice(0, 7)) return { ...NONE, txt: now.toLocaleString("en-GB"), unit: "so far", tip: "It's too early in the month to compare" };
       return chg === null ? { ...NONE, txt: now.toLocaleString("en-GB"), unit: "contacts", tip: "Not enough history to read a direction" } : show(fromChange(chg), "", `${now.toLocaleString("en-GB")} this month, ${changeWords(chg)}`);
     }
     case "faults": {
@@ -230,6 +246,7 @@ function leaf(x: Ctx, d: Def, month: string): Mood {
       if (t) return NONE;
       const { jobs, earlier } = worksIn(x, month);
       if (jobs < MIN_JOBS) return context(jobs, "jobs", "Under 30 in four weeks, so this is only something to bear in mind");
+      if (month === data.today.slice(0, 7)) return context(jobs, "jobs", "It's too early in the month to compare");
       const chg = earlier ? Math.round(((jobs - earlier) / earlier) * 100) : 0;
       return show(fromChange(chg), "jobs", `${jobs} jobs reported by the public in four weeks, ${changeWords(chg)}`);
     }
@@ -260,7 +277,8 @@ function moodOf(x: Ctx, d: Def, month = x.f.month): Mood {
     let top = 0, all = 0;
     for (const r of rows) if (r.w > 0 && r.m.v !== null) { top += r.w * r.m.v; all += r.w; }
     if (all) return show(Math.round(top / all));
-    const held = rows.filter((r) => r.m.ctx).length;
+    if (d === ROOT) return NONE;
+    const held = rows.filter((r) => r.m.lean === "ctx").length;
     return held ? context(held, held === 1 ? "item" : "items") : NONE;
   }
   return leaf(x, d, month);
@@ -273,16 +291,16 @@ const madeOf = (x: Ctx, d: Def, month = x.f.month) => {
   const rows = d.kids.map((k) => ({ d: k, m: moodOf(x, k, month), w: d === ROOT ? x.d.weights[k.id as keyof Weights] ?? 0 : k.w ?? 0 })).filter((r) => r.d.id !== "other" || x.d.sources.some((s) => mediaOf(s).medium === "other"));
   if (hasPool(d) && !d.blend) {
     const all = piecesFor(x, { month }).filter((p) => inDef(p.src, d)).length;
-    return rows.map((r) => { const n = piecesFor(x, { month }).filter((p) => inDef(p.src, r.d)).length; return { id: r.d.id, label: r.d.label, txt: r.m.txt, share: "Pooled", pct: shareOf(n, all), words: all ? `${n} of ${all} pieces` : "" }; });
+    return rows.map((r) => { const n = piecesFor(x, { month }).filter((p) => inDef(p.src, r.d)).length; return { id: r.d.id, label: r.d.label, txt: r.m.txt, raw: r.m.raw ?? null, share: "Pooled", pct: shareOf(n, all), words: all ? `${n} of ${all} pieces` : "" }; });
   }
   if (d === ROOT && x.f.view === "partners") { // a partner's mood pools its pieces, so each part shows its count
     const list = piecesFor(x, { month });
-    return rows.map((r) => { const n = list.filter((p) => inDef(p.src, r.d)).length; return { id: r.d.id, label: r.d.label, txt: r.m.txt, share: `${n} ${n === 1 ? "piece" : "pieces"}`, pct: shareOf(n, list.length), words: list.length ? `${n} of ${list.length} pieces` : "" }; });
+    return rows.map((r) => { const n = list.filter((p) => inDef(p.src, r.d)).length; return { id: r.d.id, label: r.d.label, txt: r.m.txt, raw: r.m.raw ?? null, share: `${n} ${n === 1 ? "piece" : "pieces"}`, pct: shareOf(n, list.length), words: list.length ? `${n} of ${list.length} pieces` : "" }; });
   }
-  const all = rows.reduce((a, r) => a + (r.w > 0 && r.m.v !== null ? r.w : 0), 0);
-  return rows.map((r) => {
-    const counted = r.w > 0 && r.m.v !== null, pct = counted ? shareOf(r.w, all) : null;
-    return { id: r.d.id, label: r.d.label, txt: r.m.txt, share: counted ? `${pct}%` : r.m.ctx ? "Context" : "Not counted", pct, words: counted ? `${pct}% of the mood` : r.m.ctx ? "Not in the mood" : "" };
+  const shares = wholeShares(rows.map((r) => (r.w > 0 && r.m.v !== null ? r.w : 0)));
+  return rows.map((r, i) => {
+    const counted = r.w > 0 && r.m.v !== null, pct = counted ? shares[i] : null;
+    return { id: r.d.id, label: r.d.label, txt: r.m.txt, raw: r.m.raw ?? null, share: counted ? `${pct}%` : r.m.ctx ? "Context" : "Not counted", pct, words: counted ? `${pct}% of the mood` : r.m.ctx ? "Not in the mood" : "" };
   });
 };
 
@@ -307,6 +325,8 @@ function notesFor(x: Ctx, d: Def, m: Mood): string[] {
   if (f.service !== DEFAULT_SERVICE && !["street", "surveys"].includes(d.id)) return [`Nothing collected yet. ${SERVICES.find((s) => s.id === f.service)?.label} needs its keywords and published figures first.`];
   if (f.view === "partners" && !hasPool(d) && d !== ROOT) return ["Held for the authority, not for each partner. For a partner, this shows only what's been said about them."];
   if (d === ROOT && f.view === "partners") out.push("This records what was said about the firm. It isn't a verdict on it.");
+  if (d === ROOT && data.unread.length) out.push(`Couldn't be read just now: ${data.unread.join(", ")}. The figures held from them are shown.`);
+  if (d.id === "enquiries" && f.topic === "all") out.push("The circles show the 6 largest topics.");
   if (d.id === "mps") out.push("Clarion reads the latest 12 questions, so there may be more.");
   if (d.id === "petitions") out.push("Clarion reads the 6 road petitions with the most signatures, so there may be more.");
   if (d.id === "news") out.push("Clarion reads the latest 8 posts on the news page, so there may be more.");
@@ -346,14 +366,14 @@ function build(x: Ctx, d: Def, words = "", pct: number | null = null): OutNode {
   if (d.id === "enquiries" && x.f.topic === "all" && x.f.service === DEFAULT_SERVICE) {
     const held = x.d.enquiries[x.f.month], all = held?.total ?? 0;
     for (const [topic, n] of Object.entries(held?.byTopic ?? {}).filter(([t]) => t && !/^(other|not given)$/i.test(t)).sort((a, b) => b[1] - a[1]).slice(0, 6)) {
-      const { chg } = enquiryChange(x, x.f.month, topic), pct = shareOf(n, all), mood: Mood = chg === null ? { ...NONE, txt: n.toLocaleString("en-GB"), unit: "contacts", tip: "Not enough history to read a direction" } : show(fromChange(chg), "", `${n.toLocaleString("en-GB")} this month, ${changeWords(chg)}`);
+      const part = x.f.month === x.d.today.slice(0, 7), { chg } = enquiryChange(x, x.f.month, topic), pct = shareOf(n, all), mood: Mood = chg === null || part ? { ...NONE, txt: n.toLocaleString("en-GB"), unit: "contacts", tip: "Not enough history to read a direction" } : show(fromChange(chg), "", `${n.toLocaleString("en-GB")} this month, ${changeWords(chg)}`);
       kids.push({ id: `e:${topic}`, label: topic, sub: `${pct}% of enquiries`, share: "", pct, mood, how: METHOD.enquiries.how, has: METHOD.enquiries.has, notes: [`${n.toLocaleString("en-GB")} enquiries and complaints this month. Counts only.`], facts: [], made: [], add: "", types: [], source: "", topic, kids: [], pool: false });
     }
   }
   if (d.id === "street") {
     const r = streetFor(x, x.f.month);
     for (const q of r?.questions ?? []) {
-      if (x.f.topic !== "all" && q.topic !== x.f.topic) continue;
+      if ((x.f.topic !== "all" && q.topic !== x.f.topic) || (x.f.service !== DEFAULT_SERVICE && !q.id.startsWith("l"))) continue;
       const v = q.sat - q.dis, fn = x.d.setup.functions[x.f.service]?.find((y) => y.id === q.fn)?.name;
       kids.push({ id: `q:${q.id}`, label: q.text.length > 44 ? `${q.text.slice(0, 42)}…` : q.text, sub: fn ?? "Whole service", share: "", pct: null, mood: show(v, "", `${q.sat}% satisfied, ${q.dis}% dissatisfied`), how: "Satisfied minus dissatisfied on this one question.", has: [], notes: [q.text, `${q.sat}% satisfied, ${q.dis}% dissatisfied. A street sample: indicative only.`], facts: [], made: [], add: "", types: [], source: "", question: q.id, topic: q.topic, kids: [], pool: false });
     }
@@ -382,14 +402,14 @@ function directionOf(x: Ctx): { word: string; note: string } {
 
 /** Each topic by concern, reach and mood. A calculation, not a judgement, and it proposes the top three as high-impact issues. */
 function topicRows(x: Ctx) {
-  const base = piecesFor(x, { allAbout: true, anyTopic: true }), month = x.f.month, street = streetFor(x, month);
+  const base = piecesFor(x, { anyBias: true, anyTopic: true }), month = x.f.month, street = streetFor(x, month);
   const roads = x.f.service === DEFAULT_SERVICE, enq = roads ? x.d.enquiries[month]?.byTopic ?? {} : {}, comments = roads ? street?.topics ?? [] : []; // enquiries and comments are about roads
   const names = [...new Set([...base.map((p) => p.topic), ...Object.keys(enq), ...comments.map((t) => t.topic)])].filter((t) => t && !/^(other|not given)$/i.test(t));
   const enqAll = Object.values(enq).reduce((a, b) => a + b, 0), comAll = comments.reduce((a, t) => a + t.count, 0);
   const rows = names.map((topic) => {
     const list = base.filter((p) => p.topic === topic), sc = scoreOf(list), said = comments.find((t) => t.topic === topic)?.count ?? 0;
     const shares = [enqAll ? (enq[topic] ?? 0) / enqAll : null, comAll ? said / comAll : null].filter((n): n is number => n !== null);
-    return { topic, enquiries: enq[topic] ?? 0, comments: said, concern: shares.length ? shares.reduce((a, b) => a + b, 0) / shares.length : 0, reach: list.reduce((a, p) => a + (p.reach ?? p.src.reach ?? 0), 0), pieces: list.length, mood: sc.adj, raw: sc.raw, rankConcern: 0, rankReach: 0, rankMood: 0, proposed: false };
+    return { topic, enquiries: enq[topic] ?? 0, comments: said, concern: shares.length ? shares.reduce((a, b) => a + b, 0) / shares.length : 0, reach: list.reduce((a, p) => a + peopleOf(p), 0), pieces: list.length, mood: sc.adj, raw: sc.raw, rankConcern: 0, rankReach: 0, rankMood: 0, proposed: false };
   });
   const rank = (key: "rankConcern" | "rankReach" | "rankMood", val: (r: typeof rows[number]) => number) => [...rows].sort((a, b) => val(a) - val(b) || a.topic.localeCompare(b.topic)).forEach((r, i) => { r[key] = i + 1; });
   rank("rankConcern", (r) => -r.concern); rank("rankReach", (r) => -r.reach); rank("rankMood", (r) => r.mood ?? 999);
@@ -412,6 +432,12 @@ function considerations(x: Ctx) {
   return out;
 }
 
+// The Dashboard's counts, for this month
+function figuresFor(x: Ctx) {
+  const m = x.f.month, part = m === x.d.today.slice(0, 7), { now, chg } = enquiryChange(x, m, null), a = x.d.monthly[m], b = x.d.monthly[shiftMonth(m, -1)];
+  return { enquiries: now ?? null, enquiryChange: part ? null : chg, faults: a?.perDay ? a.reports : null, faultChange: a?.perDay && b?.perDay ? Math.round(((a.perDay - b.perDay) / b.perDay) * 100) : null };
+}
+
 export function buildMap(data: MapData, f: Filters) {
   const x: Ctx = { d: data, f, byId: new Map(data.sources.map((s) => [s.id, s])) };
   const trailOf = (s: Source) => { const def = MEDIA_DEFS.find((d) => inDef(s, d)); return def ? ["root", ...pathToDef(def.id), `s:${s.id}`] : ["root"]; };
@@ -431,9 +457,9 @@ export function buildMap(data: MapData, f: Filters) {
   });
   const street = streetFor(x, f.month);
   const lastMonths = monthsFor(data.today).slice(0, 5).reverse();
-  const heat = [{ id: "root", label: "Mood" }, ...BRANCHES.map((b) => ({ id: b.id, label: b.label }))].map((r) => ({ ...r, cells: lastMonths.map((m) => { const v = moodOf(x, find(r.id)!, m.id); return { month: m.id, txt: v.ctx ? "–" : v.txt, lean: v.v === null ? "none" : v.lean }; }) }));
+  const heat = [{ id: "root", label: "Mood" }, ...BRANCHES.map((b) => ({ id: b.id, label: b.label }))].map((r) => ({ ...r, cells: lastMonths.map((m) => { const v = moodOf(x, find(r.id)!, m.id); return { month: m.id, txt: v.ctx ? "–" : v.txt, lean: v.v === null ? "none" : v.lean, raw: v.raw ?? null, tip: v.tip }; }) }));
   return {
-    today: data.today, service: f.service, month: f.month, months: monthsFor(data.today), services: SERVICES, topicList: data.topics, heat, heatMonths: lastMonths,
+    today: data.today, unread: data.unread, figures: figuresFor(x), service: f.service, month: f.month, months: monthsFor(data.today), services: SERVICES, topicList: data.topics, heat, heatMonths: lastMonths,
     tree: build(x, ROOT), direction: directionOf(x), pieces, planned, leftOut, partners: data.setup.partners, topics: topicRows(x), functions: fns, considerations: considerations(x), election: data.election,
     street: street ? { id: street.id, title: street.title, worse: street.worse, satisfied: street.satisfied, dissatisfied: street.dissatisfied, responses: street.responses, ran: street.ran } : null,
     public: {

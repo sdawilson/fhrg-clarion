@@ -438,7 +438,7 @@ function demoMapData(): MapData {
   const w = worksHeld!;
   const enquiries = { "2026-06": enquiryMonth(1490, 680, 305, 335), "2026-07": enquiryMonth(1500, 680, 300, 330), "2026-08": enquiryMonth(1450, 690, 310, 340), "2026-09": enquiryMonth(1480, 670, 330, 345), "2026-10": enquiryMonth(1976, 685, 537, 340) };
   return {
-    today: MAP_TODAY, setup: demoSetup(), weights: WEIGHTS, topics: DEMO_TOPICS, sources: SOURCES, assessments: PIECES, streets: point ? [point] : [], adults: ADULTS,
+    today: MAP_TODAY, unread: [], setup: demoSetup(), weights: WEIGHTS, topics: DEMO_TOPICS, sources: SOURCES, assessments: PIECES, streets: point ? [point] : [], adults: ADULTS,
     residents: { score: 29, outOf: 100, year: 2025, source: "Residents' survey 2025" }, enquiries: enquiriesByMonth({ months: enquiries, matches: {}, imports: [], page: "" }, DEMO_TOPICS),
     monthly: { "2026-08": { perDay: 2.0, reports: 52, petitions: [] }, "2026-09": { perDay: 2.2, reports: 58, petitions: [] }, "2026-10": { perDay: 2.4, reports: 64, petitions: [{ title: "Keep the lights on at night in Northbridge", local: 1520, above: true }] } },
     rated: { "petition|Keep the lights on at night in Northbridge": "Critical", "question|2026-10-09|Roads: Northbridge": "Critical" }, ageAdults: census ? adultsByAge(census) : null,
