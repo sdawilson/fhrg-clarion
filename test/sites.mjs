@@ -77,7 +77,7 @@ const leadToken = await login("lead@westsussex.gov.uk"), memberToken = await log
 let r = await api("/api/survey/sites", { code: WSX }, null);
 ok(r.status === 401, "survey sites need a sign-in");
 r = await api("/api/survey/sites", { code: WSX }, memberToken);
-ok(r.status === 403, "and they're for those who can plan a survey");
+ok(r.status === 200 && r.ready === true, "and anyone from the authority can plan a survey");
 r = await api("/api/survey/sites", { code: WSX }, kirkToken);
 ok(r.status === 403 || r.status === 404, "and only for your own authority");
 r = await api("/api/survey/sites", { code: WSX }, leadToken);

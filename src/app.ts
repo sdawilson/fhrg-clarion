@@ -55,7 +55,7 @@
 //   POST /api/map                  {code, service, month, topic, bias, view, partner, include}: the map, and what the Dashboard needs
 //   POST /api/rate                 {code, key, tone}: an officer's rating of a petition or an MP's question
 //   POST /api/setup/get            {code}: functions, partners and channels, and the mood weights
-//   POST /api/setup/save           {code, part, service, list}: leads and admins
+//   POST /api/setup/save           {code, part, service, list}: anyone from the authority, and admins
 //   POST /api/setup/weights        {...weights}: site administrators
 //   POST /api/briefing/officers    {code, service, month, word}: the officers' briefing, or as a Word file
 //   POST /api/campaign/get         {code, service}: issues, campaigns and actions, held back by the election setting. Money is for the authority's own members
@@ -67,10 +67,10 @@
 //   POST /api/action/remove        {code, id}
 //   POST /api/action/actual        {code, id, actual}: what an action already held cost, allowed under the election setting
 //   POST /api/note/effect          {code, id, effect, topic}: what an officer expects a note to do to mood
-//   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: leads and admins
-//   POST /api/facts/notes          {code, notes}: leads and admins
+//   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: anyone from the authority, and admins
+//   POST /api/facts/notes          {code, notes}: anyone from the authority, and admins
 //
-// Street Surveys. Any member of the authority can read; leads and admins do everything else.
+// Street Surveys. Anyone from the authority, or a site administrator, can read and change them.
 //   POST /api/survey/list          {code}
 //   POST /api/survey/get           {code, id}: the survey, results, checks and comments with names removed
 //   POST /api/survey/new           {code, title, purpose}
@@ -119,7 +119,7 @@ import { buildMap, readFilters } from "./mood";
 import { officersBriefing, officersWord } from "./officers";
 import { DEFAULT_SERVICE, SERVICES, loadSetup, loadWeights, saveSetup, saveWeights, serviceId, standardFunctions } from "./setup";
 import { dropIssue, held as heldPlans, loadPlans, removeAction, removeCampaign, saveAction, saveCampaign, setActual, setIssue, syncTell, type Action, type Campaign } from "./campaign";
-import { canEdit, canSee, isMember, isOwnLead, pilotByCode, pilotsFor, type Pilot } from "./pilots";
+import { canEdit, canManage, canSee, isMember, isOwnLead, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
 import { areaOf, outcodeOf, whereIs } from "./postcodes";
 import { qrCode } from "./qr";
@@ -392,7 +392,7 @@ async function editor(c: Config, request: Request, limit: number): Promise<{ me:
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, limit);
   const p = pilotFor(me, b.code);
-  if (!canEdit(me, p)) throw new FriendlyError("Only your authority's FHRG lead or a site administrator can change this.", 403);
+  if (!canEdit(me, p)) throw new FriendlyError("Only someone from this authority or a site administrator can change this.", 403);
   return { me, p, b };
 }
 
@@ -731,7 +731,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/enquiries/page": { const { p, b } = await editor(c, request, 1000); await savePage(c, p, b.url); return json({ ok: true }); }
         case "/api/works/get": return await handleWorks(c, request);
         case "/api/works/on": { const me = await signedIn(c, request); const b = await readJsonBody(request, 1000); const p = pilotFor(me, b.code); await turnOn(c, me, p); tryAgainNow(`works|${p.code}`); await briefly(`works|${p.code}`, null, () => refreshWorks(c, p), (x) => !!x.problem); return json({ ok: true }); }
-        case "/api/works/off": { const { p } = await editor(c, request, 1000); await turnOff(c, p); return json({ ok: true }); }
+        case "/api/works/off": { const { me, p } = await editor(c, request, 1000); if (!canManage(me, p)) throw new FriendlyError("Turning this off removes what's held, so only your authority's FHRG lead or a site administrator can do it.", 403); await turnOff(c, p); return json({ ok: true }); }
         case "/api/abc/find": return await handleAbc(c, request, "find");
         case "/api/abc/status": return await handleAbc(c, request, "status");
         case "/api/abc/save": return await handleAbc(c, request, "save");

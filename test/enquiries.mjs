@@ -96,8 +96,8 @@ let r = await api("/api/enquiries/get", { code: WSX });
 ok(r.status === 401, "this needs a sign-in");
 ok((await api("/api/enquiries/get", { code: WSX }, other)).status === 403, "and it's only for your own authority");
 r = await api("/api/enquiries/get", { code: WSX }, member);
-ok(r.view.ready === false && !r.canEdit && r.website.page === "https://www.westsussex.gov.uk/news/", "a member can read it, and the council's news page is already set");
-ok((await api("/api/enquiries/import", { code: WSX, rows: 1, months: { [M1]: month() } }, member)).status === 403, "a member can't bring anything in");
+ok(r.view.ready === false && r.canEdit && r.website.page === "https://www.westsussex.gov.uk/news/", "a member of the authority can read and change it, and the council's news page is already set");
+ok((await api("/api/enquiries/import", { code: WSX, rows: 1, months: { [M1]: month() } }, other)).status === 403, "another authority can't bring anything in");
 r = await api("/api/enquiries/import", { code: WSX, rows: 146, skipped: 2, months: { [M1]: month() } }, lead);
 ok(r.import.added === 146 && r.import.months.join() === M1, "a lead can");
 r = await api("/api/enquiries/get", { code: WSX }, member);
@@ -113,13 +113,13 @@ ok((await api("/api/enquiries/get", { code: KIRK }, other)).view.ready === false
 const stored = getText(files("").find((k) => k.endsWith(`${WSX}/enquiries.json`)));
 ok(!stored.includes("Tiny") && JSON.parse(stored).months[M1].hiddenAreas === 1, "small areas aren't stored by name");
 ok((await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Made up" }, lead)).status === 400, "a category can only go to a real topic");
-ok((await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Parking" }, member)).status === 403, "by a lead");
+ok((await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Parking" }, other)).status === 403, "by the authority's own people");
 ok((await api("/api/enquiries/match", { code: WSX, category: "Jane Smith", topic: "Parking" }, lead)).status === 404, "and only a category that's held, so nothing else can be stored this way");
 ok(!getText(files("").find((k) => k.endsWith(`${WSX}/enquiries.json`))).includes("Jane Smith"), "and it isn't");
 await api("/api/enquiries/match", { code: WSX, category: "Other", topic: "Parking" }, lead);
 r = await api("/api/enquiries/get", { code: WSX }, lead);
 ok(r.view.rows.some((x) => x.topic === "Parking" && x.categories.join() === "Other") && !r.view.unmatched.categories.includes("Other"), "and that's kept");
-ok((await api("/api/enquiries/remove", { code: WSX, id: "nope" }, lead)).status === 404 && (await api("/api/enquiries/remove", { code: WSX, id: r.imports[0].id }, member)).status === 403, "only a real import can be removed, by a lead");
+ok((await api("/api/enquiries/remove", { code: WSX, id: "nope" }, lead)).status === 404 && (await api("/api/enquiries/remove", { code: WSX, id: r.imports[0].id }, other)).status === 403, "only a real import can be removed, by the authority's own people");
 await api("/api/enquiries/remove", { code: WSX, id: r.imports.find((x) => x.months.includes(M2)).id }, lead);
 r = await api("/api/enquiries/get", { code: WSX }, lead);
 ok(r.view.monthsHeld === 1 && r.imports.length === 1, "taking an import out removes its month");
@@ -131,7 +131,7 @@ ok(!getText(files("").find((k) => k.endsWith(`${WSX}/enquiries.json`))).includes
 
 ok(r.website.read === false && r.website.posts.length === 0, "a news page that can't be read says so");
 ok((await api("/api/enquiries/page", { code: WSX, url: "https://example.com/news" }, lead)).status === 400 && (await api("/api/enquiries/page", { code: WSX, url: "http://169.254.169.254/latest" }, lead)).status === 400 && (await api("/api/enquiries/page", { code: WSX, url: "https://kirkleestogether.co.uk/" }, lead)).status === 400, "only the council's own site can be set, not another's");
-ok((await api("/api/enquiries/page", { code: WSX, url: "https://www.westsussex.gov.uk/latest-news/" }, member)).status === 403, "by a lead");
+ok((await api("/api/enquiries/page", { code: WSX, url: "https://www.westsussex.gov.uk/latest-news/" }, other)).status === 403, "by the authority's own people");
 pages.set("https://www.westsussex.gov.uk/latest-news/", page(`<a href="/latest-news/winter-gritting-routes-confirmed-today/">Winter gritting routes confirmed today</a><p>3 November 2026</p><a href="/latest-news/road-closure-on-the-a27-next-week/">Road closure on the A27 next week</a><p>2 November 2026</p><a href="/latest-news/robert-plant-tour-announced-for-2027/">Robert Plant tour announced for 2027</a><p>1 November 2026</p><a href="/latest-news/adult-social-care-awards-announced/">Adult social care awards announced</a><p>31 October 2026</p>`));
 ok((await api("/api/enquiries/page", { code: WSX, url: "https://www.westsussex.gov.uk/latest-news/" }, lead)).status === 200, "a lead can change the page");
 r = await api("/api/enquiries/get", { code: WSX }, lead);
@@ -286,7 +286,7 @@ ok(!w.sentBodies.slice(sentBefore).some((x) => x.includes("Brown") || x.includes
 dom = await open(member, `#said/${WSX}/enquiries`); d = dom.window.document;
 await see(d, /What people contacted you about/);
 main = text(d.querySelector(".main"));
-ok(!d.querySelector('input[type="file"]') && !/What's been brought in/.test(main) && !d.querySelector('select[aria-label="Topic for Road defects"]') && !button(d, "Save the address"), "a member can read the figures but change nothing");
+ok(d.querySelector('input[type="file"]') && /What's been brought in/.test(main) && d.querySelector('select[aria-label="Topic for Road defects"]') && button(d, "Save the address"), "a member of the authority can bring figures in and match them, like its lead");
 ok(!/\bnull\b/.test(main), "and nothing stray shows on the page");
 
 hooks.fetch = null;

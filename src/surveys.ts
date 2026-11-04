@@ -732,7 +732,7 @@ export async function streetSummaries(c: Config, code: string): Promise<StreetSu
   return out.sort((a, b) => b.ran.localeCompare(a.ran)); // the latest to go into the field comes first
 }
 
-// Everything a survey's page shows. `edit`: a lead or site administrator. `own`: a member of the authority, the
+// Everything a survey's page shows. `edit`: someone from the authority or a site administrator. `own`: a member of the authority, the
 // only people who get the words of a comment. Topic counts go to everyone who can see the survey.
 function selfDays(rows: Answer[]): { day: string; replies: number; left: number; byDay: number }[] {
   const days = new Map<string, { day: string; replies: number; left: number; byDay: number }>();

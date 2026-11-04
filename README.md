@@ -7,7 +7,7 @@ It runs as one Node program in a bunny.net Magic Container. Members sign in with
 ## Three modes
 
 - **Demonstration:** `/demo` opens Northbridge, a fictional authority with made-up data. No account, no calls to Claude, and nothing is saved.
-- **One authority:** members sign in with their FHRG account and see their own authority. Leads can run surveys and add results.
+- **One authority:** members sign in with their FHRG account and see and change their own authority's data. Only its lead can release a councillor briefing, use the election setting or turn on Works and weather.
 - **FHRG administrators:** site administrators start on all authorities, with figures and topic counts only, listed alphabetically and never ranked. They can open any authority, but written comments stay with that authority's members.
 
 ## What it does so far

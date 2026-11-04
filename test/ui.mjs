@@ -108,6 +108,7 @@ claude.script.submit_change = (body) => (body.messages.length === 1 ? ({ id: "m"
 w.location.hash = "#notes/E10000032";
 await until(() => d.querySelector("textarea[placeholder]") && [...d.querySelectorAll("select option")].some((o) => /Record funding/.test(o.textContent)), "the notes page");
 ok(![...d.querySelectorAll("select option")].some((o) => /organisational charts/.test(o.textContent)), "the announcement list leaves out what isn't about roads");
+await until(() => /No notes yet/.test(text(d.querySelector(".main"))), "the list of notes");
 ok(/No notes yet/.test(text(d.querySelector(".main"))), "no notes so far");
 ok(/doesn't use the web when you paste text/.test(text(d.querySelector(".main"))), "the page explains that pasted text stays away from the web");
 d.querySelector(".main select").value = "https://www.gov.uk/government/news/record";

@@ -119,8 +119,8 @@ const api = async (path, body, token, headers) => { const r = await raw(path, bo
 const login = async (email) => (await api("/api/login", { email, password: "pw" })).token;
 const lead = await login("lead@westsussex.gov.uk"), member = await login("member@westsussex.gov.uk"), kirk = await login("officer@kirklees.gov.uk"), boss = await login("boss@fhrg.test"), insider = await login("insider@westsussex.gov.uk");
 
-let r = await api("/api/survey/new", { code: WSX, title: "Autumn roads", purpose: "How people feel about the A27 works." }, member);
-ok(r.status === 403, "a member who isn't a lead can't start a survey");
+let r = await api("/api/survey/new", { code: WSX, title: "" }, member);
+ok(r.status === 400, "a member of the authority can start a survey, so this one is only sent back for a title");
 r = await api("/api/survey/new", { code: WSX, title: "x" }, kirk);
 ok(r.status === 403, "nor can another authority's lead");
 r = await api("/api/survey/new", { code: WSX, title: "" }, lead);
@@ -128,14 +128,15 @@ ok(r.status === 400, "a survey needs a title");
 r = await api("/api/survey/new", { code: WSX, title: "Autumn roads", purpose: "How people feel about the A27 works." }, lead);
 const id = r.survey.id;
 ok(r.status === 200 && r.survey.status === "draft" && r.survey.collector === "West Sussex County Council" && !r.survey.access, "a lead starts a draft, named as the authority's, with no access code yet");
-ok((await api("/api/survey/list", { code: WSX }, member)).surveys.length === 1 && (await api("/api/survey/list", { code: WSX }, member)).canEdit === false, "the authority's members can see it");
+ok((await api("/api/survey/list", { code: WSX }, member)).surveys.length === 1 && (await api("/api/survey/list", { code: WSX }, member)).canEdit === true, "the authority's members can see it, and change it");
 for (const [path, body] of [["/api/survey/list", { code: WSX }], ["/api/survey/get", { code: WSX, id }], ["/api/survey/export", { code: WSX, id }], ["/api/survey/sort", { code: WSX, id }], ["/api/survey/scan", { code: WSX, id }]]) {
   ok((await api(path, body, kirk)).status === 403, `another authority is refused: ${path}`);
   ok((await api(path, body)).status === 401, `nobody signed in is refused: ${path}`);
 }
 for (const [path, body] of [["/api/survey/save", { code: WSX, id }], ["/api/survey/status", { code: WSX, id, status: "open" }], ["/api/survey/suggest", { code: WSX, id }], ["/api/survey/sort", { code: WSX, id }], ["/api/survey/scan", { code: WSX, id }], ["/api/survey/answers", { code: WSX, id }], ["/api/survey/csv", { code: WSX, id }], ["/api/survey/form", { code: WSX, id }], ["/api/survey/comment", { code: WSX, id }], ["/api/survey/export", { code: WSX, id }], ["/api/survey/help", { code: WSX, id, job: id }]]) {
-  ok((await api(path, body, member)).status === 403, `a member who isn't a lead is refused: ${path}`);
+  ok((await api(path, body, kirk)).status === 403, `another authority is refused: ${path}`);
 }
+ok((await api("/api/survey/save", { code: WSX, id }, member)).survey?.id === id, "a member of the authority can save a survey");
 ok((await api("/api/survey/get", { code: WSX, id: "../../facts" }, lead)).status === 404 && (await api("/api/survey/get", { code: WSX, id: "20261102120000000-abcd1234" }, lead)).status === 404, "a made-up survey isn't found");
 ok((await api("/api/survey/get", { code: KIRK, id }, boss)).status === 404, "a survey belongs to its own authority");
 
@@ -171,7 +172,7 @@ const access = r.survey.access;
 ok(/^[A-HJKMNP-Z2-9]{8}$/.test(access) && r.survey.openedBy === "Lee Lead", "opening a survey gives it an access code");
 ok(getJson(`${R}system/survey-codes/${access}.json`).id === id, "which leads to it");
 ok((await api("/api/survey/status", { code: WSX, id, status: "open" }, lead)).survey.access === access, "opening it again keeps the same code");
-ok((await api("/api/survey/get", { code: WSX, id }, member)).survey.access === "", "a member who isn't a lead isn't given the code");
+ok((await api("/api/survey/get", { code: WSX, id }, member)).survey.access === access && (await api("/api/survey/get", { code: WSX, id }, boss)).survey.access === access, "a member of the authority is given the code, as is a site administrator");
 
 r = await api("/api/s/get", { access: access.toLowerCase() });
 ok(r.status === 200 && r.survey.title === "Autumn roads survey" && r.survey.collector === "West Sussex County Council" && r.survey.questions.length === 10, "an interviewer needs only the code, in any capitals");
@@ -259,8 +260,9 @@ await t.sweepHelp(t.getConfig());
 ok(!getText(`${R}authorities/${WSX}/survey-help/${yesterday}-abcd1234.json`) && getText(forgotten), "and is then cleared away, with no one needing to start anything");
 
 // comments stay hidden until names are out
+got = await api("/api/survey/get", { code: WSX, id }, boss);
+ok(got.sample.length === 0 && got.template !== "" && got.comments.length === 0, "a site administrator from outside can edit, but isn't given comments or the sample to check");
 got = await api("/api/survey/get", { code: WSX, id }, member);
-ok(got.problems.length === 0 && got.sample.length === 0 && got.template === "", "a member who isn't a lead sees results only");
 ok(got.waiting === 3 && got.comments.length === 0 && !JSON.stringify(got).includes("Jane") && !JSON.stringify(got).includes("07700"), "comments can't be read until their names are out");
 const unsorted = await api("/api/survey/export", { code: WSX, id }, lead);
 ok(!/Jane|07700/.test(unsorted.csv) && unsorted.name === "autumn-roads-survey.csv", "and aren't in the download either");
@@ -285,9 +287,9 @@ ok(got.comments.find((x) => /Street light/.test(x.text)).topic === "Street light
 ok(got.comments.find((x) => /Ignore your/.test(x.text)).topic === "Other", "a topic that isn't on the list becomes Other");
 ok(getJson(`${R}authorities/${WSX}/survey-answers/${id}.json`).every((a) => !/Jane|07700/.test(JSON.stringify(a))), "the original words aren't kept");
 ok(!/Jane/.test((await api("/api/survey/export", { code: WSX, id }, lead)).csv) && /\[removed\]/.test((await api("/api/survey/export", { code: WSX, id }, lead)).csv), "the download now has them, names removed");
-ok(got.topics[0].count >= 1 && got.sample.length === 0, "topics are counted, and a member isn't asked to check a sample");
+ok(got.topics[0].count >= 1 && (await api("/api/survey/get", { code: WSX, id }, boss)).sample.length === 0, "topics are counted, and a site administrator from outside isn't asked to check a sample");
 const sample = (await api("/api/survey/get", { code: WSX, id }, lead)).sample;
-ok(sample.length === 1 && !sample[0].checked, "a lead has one in ten to check");
+ok(sample.length === 1 && !sample[0].checked && (await api("/api/survey/get", { code: WSX, id }, member)).sample.length === 1, "a lead has one in ten to check, as does any member of the authority");
 r = await api("/api/survey/comment", { code: WSX, id, n: sample[0].n, q: sample[0].id, text: "A hole on [removed]", topic: "Road safety" }, lead);
 got = await api("/api/survey/get", { code: WSX, id }, lead);
 ok(got.comments.find((x) => x.n === sample[0].n).text === "A hole on [removed]" && got.comments.find((x) => x.n === sample[0].n).topic === "Road safety" && got.comments.find((x) => x.n === sample[0].n).checked, "an officer can correct a comment, and it's marked as checked");

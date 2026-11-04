@@ -313,15 +313,15 @@ ok(/Put a mistake right/.test(text(d.querySelector(".main"))), "any form can be 
 button(d, "Put back form 900").click();
 await until(() => !button(d, "Put back form 900") && button(d, "Leave out this form"), "the form to come back");
 
-// ---- results, for someone who isn't a lead
+// ---- results, for a member of the authority who isn't its lead
 await api("/api/s/submit", { access, forms: Array.from({ length: 40 }, (_, i) => ({ client: `n${i}`, site: "Market Square", secs: 200, answers: { c1: "Fairly dissatisfied", a1: "45 to 54", a2: "Female" } })) });
 await api("/api/survey/sort", { code: WSX, id }, lead).catch(() => {});
-dom = await open(member, `#survey/${WSX}/${id}`); d = dom.window.document; w = dom.window;
+dom = await open(member, `#survey/${WSX}/${id}/results`); d = dom.window.document; w = dom.window;
 await see(d, /Indicative only/);
-ok(!button(d, "Set up") && !button(d, "Collect") && !button(d, "Check"), "a member who isn't a lead sees only the results");
-ok(/weighted to the local population's age and sex/.test(text(d.querySelector(".main"))), "which say how they're weighted");
+ok(button(d, "Set up") && button(d, "Collect") && button(d, "Check"), "a member of the authority gets every step, like its lead");
+ok(/weighted to the local population's age and sex/.test(text(d.querySelector(".main"))), "and results that say how they're weighted");
 ok(d.querySelector(".meter span").style.width !== "", "with a bar for each answer");
-ok(!button(d, "Download the answers"), "and no download of individual forms");
+ok(button(d, "Download the answers"), "and the download of the answers, as comments stay with the authority's own people");
 const page = text(d.querySelector(".main"));
 ok(/\[removed\]/.test(page) && !/Jane/.test(page), "comments appear with names removed");
 ok(/<img src=x/.test(page) && d.querySelector(".comment img") === null && w.hacked === undefined, "anything a resident wrote is shown as text, never run");
