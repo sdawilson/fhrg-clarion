@@ -177,9 +177,10 @@ table.heat { border-collapse: separate; border-spacing: 2px; font-size: 0.84rem;
 /* attention against concern */
 .quad-wrap { overflow-x: auto; }
 .quad { width: 100%; min-width: 540px; height: auto; display: block; }
-.q-red { stop-color: #e8b9ae; } .q-yellow { stop-color: #f5e6b0; } .q-green { stop-color: #bfdcbc; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .q-red { stop-color: #5e322c; } :root:not([data-theme="light"]) .q-yellow { stop-color: #524829; } :root:not([data-theme="light"]) .q-green { stop-color: #2a4a33; } }
-:root[data-theme="dark"] .q-red { stop-color: #5e322c; } :root[data-theme="dark"] .q-yellow { stop-color: #524829; } :root[data-theme="dark"] .q-green { stop-color: #2a4a33; }
+.q-red { stop-color: #e8b9ae; } .q-yellow { stop-color: #f5e6b0; } .q-blue { stop-color: #c9d6e4; } /* the blue is a tint of the navy in the site's colours */
+.q-arrow { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .q-red { stop-color: #5e322c; } :root:not([data-theme="light"]) .q-yellow { stop-color: #524829; } :root:not([data-theme="light"]) .q-blue { stop-color: #1c2f47; } }
+:root[data-theme="dark"] .q-red { stop-color: #5e322c; } :root[data-theme="dark"] .q-yellow { stop-color: #524829; } :root[data-theme="dark"] .q-blue { stop-color: #1c2f47; }
 .q-line { stroke: var(--line-2); stroke-width: 1; }
 .q-dot { fill: var(--s1); stroke: var(--surface); stroke-width: 2; }
 .q-dot.early { fill: var(--s2); }
@@ -1240,22 +1241,22 @@ async function evidenceView(page, a) {
 
 // ---------------------------------------------------------------- what's being said, and the comparison
 function attentionCard(att) {
-  const n = att.topics.length, X = (rank) => 80 + ((rank - 1) * 504) / (n - 1), Y = (rank) => 75 + ((rank - 1) * 273) / (n - 1);
+  const n = att.topics.length, X = (rank) => 584 - ((rank - 1) * 504) / (n - 1), Y = (rank) => 75 + ((rank - 1) * 273) / (n - 1);
   const midX = (X(1) + X(n)) / 2, midY = (Y(1) + Y(n)) / 2;
   const label = (x, y, text, cls, anchor = "start") => svg("text", { x, y, class: cls, "text-anchor": anchor }, text);
-  const chart = svg("svg", { class: "quad", viewBox: "0 0 620 430", role: "img", "aria-label": `Topics placed by public concern and media attention. Early signs: ${att.earlySigns.map((x) => x.topic).join(", ") || "none"}.` },
-    // Shaded out from the corner where people are concerned and nobody's reporting it. The labels and positions carry the meaning, so nothing rests on colour
-    svg("defs", {}, svg("radialGradient", { id: "q-heat", gradientUnits: "userSpaceOnUse", cx: 60, cy: 390, r: 644 }, svg("stop", { offset: "0%", class: "q-red" }), svg("stop", { offset: "50%", class: "q-yellow" }), svg("stop", { offset: "100%", class: "q-green" }))),
+  const chart = svg("svg", { class: "quad", viewBox: "0 0 620 448", role: "img", "aria-label": `Topics placed by public concern and media attention. Early signs: ${att.earlySigns.map((x) => x.topic).join(", ") || "none"}.` },
+    // Shaded out from the top right, where concern and attention are both highest. The labels and positions carry the meaning, so nothing rests on colour
+    svg("defs", {}, svg("radialGradient", { id: "q-heat", gradientUnits: "userSpaceOnUse", cx: 600, cy: 40, r: 644 }, svg("stop", { offset: "0%", class: "q-red" }), svg("stop", { offset: "50%", class: "q-yellow" }), svg("stop", { offset: "100%", class: "q-blue" }))),
     svg("rect", { class: "q-back", x: 60, y: 40, width: 540, height: 350, fill: "url(#q-heat)" }),
     svg("line", { class: "q-line", x1: 60, y1: midY, x2: 600, y2: midY }), svg("line", { class: "q-line", x1: midX, y1: 40, x2: midX, y2: 390 }), svg("line", { class: "q-line", x1: 60, y1: 390, x2: 600, y2: 390 }), svg("line", { class: "q-line", x1: 60, y1: 40, x2: 60, y2: 390 }),
-    label(70, 58, "Felt and reported", "q-zone-name"), label(590, 58, "Loud, not widely felt", "q-zone-name", "end"), label(70, 380, "Early signs: felt, not reported", "q-zone-name early"), label(590, 380, "Quiet and minor", "q-zone-name", "end"));
+    label(70, 58, "Loud, not widely felt", "q-zone-name"), label(590, 58, "Felt and reported", "q-zone-name", "end"), label(70, 380, "Quiet and minor", "q-zone-name"), label(590, 380, "Early signs: felt, not reported", "q-zone-name early", "end"));
   for (const t of att.topics) {
     const x = X(t.concern), y = Y(t.attention), cls = t.early ? "early" : "";
     const width = t.topic.length * 6.6, left = width > (x < midX ? midX : 600) - x - 12 && x - 12 - width >= 0; // a name stays on its own side of the line, if it fits there
     chart.append(svg("circle", { class: `q-dot ${cls}`, cx: x, cy: y, r: t.early ? 7 : 6 }), label(x + (left ? -12 : 12), y + 4, t.topic, `q-name ${cls}`, left ? "end" : "start"));
   }
-  chart.append(label(330, 418, "Public concern (rank): higher to the left", "q-axis", "middle"));
-  chart.append(svg("text", { x: 20, y: 215, class: "q-axis", "text-anchor": "middle", transform: "rotate(-90 20 215)" }, "Media attention (rank): higher at the top"));
+  chart.append(label(330, 418, "Public concern (rank): higher to the right", "q-axis", "middle"), svg("path", { class: "q-arrow", d: "M250 434H410M403 429l7 5-7 5" }));
+  chart.append(svg("text", { x: 20, y: 215, class: "q-axis", "text-anchor": "middle", transform: "rotate(-90 20 215)" }, "Media attention (rank): higher at the top"), svg("path", { class: "q-arrow", d: "M36 295V135M31 142l5-7 5 7" }));
   return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, `Each topic's rank in the media against its rank for public concern, from ${[att.usesSurvey ? "the street survey" : "", att.usesEnquiries ? "your enquiries" : ""].filter(Boolean).join(" and ")}. Ranks, because a press count and a survey share aren't on one scale.`))), h("div", { class: "quad-wrap" }, chart));
 }
 function earlySignsCard(a, att) {
