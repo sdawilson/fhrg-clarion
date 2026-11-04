@@ -310,7 +310,7 @@ export function buildPack() {
     },
     noteList: [{ id: note.id, status: "ready", stage: "Ready", created: note.created, by: note.by, title: note.change.title, headline: note.headline }],
     note, announcements: [{ title: "£4.2m extra for pothole repairs", url: "", date: "2026-10-06", summary: "" }],
-    surveyList: { canEdit: true, surveys: [autumn, winter].map((s) => ({ id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: s.id === autumn.id ? rows.length : 0, target: s.plan.target })) },
+    surveyList: { canEdit: true, surveys: [autumn, winter].map((s) => ({ id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: s.id === autumn.id ? rows.filter((x) => x.via !== "self").length : 0, byLink: s.id === autumn.id ? rows.filter((x) => x.via === "self").length : 0, target: s.plan.target })) },
     surveys: pages, sites: SITE_PACK,
     suggestions: [
       { text: "Have you heard about the closure of the Relief Road?", kind: "choice", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"], reason: "Loud: has it reached people?", topic: "Relief Road closure", basedOn: ["Impact note"], why: "5 assessed pieces in four weeks, but nothing yet shows how many people it affects." },

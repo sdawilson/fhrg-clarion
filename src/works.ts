@@ -16,7 +16,7 @@ import { looksPersonal } from "./enquiries";
 import { canEdit, isOwnLead, sameAuthority, type Pilot } from "./pilots";
 import { latestReadings } from "./reading";
 import { savePretty, storageJson } from "./storage";
-import { streetSummaries } from "./surveys";
+import { interviewedOnly, streetSummaries } from "./surveys";
 import { FriendlyError, cleanText, fetchWithTimeout, londonToday, withLock } from "./util";
 
 type Tally = Record<string, number>;
@@ -274,7 +274,7 @@ export function worksFigures(held: Held, pressByWeek: Tally, readings: { created
 }
 
 export async function worksPage(c: Config, me: Member, p: Pilot, held: Held, names: Record<string, string>) {
-  const [assessments, readings, streets] = await Promise.all([loadAssessments(c, p.code), latestReadings(c, p.code), streetSummaries(c, p.code)]);
+  const [assessments, readings, streets] = await Promise.all([loadAssessments(c, p.code), latestReadings(c, p.code), streetSummaries(c, p.code).then(interviewedOnly)]);
   const press: Tally = {};
   for (const a of assessments) if (a.relevance !== "None") press[mondayOf(a.date)] = (press[mondayOf(a.date)] ?? 0) + 1;
   return {

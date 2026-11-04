@@ -59,11 +59,12 @@ function h(tag, attrs, ...kids) {
   return el;
 }
 const CODE = (location.pathname.split("/")[2] || "").toUpperCase();
-const SELF = location.pathname.split("/")[1] === "r"; // someone filling it in themselves, from a link
+const SELF = location.pathname.split("/")[1].toLowerCase() === "r"; // someone filling it in themselves, from a link
 const SEND_EVERY_MS = window.SEND_EVERY_MS || 30000;
 const store = {
   get(key, fallback) { try { const v = localStorage.getItem(`${key}_${CODE}`); return v === null ? fallback : JSON.parse(v); } catch (e) { return fallback; } },
   set(key, value) { try { localStorage.setItem(`${key}_${CODE}`, JSON.stringify(value)); return true; } catch (e) { return false; } },
+  drop(key) { try { localStorage.removeItem(`${key}_${CODE}`); } catch (e) { /* nothing to drop */ } },
 };
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 const NOTICE = (who) => `Taking part is voluntary, you need to be 16 or over, and you can skip any question. We don't ask for your name, so please don't give anyone's name or address. An AI tool takes out any names and sorts comments into topics. Run by ${who}.`;
@@ -180,8 +181,16 @@ function finish() {
   send();
 }
 
-// ----- filling it in themselves. One person, one reply, sent straight away. Answers stay on the device only until they've
-// gone. Each reply has its own id, so sending one twice does no harm.
+// ----- filling it in themselves. One person, one reply, sent straight away. Devices get shared, so answers stay only until
+// they've gone or for a day at most, and nobody ever sends what's waiting without being asked. Each reply has its own id, so
+// sending one twice does no harm.
+const REPLY_MS = 24 * 60 * 60 * 1000;
+function heldReply() {
+  const reply = store.get("clarion_reply", null);
+  if (reply && Date.now() - reply.at <= REPLY_MS) return reply;
+  store.drop("clarion_reply");
+  return null;
+}
 function selfStart(message) {
   frame(h("h1", {}, S.survey.title), h("p", {}, "It takes a few minutes, and you can skip any question."), message ? h("p", { class: "bad", role: "alert" }, message) : null,
     h("div", { class: "card" }, h("p", { class: "note" }, NOTICE(S.survey.collector)), h("p", { class: "note" }, "If you give the first half of your postcode, we keep only a count of replies from each area, and whether you live here.")),
@@ -206,37 +215,45 @@ function finishSelf() {
   const answers = Object.fromEntries(Object.entries(f.answers).filter(([, v]) => String(v).trim()));
   S.form = null;
   if (!Object.keys(answers).length) return selfStart("You didn't answer any questions, so nothing has been sent.");
-  const reply = { client: f.client, secs: Math.round((Date.now() - f.started) / 1000), answers, postcode: firstHalf(f.postcode) };
+  const reply = { at: Date.now(), client: f.client, secs: Math.round((Date.now() - f.started) / 1000), answers, postcode: firstHalf(f.postcode) };
   store.set("clarion_reply", reply);
   sendSelf(reply);
 }
 async function sendSelf(reply) {
   frame(h("p", { role: "status" }, "Sending your answers…"));
   try {
-    await call("/api/r/submit", { access: CODE, ...reply });
-    store.set("clarion_reply", null); store.set("clarion_done", true);
+    await call("/api/r/submit", { access: CODE, client: reply.client, secs: reply.secs, answers: reply.answers, postcode: reply.postcode });
+    store.drop("clarion_reply"); store.set("clarion_done", true);
     frame(h("h1", {}, "Thank you"), h("p", {}, "Your answers have been sent."));
   } catch (e) {
-    if (e.status === 409) { store.set("clarion_reply", null); return selfClosed(e.message); }
+    if (e.status === 409 || e.status === 404) { store.drop("clarion_reply"); return e.status === 404 ? frame(h("h1", {}, "This link isn't working"), h("p", {}, `${e.message} Your answers couldn't be sent, and they've been removed from this device.`)) : selfClosed(e.message, true); }
     frame(h("h1", {}, "Your answers haven't been sent yet"), h("p", {}, e.status === 429 ? e.message : "Check your connection, then try again."), h("button", { class: "main-btn", type: "button", onclick: () => sendSelf(reply) }, "Try again"));
   }
 }
-function selfClosed(message) {
-  frame(h("h1", {}, /paused/.test(message) ? "This survey is paused" : "This survey has closed"), h("p", {}, /paused/.test(message) ? "Surveys stop during a pre-election period. Please try again afterwards." : "Thank you for your interest."));
+function selfClosed(message, lost) {
+  const paused = /paused/.test(message);
+  frame(h("h1", {}, paused ? "This survey is paused" : "This survey has closed"), h("p", {}, paused ? "Surveys stop during a pre-election period. Please try again afterwards." : "Thank you for your interest."),
+    lost ? h("p", {}, "Your answers couldn't be sent, and they've been removed from this device.") : null);
+}
+function waitingScreen(reply) {
+  frame(h("h1", {}, "An unsent reply is on this device"), h("p", {}, "Someone filled this in here, but it wasn't sent. If it was you, send it. If not, delete it."),
+    h("button", { class: "main-btn", type: "button", onclick: () => sendSelf(reply) }, "Send it"),
+    h("button", { class: "quiet", type: "button", onclick: () => { store.drop("clarion_reply"); selfStart(); } }, "Delete it"));
 }
 async function loadSelf() {
+  const waiting = heldReply();
   if (store.get("clarion_done", false)) return frame(h("h1", {}, "Thank you"), h("p", {}, "A reply has already been sent from this device."));
   frame(h("p", { role: "status" }, "Opening the survey…"));
   try {
     S.survey = (await call("/api/r/get", { access: CODE })).survey;
   } catch (e) {
-    if (e.status === 409) return selfClosed(e.message);
+    if (e.status === 409 || e.status === 404) store.drop("clarion_reply"); // it can never be sent now
+    if (e.status === 409) return selfClosed(e.message, !!waiting);
     if (e.status === 404 || e.status === 429) return frame(h("h1", {}, "This link isn't working"), h("p", {}, e.message));
     return frame(h("h1", {}, "The survey couldn't be opened"), h("p", {}, "Check your connection, then try again."), h("button", { class: "main-btn", type: "button", onclick: loadSelf }, "Try again"));
   }
   document.title = S.survey.title;
-  const waiting = store.get("clarion_reply", null);
-  if (waiting) return sendSelf(waiting);
+  if (waiting) return waitingScreen(waiting);
   selfStart();
 }
 

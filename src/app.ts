@@ -79,7 +79,7 @@
 //   POST /api/survey/self          {code, id, on}: turns the self-completion link on or off
 //   POST /api/survey/qr            {code, id, origin}: that link, and its QR code
 
-import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member } from "./accounts";
+import { handleLogin, handleLogout, handleSso, networkOf, signedIn, type Member } from "./accounts";
 import { findTitles, saveTitles, titlesHeld } from "./abc";
 import { loadWorks, refreshWorks, turnOff, turnOn, worksPage } from "./works";
 import { enquiriesView, loadEnquiries, readNews, removeImport, saveImport, saveMatch, savePage } from "./enquiries";
@@ -104,7 +104,7 @@ import { announcements, fixMyStreetUrl, loadSignals } from "./signals";
 import { loadSites } from "./sites";
 import { MAX_SCAN_CHARS, getHelp, sharedTopics, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
-  addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, countArea, createSurvey, formNumber, listSurveys, loadAnswers, loadAreas,
+  addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, countArea, createSurvey, formNumber, leaveOutDay, listSurveys, loadAnswers, loadAreas,
   loadCensus, loadSurvey, openSurvey, publicSelf, publicSurvey, readCsv, saveSurvey, setSelf, surveyByAccess, surveyBySelf, surveyPage, textQuestionIds, validAccess, validSelf, type Survey,
 } from "./surveys";
 import { FriendlyError, briefly, tryAgainNow, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
@@ -387,7 +387,7 @@ async function handleSurveyList(c: Config, request: Request): Promise<Response> 
   return json({
     paused: election.on,
     canEdit: canEdit(me, p),
-    surveys: surveys.map((s, i) => ({ id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: counts[i].filter((r) => !r.excluded).length, target: s.plan.target })),
+    surveys: surveys.map((s, i) => { const used = counts[i].filter((r) => !r.excluded); return { id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: used.filter((r) => r.via !== "self").length, byLink: used.filter((r) => r.via === "self").length, target: s.plan.target }; }),
   });
 }
 
@@ -489,8 +489,14 @@ function countOf(key: string): { from: number; n: number } {
   return fresh;
 }
 
+// Survey pages only ever post JSON from their own address, so another website can't send replies from its visitors' browsers
+function fromOurPage(request: Request): void {
+  if (!/^application\/json/i.test(request.headers.get("content-type") ?? "") || request.headers.get("sec-fetch-site") === "cross-site") throw new FriendlyError("That wasn't sent from a survey page.", 403);
+}
+
 async function surveyFromCode(c: Config, request: Request, value: unknown, forms = 1): Promise<Survey> {
-  const wrong = countOf(`wrong|${clientIp(request)}`);
+  fromOurPage(request);
+  const wrong = countOf(`wrong|${networkOf(request)}`);
   if (wrong.n >= MAX_WRONG) throw new FriendlyError("Too many tries. Please wait a few minutes.", 429);
   const access = String(value ?? "").toUpperCase().replace(/[\s-]/g, "");
   const s = validAccess(access) ? await surveyByAccess(c, access) : null;
@@ -507,13 +513,14 @@ async function surveyFromCode(c: Config, request: Request, value: unknown, forms
 // The self-completion link. It's meant to travel, so nothing about it is secret, and the limits are on how fast replies
 // can arrive: a campaign can't fill a survey in a few minutes, and most of a shared office can still reply
 async function surveyFromSelf(c: Config, request: Request, value: unknown, replying = false): Promise<Survey> {
-  const wrong = countOf(`wrong|${clientIp(request)}`);
+  fromOurPage(request);
+  const wrong = countOf(`wronglink|${networkOf(request)}`); // apart from tablets, so an old poster can't lock out an interviewer
   if (wrong.n >= MAX_WRONG) throw new FriendlyError("Too many tries. Please wait a few minutes.", 429);
   const link = String(value ?? "").toUpperCase();
   const s = validSelf(link) ? await surveyBySelf(c, link) : null;
   if (!s || s.self !== link) { wrong.n++; throw new FriendlyError("This link isn't right. Check it with whoever sent it.", 404); }
   if (replying) {
-    const person = countOf(`self|${clientIp(request)}`), all = countOf(`selfall|${link}`);
+    const person = countOf(`self|${networkOf(request)}`), all = countOf(`selfall|${link}`);
     if (person.n >= MAX_SELF_PER_ADDRESS || all.n >= MAX_SELF_REPLIES) throw new FriendlyError("A lot of replies are arriving at once. Please try again in a few minutes.", 429);
     person.n++; all.n++;
   }
@@ -524,12 +531,14 @@ async function surveyFromSelf(c: Config, request: Request, value: unknown, reply
 
 async function handleSelfSubmit(c: Config, request: Request): Promise<Response> {
   const b = await readJsonBody(request, 20_000);
+  // before anything is counted, so empty requests can't use up the limits
+  if (typeof b.client !== "string" || !b.client.trim() || !b.answers || typeof b.answers !== "object" || !Object.keys(b.answers).length) throw new FriendlyError("That reply has no answers.");
   const s = await surveyFromSelf(c, request, b.access, true);
   const outcode = outcodeOf(b.postcode), p = pilotByCode(s.code);
   const where = p && outcode ? whereIs(p, await areaOf(c, outcode)) : "unknown";
   const r = await addAnswers(c, s, [{ client: b.client, secs: b.secs, answers: b.answers, where }], "self");
   if (!r.done.length) throw new FriendlyError(r.problems[0] ?? "That reply couldn't be saved.", 409);
-  if (r.added && outcode && where !== "unknown") await countArea(c, s, outcode);
+  if (r.added && outcode && where === "here") await countArea(c, s, outcode); // an area outside the authority is never named, only counted as elsewhere
   return json({ ok: true });
 }
 
@@ -645,6 +654,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/r/submit": return await handleSelfSubmit(c, request);
         case "/api/survey/self": { const { b, s } = await surveyEditor(c, request); if (b.on === true) await notPaused(c, s.code); return json({ survey: await setSelf(c, s, b.on === true) }); }
         case "/api/survey/qr": return await handleSurveyQr(c, request);
+        case "/api/survey/selfday": { const { b, s } = await surveyEditor(c, request); await leaveOutDay(c, s, b.day, b.excluded === true); return json({ ok: true }); }
       }
     }
     return json({ error: "Not found." }, 404);

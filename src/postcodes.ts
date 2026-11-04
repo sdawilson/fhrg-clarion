@@ -13,7 +13,8 @@ type Area = { districts: string[]; counties: string[] };
 
 const LOOKUP_MS = 3000;
 const OUTCODE = /^[A-Z]{1,2}[0-9][0-9A-Z]?$/;
-const held = new Map<string, Area>();
+const MAX_REMEMBERED = 5000;
+const held = new Map<string, Area>(), looking = new Map<string, Promise<Area | null>>(), noSuchArea = new Set<string>();
 const filePath = (c: Config, outcode: string) => `${c.root}reference/outcodes/${outcode}.json`;
 const names = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
@@ -24,13 +25,25 @@ export function outcodeOf(v: unknown): string | null {
   return OUTCODE.test(first) ? first : null;
 }
 
+// One lookup at a time for each area, however many replies arrive together, and none for an area known not to exist
 export async function areaOf(c: Config, outcode: string): Promise<Area | null> {
   const known = held.get(outcode);
   if (known) return known;
+  if (noSuchArea.has(outcode)) return null;
+  const going = looking.get(outcode) ?? lookUp(c, outcode).finally(() => looking.delete(outcode));
+  looking.set(outcode, going);
+  return await going;
+}
+
+async function lookUp(c: Config, outcode: string): Promise<Area | null> {
   try {
     let area = await storageJson<Area | null>(c, filePath(c, outcode), null);
     if (!area) {
       const res = await fetchWithTimeout(`https://api.postcodes.io/outcodes/${outcode}`, {}, LOOKUP_MS);
+      if (res.status === 404) {
+        if (noSuchArea.size >= MAX_REMEMBERED) noSuchArea.clear();
+        noSuchArea.add(outcode);
+      }
       if (!res.ok) return null;
       const { result } = (await res.json()) as { result?: { admin_district?: unknown; admin_county?: unknown } };
       if (!result) return null;
@@ -45,7 +58,8 @@ export async function areaOf(c: Config, outcode: string): Promise<Area | null> {
   }
 }
 
-// An area can cross a boundary, so this means "may live here". Better to keep a neighbour in than leave a resident out
+// An area can cross a boundary, so this means "may live here". Better to keep a neighbour in than leave a resident out.
+// An authority's name in pilots.ts has to match postcodes.io, as all three pilots' do, so check that when adding one
 export function whereIs(p: Pilot, area: Area | null): Where {
   if (!area) return "unknown";
   const name = p.name.toLowerCase();

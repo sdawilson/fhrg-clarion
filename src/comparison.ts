@@ -10,7 +10,7 @@ import { loadAssessments, loadSources, summarise as summariseCoverage, withWeigh
 import { enquiriesView, loadEnquiries } from "./enquiries";
 import type { Pilot } from "./pilots";
 import { sharedTopics } from "./surveyai";
-import { loadCensus, streetSummaries } from "./surveys";
+import { interviewedOnly, loadCensus, streetSummaries } from "./surveys";
 import { londonToday } from "./util";
 import { loadWorks, publicJobs } from "./works";
 
@@ -72,6 +72,6 @@ export async function ownSignals(c: Config, p: Pilot): Promise<{ said: Said[]; c
 
 export async function loadComparison(c: Config, p: Pilot) {
   const [{ said, contacts }, streets] = await Promise.all([ownSignals(c, p), streetSummaries(c, p.code)]);
-  const latest = streets.find((s) => !s.selfOnly && Date.now() - Date.parse(s.ran) < SURVEY_DAYS * DAY_MS && s.topics.length); // a newer one may not have had its comments sorted yet
+  const latest = interviewedOnly(streets).find((s) => Date.now() - Date.parse(s.ran) < SURVEY_DAYS * DAY_MS && s.topics.length); // a newer one may not have had its comments sorted yet
   return compare(said, latest?.topics ?? [], contacts);
 }

@@ -31,7 +31,8 @@ export const MAX_LOCAL = 5;
 export const MIN_GROUP = 30;
 export const WEIGHT_CAP = 5;
 const MAX_ANSWERS = 5000;
-const MAX_SELF = 3000; // a link can be passed around, and that mustn't crowd out interviewers' forms
+const MAX_SELF = 3000; // replies by link. A link can be passed around, so these have their own limit, and interviewers keep theirs
+const MAX_SELF_HELD = 6000; // and including any left out, so a flood that's been dealt with can't fill the storage
 const MIN_AREA = 10; // fewer replies from a postcode area than this are pooled
 const MAX_SITES = 40;
 const DEFAULT_TARGET = 120; // four sites of 30
@@ -242,10 +243,16 @@ export async function setSelf(c: Config, s: Survey, on: boolean): Promise<Survey
       now.self = newSelf();
       await savePretty(c, accessPath(c, now.self), { code: now.code, id: now.id });
     }
-    now.selfOn = on; now.updated = new Date().toISOString();
+    now.selfOn = on; // `updated` stays as it is, because it decides how long a survey counts as current
     await savePretty(c, surveyPath(c, s.code, s.id), now);
     return now;
   });
+}
+
+// A flood arrives on one or two days, so that's the handle for leaving it out, and it can be put back
+export async function leaveOutDay(c: Config, s: Survey, day: unknown, excluded: boolean): Promise<void> {
+  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new FriendlyError("That isn't a date.");
+  await changeAnswers(c, s, (all) => { for (const a of all) if (a.via === "self" && a.at.startsWith(day)) a.excluded = excluded; });
 }
 
 export async function surveyByAccess(c: Config, access: string): Promise<Survey | null> {
@@ -292,12 +299,13 @@ export async function addAnswers(c: Config, s: Survey, items: Incoming[], via: A
     // a form left out can be entered again, which is how a mistake on one gets put right
     const forms = new Set(all.filter((a) => !a.excluded).map((a) => a.form)), clients = new Set(all.map((a) => a.client).filter(Boolean));
     let next = all.reduce((most, a) => Math.max(most, a.n), 0) + 1, added = 0, skipped = 0;
+    let linked = all.filter((a) => a.via === "self").length, linkedInUse = all.filter((a) => a.via === "self" && !a.excluded).length;
     const problems: string[] = [], done: string[] = [];
     for (const item of items) {
       const client = cleanText(item?.client, 60);
       if (client && clients.has(client)) { skipped++; done.push(client); continue; }
-      if (all.length >= MAX_ANSWERS) { problems.push(`This survey has reached its limit of ${MAX_ANSWERS} answers.`); break; }
-      if (via === "self" && all.filter((a) => a.via === "self").length >= MAX_SELF) { problems.push("This survey has all the replies it can take."); break; }
+      if (via !== "self" && all.length - linked >= MAX_ANSWERS) { problems.push(`This survey has reached its limit of ${MAX_ANSWERS} answers.`); break; }
+      if (via === "self" && (linkedInUse >= MAX_SELF || linked >= MAX_SELF_HELD)) { problems.push("This survey has all the replies it can take."); break; }
       const prefix = via === "tablet" ? "T" : via === "self" ? "R" : ""; // neither can take a paper form's number
       while (prefix && forms.has(`${prefix}${next}`)) next++;
       const form = prefix ? `${prefix}${next}` : formNumber(item?.form);
@@ -309,6 +317,7 @@ export async function addAnswers(c: Config, s: Survey, items: Incoming[], via: A
       const secs = Number(item?.secs);
       all.push({ n: next++, form, via, ...(via === "self" ? { where: item?.where ?? "unknown" } : {}), site: cleanText(item?.site, 80), at: new Date().toISOString(), secs: item?.secs !== undefined && item.secs !== null && Number.isFinite(secs) && secs >= 0 ? Math.round(secs) : null, ...(client ? { client } : {}), answers: read.answers, topics: {}, clean: {}, checked: {} });
       forms.add(form);
+      if (via === "self") { linked++; linkedInUse++; }
       if (client) { clients.add(client); done.push(client); }
       added++;
     }
@@ -384,7 +393,7 @@ export async function countArea(c: Config, s: Survey, outcode: string): Promise<
   await withLock(path, async () => {
     const tally = await loadAreas(c, s.code, s.id);
     tally[outcode] = (tally[outcode] || 0) + 1;
-    await storagePut(c, path, JSON.stringify(tally));
+    await storagePut(c, path, JSON.stringify(Object.fromEntries(Object.entries(tally).sort(([a], [b]) => a.localeCompare(b))))); // in no order that follows the replies
   });
 }
 export function areaRows(tally: AreaTally): { named: { area: string; count: number }[]; pooled: number } {
@@ -494,6 +503,9 @@ const effectiveSize = (w: number[]) => { const sum = w.reduce((a, b) => a + b, 0
 const fromSelf = (r: Answer) => r.via === "self";
 const counted = (r: Answer) => fromSelf(r) && r.where !== "elsewhere";
 const noSites = <T extends Pick<Survey, "plan">>(s: T): T => ({ ...s, plan: { ...s.plan, sites: [] } });
+const elsewhere = (r: Answer) => r.where === "elsewhere";
+/** Surveys with interviewers. A survey people only chose to answer isn't a street survey, and a link is too easily moved to count as one. */
+export const interviewedOnly = (list: StreetSummary[]) => list.filter((x) => !x.selfOnly);
 
 export function surveyResults(s: Pick<Survey, "locals" | "plan">, rows: Answer[], census: Census | null): Results {
   const used = rows.filter((r) => !r.excluded);
@@ -651,6 +663,16 @@ export async function streetSummaries(c: Config, code: string): Promise<StreetSu
 
 // Everything a survey's page shows. `edit`: a lead or site administrator. `own`: a member of the authority, the
 // only people who get the words of a comment. Topic counts go to everyone who can see the survey.
+function selfDays(rows: Answer[]): { day: string; replies: number; left: number }[] {
+  const days = new Map<string, { day: string; replies: number; left: number }>();
+  for (const r of rows.filter(fromSelf)) {
+    const day = r.at.slice(0, 10), x = days.get(day) ?? { day, replies: 0, left: 0 };
+    x.replies++; if (r.excluded) x.left++;
+    days.set(day, x);
+  }
+  return [...days.values()].sort((a, b) => b.day.localeCompare(a.day));
+}
+
 export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edit: boolean, own: boolean, areas = 0, tally: AreaTally = {}) {
   const used = rows.filter((r) => !r.excluded), replied = used.filter(fromSelf), selfOnly = replied.length > 0 && replied.length === used.length;
   const headline = selfOnly ? surveyResults(noSites(s), rows.filter(counted), census) : surveyResults(s, rows.filter((r) => !fromSelf(r)), census);
@@ -663,12 +685,14 @@ export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edi
     survey: edit ? s : { ...s, access: "", self: "", selfOn: false }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS,
     template: edit ? templateCsv(s) : "",
     census: census ? { adults: census.adults } : null, areas, targets: ageSexTargets(census, s.plan.target),
-    results: { ...headline, total: rows.length, bySource }, selfOnly, topics: topicCounts(shown), comments: own ? shown : [], ownComments: own, waiting: waitingComments(s, used),
+    results: { ...headline, total: rows.length, bySource }, selfOnly, topics: topicCounts(shown), comments: own ? shown : [], ownComments: own, waiting: waitingComments(s, used.filter((r) => !elsewhere(r))),
     self: replied.length ? {
       results: selfOnly ? null : surveyResults(noSites(s), rows.filter(counted), census), here: whereCount("here"), elsewhere: whereCount("elsewhere"), notSaid: whereCount("unknown"), areas: areaRows(tally),
+      left: rows.filter((r) => fromSelf(r) && r.excluded).length,
       topics: selfOnly ? [] : topicCounts(theirs), comments: own && !selfOnly ? theirs : [],
     } : null,
-    problems: edit ? findProblems(s, rows) : [], excluded: edit ? rows.filter((r) => r.excluded).map((r) => ({ n: r.n, form: r.form })) : [],
+    problems: edit ? [...findProblems(s, rows.filter((r) => !fromSelf(r))), ...findProblems(s, rows.filter(fromSelf))] : [], excluded: edit ? rows.filter((r) => r.excluded && !fromSelf(r)).map((r) => ({ n: r.n, form: r.form })) : [],
+    selfDays: edit ? selfDays(rows) : [],
     sample: edit && own ? commentSample(everyone) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1,
   };
 }

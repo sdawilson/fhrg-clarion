@@ -8,7 +8,7 @@ import { loadComparison } from "./comparison";
 import { PILOTS, type Pilot } from "./pilots";
 import { latestReadings } from "./reading";
 import { storageJson, storageList } from "./storage";
-import { listSurveys, streetSummaries, type StreetSummary } from "./surveys";
+import { interviewedOnly, listSurveys, streetSummaries, type StreetSummary } from "./surveys";
 import { cached, median } from "./util";
 
 const BENCHMARK_MIN = 5; // fewer, and the middle figure could give away an authority's own result
@@ -27,11 +27,11 @@ async function authorityRow(c: Config, p: Pilot): Promise<Row> {
     storageList(c, `${c.root}authorities/${p.code}/readings/`), storageList(c, `${c.root}authorities/${p.code}/notes/`),
     storageJson<unknown[]>(c, `${c.root}authorities/${p.code}/forecasts.json`, []), loadComparison(c, p).catch((e) => { console.log(`[warn] comparison for ${p.code}: ${(e as Error).message}`); return null; }),
   ]);
-  const latest = readings.find((r) => r.status === "ready");
+  const latest = readings.find((r) => r.status === "ready"), reported = interviewedOnly(streets);
   const today = new Date().toISOString().slice(0, 10);
   return {
     code: p.code, name: p.name, region: p.region, kind: p.kind, direction: latest?.direction ?? "", readingOn: latest?.created.slice(0, 10) ?? "",
-    surveysRun: surveys.filter((s) => s.status !== "draft").length, reported: streets.length, replies: streets.reduce((n, x) => n + x.responses, 0), street: streets[0] ?? null,
+    surveysRun: surveys.filter((s) => s.status !== "draft").length, reported: reported.length, replies: reported.reduce((n, x) => n + x.responses, 0), street: reported[0] ?? null,
     readingsThisMonth: readingNames.filter((n) => n.startsWith(month())).length, notesThisMonth: noteNames.filter((n) => n.startsWith(month())).length,
     forecastsDue: (Array.isArray(forecasts) ? forecasts : []).filter((f: any) => typeof f?.checkDate === "string" && f.checkDate <= today && !f.outcome).length,
     early: comparison === null ? null : comparison.ready ? comparison.earlySigns.map((x) => x.topic) : [],
@@ -73,6 +73,6 @@ export function middleFigure(latest: Pick<StreetSummary, "satisfied" | "worse">[
 }
 
 export const benchmark = (c: Config) => cached("benchmark", 10 * 60 * 1000, async () => {
-  const latest = (await Promise.all(PILOTS.map((p) => streetSummaries(c, p.code)))).map((x) => x.find((y) => y.current && !y.selfOnly)).filter((x): x is StreetSummary => !!x);
+  const latest = (await Promise.all(PILOTS.map((p) => streetSummaries(c, p.code)))).map((x) => interviewedOnly(x).find((y) => y.current)).filter((x): x is StreetSummary => !!x);
   return middleFigure(latest);
 });

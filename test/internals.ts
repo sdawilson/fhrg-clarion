@@ -23,4 +23,5 @@ export { audienceFor, bandRates, cleanDomain, pieceWeight, readAssessment, readK
 export { wordFile } from "../src/docx";
 export { outcodeOf, whereIs } from "../src/postcodes";
 export { qrCode } from "../src/qr";
-export { areaRows, summarise as summariseStreet } from "../src/surveys";
+export { networkOf } from "../src/accounts";
+export { areaRows, interviewedOnly, summarise as summariseStreet } from "../src/surveys";

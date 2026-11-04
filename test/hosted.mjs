@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { JSDOM } from "jsdom";
-import { addUser, claude, files, getText, postcodesDown, putText, until } from "./sim.mjs";
+import { addUser, claude, files, getText, newsTopics, postcodesDown, putText, until } from "./sim.mjs";
 const { handleRequest, setSurveyPage } = await import("./.build/app.mjs");
 const t = await import("./.build/internals.mjs");
 
@@ -23,7 +23,16 @@ ok(areas.named.map((x) => x.area).join() === "RH12,BN11" && areas.pooled === 10,
 // checked against a real decoder when it was written, so this notices if it ever changes
 const qr = t.qrCode("https://clarion.fhrg.co.uk/r/ABCDEFGHJKMN");
 ok(qr.length === 29 && qr.every((r) => r.length === 29) && qr[0].startsWith("1111111") && qr[6].startsWith("1111111") && qr[0].endsWith("1111111") && qr[28].startsWith("1111111"), "a QR code has its three corner squares");
-ok(createHash("sha256").update(qr.join("\n")).digest("hex").startsWith("db2ad8cde4a24479"), "and comes out as the decoder read it");
+const fingerprint = (text) => createHash("sha256").update(t.qrCode(text).join("\n")).digest("hex").slice(0, 16);
+ok(fingerprint("https://clarion.fhrg.co.uk/r/ABCDEFGHJKMN") === "db2ad8cde4a24479", "and comes out as a real decoder read it");
+for (const [letter, length, size, print] of [["a", 10, 1, "72b02bb951d86eea"], ["b", 20, 2, "bedffd0c294095b9"], ["c", 60, 4, "159caa4cf09d92ca"], ["d", 90, 6, "2631e75034562723"], ["e", 130, 8, "d10d8fcfc1691daf"], ["f", 200, 10, "9f65c13b969907d5"]]) ok(fingerprint(letter.repeat(length)) === print && t.qrCode(letter.repeat(length)).length === size * 4 + 17, `at size ${size} too`);
+let tooLong = false;
+try { t.qrCode("x".repeat(300)); } catch { tooLong = true; }
+ok(tooLong, "and anything too long for one is refused");
+ok(t.scrubContacts("It's by RH12 1AB, near the A27") === "It's by [removed], near the A27" && t.scrubContacts("rh121ab") === "[removed]", "a whole postcode is taken out of a comment by code");
+const lane = (ip) => t.networkOf(new Request("https://x.test", { headers: { "x-real-ip": ip } }));
+ok(lane("2001:db8:1:2::1") === lane("2001:0db8:0001:0002:aaaa:bbbb:cccc:dddd") && lane("2001:db8:1:3::1") !== lane("2001:db8:1:2::1"), "a block of new-style addresses counts as one");
+ok(lane("::ffff:10.1.2.3") === "10.1.2.3" && lane("10.1.2.3") === "10.1.2.3" && lane("2001:db8::1") === "2001:db8:0:0", "and old-style addresses stay as they are");
 
 // ---- through the API
 await addUser(1, "lead@westsussex.gov.uk", "Lee Lead", 30, "lead");
@@ -33,8 +42,11 @@ await addUser(4, "boss@fhrg.test", "Bo Boss", 99, "member", 1);
 let ip = 0;
 const api = async (path, body, token, address) => { const res = await handleRequest(new Request(`https://clarion.test${path}`, { method: "POST", headers: { "content-type": "application/json", "x-real-ip": address ?? `10.0.0.${++ip % 250}`, ...(token ? { "x-session-token": token } : {}) }, body: JSON.stringify(body) })); return Object.assign(await res.json(), { status: res.status }); };
 const login = async (email) => (await api("/api/login", { email, password: "pw" })).token;
+const raw = async (path, body, headers) => (await handleRequest(new Request(`https://clarion.test${path}`, { method: "POST", headers, body }))).status;
 const lead = await login("lead@westsussex.gov.uk"), member = await login("member@westsussex.gov.uk"), kit = await login("kit@kirklees.gov.uk"), boss = await login("boss@fhrg.test");
 
+newsTopics.push("Parking", "Pavements");
+const paper = (await api("/api/coverage/source", { code: WSX, name: "A paper", type: "Local Newspaper", reach: 5000 }, lead)).source;
 const made = (await api("/api/survey/new", { code: WSX, title: "Roads survey", purpose: "PRIVATE-PURPOSE of the officer" }, lead)).survey;
 const id = made.id;
 await api("/api/survey/save", { code: WSX, id, plan: { sites: [{ name: "High Street", share: 1 }] } }, lead);
@@ -73,6 +85,7 @@ const asked = postcodesDown.asked.length;
 await api("/api/r/submit", reply("b", "rh12"));
 ok(postcodesDown.asked.length === asked && JSON.parse(getText(areaFile())).RH12 === 2, "each area is looked up once");
 await api("/api/r/submit", reply("c", "M1 1AE"));
+ok(!getText(areaFile()).includes("M1"), "an area outside the authority is never named");
 await api("/api/r/submit", reply("d", ""));
 await api("/api/r/submit", reply("e", "ZZ99 9ZZ"));
 postcodesDown.on = true;
@@ -83,21 +96,45 @@ ok(held.map((x) => x.where).join() === "here,here,elsewhere,unknown,unknown,unkn
 ok(!getText(areaFile()).includes("ZZ99"), "a made-up area isn't counted");
 ok((await api("/api/r/submit", { ...reply("g", ""), where: "here", answers: { c1: "Fairly satisfied" }, via: "tablet", site: "High Street" })).ok && JSON.parse(getText(answersFile())).at(-1).where === "unknown" && JSON.parse(getText(answersFile())).at(-1).via === "self" && JSON.parse(getText(answersFile())).at(-1).site === "", "the sender can't set the route, the site or where they live");
 r = await api("/api/r/submit", { ...reply("h", ""), answers: {} });
-ok(r.ok && !JSON.parse(getText(answersFile())).some((x) => x.client === "h"), "an empty reply isn't kept");
+ok(r.status === 400 && !JSON.parse(getText(answersFile())).some((x) => x.client === "h"), "an empty reply is refused");
+ok((await api("/api/r/submit", { ...reply("", "") })).status === 400 && (await api("/api/r/submit", { access: link, answers: { c1: "Fairly satisfied" } })).status === 400, "and so is one with no id, which couldn't safely be sent again");
+const body = JSON.stringify(reply("cross", ""));
+ok(await raw("/api/r/submit", body, { "content-type": "text/plain" }) === 403 && await raw("/api/r/submit", body, { "content-type": "application/json", "sec-fetch-site": "cross-site" }) === 403 && await raw("/api/s/submit", JSON.stringify({ access, forms: [] }), { "content-type": "text/plain" }) === 403, "another website can't send replies from its visitors' browsers");
+ok(!JSON.parse(getText(answersFile())).some((x) => x.client === "cross"), "and nothing arrives");
 
 for (let i = 0; i < 20; i++) r = await api("/api/r/submit", reply(`same-${i}`, ""), undefined, "10.9.9.9");
 const limited = await api("/api/r/submit", reply("same-x", ""), undefined, "10.9.9.9");
 ok(r.ok && limited.status === 429, "one address can't send more than 20 in ten minutes");
 ok((await api("/api/r/submit", reply("other", ""), undefined, "10.9.9.8")).ok, "others carry on");
+let sixFour;
+for (let i = 0; i < 21; i++) sixFour = await api("/api/r/submit", reply(`v6-${i}`, ""), undefined, `2001:db8:5:6:${i + 1}::1`);
+ok(sixFour.status === 429, "and hopping around one block of new addresses doesn't get round it");
+for (let i = 0; i < 31; i++) r = await api("/api/r/get", { access: "AAAAAAAAAAAA" }, undefined, "10.8.8.8");
+ok(r.status === 429 && (await api("/api/s/get", { access }, undefined, "10.8.8.8")).survey, "guessing at links stops, without locking out an interviewer at the same address");
+const busy = (await api("/api/survey/new", { code: WSX, title: "Busy", purpose: "x" }, lead)).survey;
+await api("/api/survey/status", { code: WSX, id: busy.id, status: "open" }, lead);
+const busyLink = (await api("/api/survey/self", { code: WSX, id: busy.id, on: true }, lead)).survey.self;
+let all, taken = 0;
+for (let i = 0; all?.status !== 429 && i < 700; i++) { all = await api("/api/r/submit", { ...reply(`burst-${i}`, ""), access: busyLink }, undefined, `10.${50 + Math.floor(i / 20)}.0.1`); if (all.ok) taken++; }
+ok(all.status === 429 && taken === 600, "no link takes more than 600 in ten minutes");
+ok((await api("/api/r/submit", { access: busyLink, client: "x", answers: {} }, undefined, "10.7.7.7")).status === 400 && (await api("/api/r/get", { access: busyLink }, undefined, "10.7.7.7")).survey, "while reading the questions still works");
+ok((await api("/api/r/submit", reply("elsewhere-link", ""), undefined, "10.7.7.6")).ok, "and other surveys' links carry on");
 
 // the cap, so a link can't crowd out interviewers
-const before = getText(answersFile()), full = JSON.parse(before);
-const crowd = Array.from({ length: 3000 }, (_, i) => ({ ...full[0], n: 9000 + i, form: `R${9000 + i}`, client: `crowd-${i}` }));
-putText(answersFile(), JSON.stringify([...full, ...crowd]));
-r = await api("/api/r/submit", reply("too-many", ""));
+const beforeCap = getText(answersFile()), full = JSON.parse(beforeCap).slice(0, 8);
+const crowd = (n, more = {}) => Array.from({ length: n }, (_, i) => ({ ...full[0], n: 9000 + i, form: `R${9000 + i}`, client: `crowd-${i}`, ...more }));
+const fresh2 = async (rows, words) => { putText(answersFile(), JSON.stringify(rows)); return await api("/api/r/submit", reply(`cap-${words}`, ""), undefined, `10.60.${++ip % 250}.1`); };
+r = await fresh2(crowd(3000), "a");
 ok(r.status === 409 && /all the replies/.test(r.error), "replies by link stop at 3,000");
 ok((await api("/api/s/submit", { access, forms: [{ client: "t1", site: "High Street", answers: { c1: "Fairly satisfied" } }] })).added === 1, "and interviewers' forms still go in");
-putText(answersFile(), before);
+const big = Array.from({ length: 4990 }, (_, i) => ({ ...full[0], via: "tablet", n: 1 + i, form: `T${1 + i}`, client: `t-${i}`, site: "High Street" }));
+putText(answersFile(), JSON.stringify([...big, ...crowd(3000)]));
+ok((await api("/api/s/submit", { access, forms: [{ client: "t2", site: "High Street", answers: { c1: "Fairly satisfied" } }] })).added === 1, "a large survey keeps all of its own 5,000, however many came by link");
+r = await fresh2(crowd(3000, { excluded: true }), "b");
+ok(r.ok, "a flood that's been left out stops counting, so it can't kill a link for good");
+r = await fresh2(crowd(6000, { excluded: true }), "c");
+ok(r.status === 409, "though there's a limit on how much is held");
+putText(answersFile(), beforeCap);
 
 await api("/api/survey/self", { code: WSX, id, on: false }, lead);
 r = await api("/api/r/get", { access: link });
@@ -145,14 +182,53 @@ r = await api("/api/survey/get", { code: WSX, id }, lead);
 ok(r.selfOnly && r.results.used === 40 && pct(r.results, "c1", "Very dissatisfied") === 100 && r.self.results === null, "with no interviewers, people's own replies become the headline, still without those from elsewhere");
 const reader = await api("/api/authority", { code: WSX }, lead);
 const summary = reader.evidence.streets.find((x) => x.id === id);
-ok(summary.selfOnly && /chose to reply/.test(summary.note), "a survey like that is labelled for a reading");
-ok(!/street survey/.test(reader.kinds?.join() ?? "") && t.kindsHeld({ surveys: [], streets: [{ current: true, selfOnly: true }], signals: { fixMyStreet: { ok: false }, petitions: { ok: false }, questions: { ok: false } } }).length === 0, "and isn't a kind of signal");
+ok(summary.selfOnly && /chose to reply/.test(summary.note) && summary.satisfied === 0 && summary.responses === 40, "a survey like that is labelled for a reading, without replies from elsewhere");
+ok(reader.evidence.gaps.includes("A street survey in this authority"), "and it leaves the gap for a street survey open");
+ok(t.kindsHeld({ surveys: [], streets: [{ current: true, selfOnly: true }], signals: { fixMyStreet: { ok: false }, petitions: { ok: false }, questions: { ok: false } } }).length === 0, "it isn't a kind of signal");
 ok(t.kindsHeld({ surveys: [], streets: [{ current: true, selfOnly: false }], signals: { fixMyStreet: { ok: false }, petitions: { ok: false }, questions: { ok: false } } }).join() === "street survey", "which one with interviewers is");
+ok(t.interviewedOnly([{ id: 1, selfOnly: true }, { id: 2, selfOnly: false }]).map((x) => x.id).join() === "2", "the FHRG middle figure and the rest take only surveys with interviewers");
+let admin = await api("/api/admin/overview", {}, boss);
+let wsxRow = admin.authorities.find((x) => x.code === WSX);
+ok(wsxRow.street === null && wsxRow.reported === 0 && wsxRow.replies === 0 && admin.totals.middle === null && admin.totals.withSurvey === 0, "the all-authorities view doesn't show it as a street survey");
+putText(answersFile(), JSON.stringify([...selves.map((x) => ({ ...x, answers: { ...x.answers, c3: "Comment" }, clean: { c3: true }, topics: { c3: "Pavements" } })), ...away]));
+admin = await api("/api/admin/overview", {}, boss);
+ok(!admin.topics.some((x) => x.topic === "Pavements"), "and its topics stay out of the map");
+ok(/street survey or enquiries/.test((await (async () => { for (const [topic, n] of [["Potholes", 3], ["Road safety", 2], ["Parking", 1]]) for (let i = 0; i < n; i++) await api("/api/coverage/assess", { code: WSX, source: paper.id, date: new Date(Date.now() - (2 + i) * 86400000).toISOString().slice(0, 10), summary: "words", topic, relevance: "High", tone: "Critical", prominence: "Inside page" }, lead); return await api("/api/attention", { code: WSX }, lead); })()).needs), "and it can't stand for concern in attention and concern");
+reset([...selves, ...away]);
+
+// what a reading and a briefing are told
+claude.script.submit_briefing = (body) => ({ id: "m", type: "message", role: "assistant", model: "x", stop_reason: "tool_use", stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 }, content: [{ type: "tool_use", id: "t1", name: "submit_briefing", input: { summary: "A summary.", how_residents_feel: "F", why_it_matters_here: "M", likely_questions: [], factual_lines: [] } }] });
+const callsBefore = claude.calls.length;
+const drafted = (await api("/api/briefing/start", { code: WSX }, lead)).briefing;
+await until(async () => (await api("/api/briefing/get", { code: WSX, id: drafted.id }, lead)).briefing.status !== "working", "the briefing");
+const briefingDraft = (await api("/api/briefing/get", { code: WSX, id: drafted.id }, lead)).briefing;
+ok(/"surveys_people_chose_to_answer":\[\{/.test(claude.calls[callsBefore].prompt) && /"street_surveys":\[\]/.test(claude.calls[callsBefore].prompt), "a briefing is told it's a survey people chose to answer, not a street survey");
+ok(briefingDraft.sources.some((x) => /people who chose to reply \(indicative\)/.test(x)) && !briefingDraft.sources.some((x) => x.startsWith("Street survey")), "and its sources say so");
+const issued = (await api("/api/briefing/approve", { code: WSX, id: drafted.id, updated: briefingDraft.updated, hidden: false, title: briefingDraft.title, summary: "A summary.", feel: "F", matters: "M", questions: [], lines: [] }, lead)).briefing;
+const word = Buffer.from((await api("/api/briefing/word", { code: WSX, id: issued.id }, lead)).file, "base64").toString();
+ok(word.includes("may not be typical") && !word.includes("a street sample"), "and so does the Word copy");
+const readingCalls = claude.calls.length;
+await api("/api/reading/start", { code: WSX }, lead);
+await until(() => claude.calls.length > readingCalls, "a reading");
+ok(/surveys_people_chose_to_answer/.test(JSON.stringify(claude.calls.at(-1).prompt)) && !/"street_surveys"/.test(JSON.stringify(claude.calls.at(-1).prompt).replace(/\\/g, "")), "and so is a mood reading");
 reset([...inter, ...selves, ...away]);
 ok(!(await api("/api/authority", { code: WSX }, lead)).evidence.streets.find((x) => x.id === id).selfOnly, "and a survey with interviewers reports their figure");
 ok((await api("/api/authority", { code: WSX }, lead)).evidence.streets.find((x) => x.id === id).satisfied === 100, "unmoved by anyone else's replies");
 
 // comments
+const list = (await api("/api/survey/list", { code: WSX }, lead)).surveys.find((x) => x.id === id);
+ok(list.responses === 40 && list.byLink === 75, "the list of surveys counts interviewers against the aim, and link replies apart");
+const alone = (await api("/api/survey/export", { code: WSX, id }, lead)).csv;
+reset(inter);
+const interOnly = (await api("/api/survey/export", { code: WSX, id }, lead)).csv;
+const weightOf = (text, form) => text.split("\n").find((x) => x.startsWith(`${form},`)).split(",")[3];
+ok(weightOf(alone, "T1") === weightOf(interOnly, "T1"), "interviewers' weights don't move when people's own replies arrive");
+reset([...inter, ...selves, ...away]);
+const twins = Array.from({ length: 6 }, (_, i) => row(i + 500, "tablet", "Fairly satisfied"));
+const mixed = twins.flatMap((x, i) => [x, row(i + 600, "self", i % 2 ? "Very satisfied" : "Fairly dissatisfied", { where: "here" })]);
+reset(mixed);
+ok((await api("/api/survey/get", { code: WSX, id }, lead)).problems.filter((x) => /same answers/.test(x.why)).length === 4, "a run of matching forms is still found, with replies by link in between");
+reset([...inter, ...selves, ...away]);
 const said = [...inter.slice(0, 2).map((x, i) => ({ ...x, answers: { ...x.answers, c3: `Interviewer comment ${i}` }, clean: { c3: true }, topics: { c3: "Potholes" } })), ...inter.slice(2),
   ...selves.slice(0, 3).map((x, i) => ({ ...x, answers: { ...x.answers, c3: `My own comment ${i}` }, clean: { c3: true }, topics: { c3: "Pavements" } })), ...selves.slice(3), { ...selves[3], n: 400, form: "R400", client: "w", answers: { ...selves[3].answers, c3: "Not cleaned yet, from Jane Smith" } }];
 reset(said);
@@ -161,7 +237,41 @@ ok(r.topics[0].topic === "Potholes" && r.self.topics[0].topic === "Pavements" &&
 ok(!JSON.stringify(r).includes("Jane Smith") && r.waiting === 1, "and a comment stays hidden until its names are out");
 r = await api("/api/survey/get", { code: WSX, id }, boss);
 ok(r.self.comments.length === 0 && r.self.topics.length === 1, "a site administrator from outside gets topic counts only");
+
+// sorting comments
+const farAway = { ...away[0], answers: { ...away[0].answers, c3: "From somewhere else" } };
+reset([...said, farAway]);
+ok((await api("/api/survey/get", { code: WSX, id }, lead)).waiting === 1, "a comment from outside the authority doesn't wait to be sorted");
+claude.script.submit_comments = (body) => { const items = JSON.parse(/<comments>\n([\s\S]*)\n<\/comments>/.exec(body.messages[0].content)[1]); return { id: "m", type: "message", role: "assistant", model: "x", stop_reason: "tool_use", stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 }, content: [{ type: "tool_use", id: "t1", name: "submit_comments", input: { comments: items.map((x) => ({ ref: x.ref, text: "Sorted, at RH12 1AB", topic: "Other" })) } }] }; };
+let job = (await api("/api/survey/sort", { code: WSX, id }, lead)).job;
+await until(async () => { const held2 = JSON.parse(getText(answersFile())); return held2.find((x) => x.form === "R400")?.clean?.c3; }, "the comments to be sorted");
+held = JSON.parse(getText(answersFile()));
+ok(held.find((x) => x.form === "R400").answers.c3 === "Sorted, at [removed]" && !held.find((x) => x.n === farAway.n).clean?.c3, "Claude sees those from the authority, not those from elsewhere");
+const pile = Array.from({ length: 1100 }, (_, i) => ({ ...row(1000 + i, "self", "Very dissatisfied", { where: "here" }), answers: { c1: "Very dissatisfied", c3: `Comment number ${i}` } }));
+reset([...pile, { ...inter[0], answers: { ...inter[0].answers, c3: "An interviewer's comment" } }]);
+await until(async () => { job = (await api("/api/survey/sort", { code: WSX, id }, lead)).job; return job && job.total !== undefined; }, "the sort to start");
+ok(job.total === 1000, "one run sorts up to 1,000, so one click can't use up the month's budget");
+await until(async () => JSON.parse(getText(answersFile())).filter((x) => x.clean?.c3).length >= 1000, "that run");
+ok(JSON.parse(getText(answersFile())).find((x) => x.form === "T1").clean?.c3, "with interviewers' comments first");
 reset([...inter, ...selves, ...away]);
+
+// leaving out a flood
+const today2 = new Date().toISOString().slice(0, 10), older = selves.slice(0, 5).map((x) => ({ ...x, at: "2026-01-02T10:00:00.000Z" }));
+reset([...inter, ...older, ...selves.slice(5)]);
+ok((await api("/api/survey/selfday", { code: WSX, id, day: today2, excluded: true }, member)).status === 403 && (await api("/api/survey/selfday", { code: WSX, id, day: "nonsense", excluded: true }, lead)).status === 400, "only a lead can leave out a day's replies");
+await api("/api/survey/selfday", { code: WSX, id, day: today2, excluded: true }, lead);
+r = await api("/api/survey/get", { code: WSX, id }, lead);
+ok(r.self.results.used === 5 && r.self.left === 35 && r.results.used === 40 && r.selfDays.find((x) => x.day === today2).left === 35, "leaving out a day leaves out every reply by link that day, and no one else's");
+await api("/api/survey/selfday", { code: WSX, id, day: today2, excluded: false }, lead);
+ok((await api("/api/survey/get", { code: WSX, id }, lead)).self.left === 0, "and it can be put back");
+ok(!(await api("/api/survey/get", { code: WSX, id }, member)).selfDays.length, "a member isn't shown it");
+reset([...inter, ...selves, ...away]);
+
+// a change to the link doesn't make an old survey count as current again
+const oldest = JSON.parse(getText(files(`clarion/authorities/${WSX}/surveys/`).find((f) => f.includes(id))));
+const stamp = oldest.updated;
+await api("/api/survey/self", { code: WSX, id, on: true }, lead);
+ok(JSON.parse(getText(files(`clarion/authorities/${WSX}/surveys/`).find((f) => f.includes(id)))).updated === stamp, "turning the link on or off doesn't make a survey count as recent again");
 
 // ---- the pages
 const pageHtml = fs.readFileSync(new URL("../public/survey.html", import.meta.url), "utf8"), mainHtml = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
@@ -213,16 +323,28 @@ const lastBefore = JSON.parse(getText(answersFile())).length;
 button(d, "Try again").click();
 await shows(d, /Thank you/);
 ok(JSON.parse(getText(answersFile())).length === lastBefore + 1 && JSON.parse(getText(answersFile())).at(-1).where === "here", "and send when it comes back");
-ok(d.defaultView.localStorage.getItem(`clarion_reply_${link}`) === "null", "and then nothing is left on the device");
+ok(d.defaultView.localStorage.getItem(`clarion_reply_${link}`) === null && Object.keys(d.defaultView.localStorage).filter((k) => k.includes(link)).join() === `clarion_done_${link}`, "and then nothing of it is left on the device, only a mark that it replied");
 const storage = d.defaultView.localStorage.getItem(`clarion_done_${link}`);
 d = browser(pageHtml, `/r/${link}`, (w) => { w.localStorage.setItem(`clarion_done_${link}`, storage); });
 await shows(d, /already been sent from this device/);
 ok(!button(d, "Start"), "the same device can't reply twice");
 
-const waiting = { client: "waited", secs: 90, postcode: "", answers: { c1: "Fairly satisfied" } };
-d = browser(pageHtml, `/r/${link}`, (w) => { w.localStorage.setItem(`clarion_reply_${link}`, JSON.stringify(waiting)); });
+const waiting = { at: Date.now(), client: "waited", secs: 90, postcode: "", answers: { c1: "Fairly satisfied", c3: "PRIVATE-WORDS of the last person" } };
+const leftBehind = (w, reply = waiting) => { w.localStorage.setItem(`clarion_reply_${link}`, JSON.stringify(reply)); };
+d = browser(pageHtml, `/r/${link}`, leftBehind);
+await shows(d, /An unsent reply is on this device/);
+ok(!JSON.parse(getText(answersFile())).some((x) => x.client === "waited") && !text(app(d)).includes("PRIVATE-WORDS"), "a reply left on a shared device isn't sent or shown without asking");
+button(d, "Delete it").click();
+await shows(d, /Roads survey/);
+ok(button(d, "Start") && d.defaultView.localStorage.getItem(`clarion_reply_${link}`) === null && !JSON.parse(getText(answersFile())).some((x) => x.client === "waited"), "it can be deleted, and the next person can start");
+d = browser(pageHtml, `/r/${link}`, leftBehind);
+await shows(d, /An unsent reply is on this device/);
+button(d, "Send it").click();
 await shows(d, /Thank you/);
-ok(JSON.parse(getText(answersFile())).some((x) => x.client === "waited"), "a reply left waiting goes when the page next opens");
+ok(JSON.parse(getText(answersFile())).some((x) => x.client === "waited"), "or sent, by someone who says it's theirs");
+d = browser(pageHtml, `/r/${link}`, (w) => leftBehind(w, { ...waiting, client: "stale", at: Date.now() - 25 * 3600 * 1000 }));
+await shows(d, /Roads survey/);
+ok(button(d, "Start") && d.defaultView.localStorage.getItem(`clarion_reply_${link}`) === null, "a reply over a day old is removed");
 
 d = browser(pageHtml, `/r/${link}`);
 await shows(d, /Roads survey/);
@@ -235,16 +357,20 @@ await shows(d, /didn't answer any questions/);
 ok(button(d, "Start"), "someone who skips everything sends nothing");
 
 await api("/api/survey/self", { code: WSX, id, on: false }, lead);
-d = browser(pageHtml, `/r/${link}`);
+d = browser(pageHtml, `/r/${link}`, leftBehind);
 await shows(d, /This survey has closed/);
-ok(!button(d, "Start"), "a closed link says so");
+ok(!button(d, "Start") && d.defaultView.localStorage.getItem(`clarion_reply_${link}`) === null && /removed from this device/.test(text(app(d))), "a closed link says so, and clears anything left waiting");
 await api("/api/survey/self", { code: WSX, id, on: true }, lead);
 await api("/api/briefing/election", { code: WSX, on: true }, lead);
 d = browser(pageHtml, `/r/${link}`);
 await shows(d, /This survey is paused/);
 await api("/api/briefing/election", { code: WSX, on: false }, lead);
-d = browser(pageHtml, "/r/AAAAAAAAAAAA");
+d = browser(pageHtml, "/r/ZZZZZZZZZZZZ", (w) => { w.localStorage.setItem("clarion_reply_ZZZZZZZZZZZZ", JSON.stringify(waiting)); });
 await shows(d, /This link isn't working/);
+ok(d.defaultView.localStorage.getItem("clarion_reply_ZZZZZZZZZZZZ") === null, "a dead link clears anything left waiting");
+d = browser(pageHtml, `/R/${link}`);
+await shows(d, /Roads survey/);
+ok(button(d, "Start") && !/Where are you/.test(text(app(d))), "a capital letter in the address makes no difference");
 d = browser(pageHtml, `/s/${access}`);
 await shows(d, /Ready for the next person/);
 ok(/Where are you/.test(text(app(d))) && /All sent|waiting to send/.test(text(app(d))), "interviewers' tablets carry on as before");
@@ -265,13 +391,20 @@ await until(() => d.querySelector("svg.qr"), "the QR code");
 const code = (await api("/api/survey/get", { code: WSX, id: fresh.id }, lead)).survey.self;
 ok(text(d.querySelector(".main")).includes(`/r/${code}`) && d.querySelector("svg.qr path").getAttribute("d").length > 500, "turned on, it shows the link and a QR code");
 ok([...d.querySelectorAll("textarea")].some((x) => x.value.includes(`/r/${code}`)), "and wording for an email, with the link in it");
-ok(button(d, "Save the QR code"), "and the code can be saved");
+d.defaultView.HTMLCanvasElement.prototype.getContext = () => ({ fillRect: () => {} });
+d.defaultView.HTMLCanvasElement.prototype.toBlob = function (done) { done(new d.defaultView.Blob(["png"], { type: "image/png" })); };
+button(d, "Save the QR code").click();
+await until(() => d.defaultView.saved, "the picture");
+ok(d.defaultView.saved.type === "image/png", "and the code can be saved as a picture");
 d = await open(lead, `#survey/${WSX}/${id}/results`);
 await see(d, /People who filled it in themselves/);
 const results = text(d.querySelector(".main"));
 ok(/Interviewers/.test(results) && /Filled in themselves/.test(results) && /may not be typical/.test(results) && /Say it's got worse/.test(results), "results sit side by side");
 ok(/live elsewhere/.test(results) || /lives elsewhere/.test(results), "and say who's left out");
 ok(!/null|undefined/.test(results), "with nothing broken on the page");
+d = await open(lead, `#survey/${WSX}/${id}/check`);
+await see(d, /Replies by link, day by day/);
+ok(button(d, "Leave out this day"), "the Check tab lists replies by link by day");
 d = await open(lead, `#survey/${WSX}/${id}/collect`);
 await see(d, /Filled in by people themselves\s*\d+/);
 ok(Number(/Filled in by people themselves\s*(\d+)/.exec(text(d.querySelector(".main")))[1]) >= 75, "the Collect page counts them by route");
@@ -280,15 +413,18 @@ d = await open(lead, `#survey/${WSX}/${id}/results`);
 await see(d, /Everyone here chose to reply/);
 ok(/weaker than a street sample/.test(text(d.querySelector(".main"))), "a survey with no interviewers says so at the top");
 ok(!/Interviewers/.test([...d.querySelectorAll("thead")].map(text).join()), "and has nothing to set beside it");
-await see(d, /Postcode area|didn't say/);
-ok(!d.querySelector(".main").textContent.includes("RH12 1"), "and no whole postcode");
+d = await open(lead, `#a/${WSX}`);
+await see(d, /how people feel about their roads/);
 await new Promise((done) => setTimeout(done, 50));
-ok(claude.calls.length === 0, "none of this calls Claude");
-const tallied = JSON.parse(getText(areaFile()));
+ok(!/Street survey, \d+ replies/.test(text(d.querySelector(".main"))) && !/\d+ street survey replies/.test(text(d.querySelector(".main"))), "the Summary page doesn't call it a street survey");
+d = await open(lead, `#evidence/${WSX}`);
+await see(d, /People who chose to reply, with no interviewers/);
+await api("/api/r/submit", { ...reply("one-bn", "BN11 1AA"), answers: { c1: "Fairly satisfied" } });
 for (let i = 0; i < 12; i++) await api("/api/r/submit", { ...reply(`crowd-rh-${i}`, "RH12"), answers: { c1: "Fairly satisfied" } });
+ok(Object.keys(JSON.parse(getText(areaFile()))).join() === "BN11,RH12", "the areas are held in no order that follows the replies");
 d = await open(lead, `#survey/${WSX}/${id}/results`);
 await see(d, /RH12/);
-ok(/Other areas, each under 10/.test(text(d.querySelector(".main"))) && !/\bM1\b/.test(text(d.querySelector(".main"))) && tallied.M1 === 1, "small areas are pooled on the page");
+ok(/Other areas, each under 10/.test(text(d.querySelector(".main"))) && !text(d.querySelector(".main")).includes("BN11"), "small areas are pooled on the page");
 
 // the demonstration
 const pack = t.buildPack();
@@ -298,6 +434,14 @@ d = await open("", `#survey/NORTHBRIDGE/${demoPage.survey.id}/collect`, "/demo")
 await see(d, /A link for people to fill in themselves/);
 await until(() => d.querySelector("svg.qr"), "the demonstration's QR code");
 ok(/no real link/.test(text(d.querySelector(".main"))) && !/https?:/.test(JSON.stringify(pack.qr)), "with no real link");
+const broken = await open(lead, `#survey/${WSX}/${fresh.id}/collect`);
+const stop = broken.defaultView;
+await until(() => broken.querySelector("svg.qr"), "the QR code again");
+stop.fetch = async () => { throw new TypeError("Failed to fetch"); };
+stop.location.hash = `#survey/${WSX}/${fresh.id}/check`;
+stop.location.hash = `#survey/${WSX}/${fresh.id}/collect`;
+await new Promise((done) => setTimeout(done, 100));
+ok(!/null|undefined/.test(text(broken.querySelector(".main"))), "with no connection the page fails quietly");
 
 console.log(failures ? `\n${failures} failed` : "\nAll passed");
 process.exit(failures ? 1 : 0);

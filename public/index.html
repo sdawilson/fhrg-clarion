@@ -408,6 +408,7 @@ const Demo = {
       case "/api/reading/get": return { reading: P.authority.reading };
       case "/api/survey/self": Demo.survey(b.id).survey.selfOn = b.on === true; return { survey: Demo.survey(b.id).survey };
       case "/api/survey/qr": return P.qr;
+      case "/api/survey/selfday": return { ok: true };
       case "/api/survey/list": return { ...P.surveyList, paused: Demo.election.on };
       case "/api/survey/get": return { ...Demo.survey(b.id), sorting: null, dropped: 0, paused: Demo.election.on };
       case "/api/survey/save": return { survey: Demo.survey(b.id).survey };
@@ -578,7 +579,7 @@ async function summaryView(page, a) {
   let d, coverage, att;
   try { [d, coverage, att] = await Promise.all([API.call("/api/authority", { code: a.code }), API.call("/api/coverage/summary", { code: a.code }).catch(() => null), API.call("/api/attention", { code: a.code }).catch(() => ({ ready: false, needs: "" }))]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
   if (view !== App.viewId) return;
-  const street = d.evidence.streets[0] ?? null; // the latest
+  const street = d.evidence.streets.find((x) => !x.selfOnly) ?? null; // the latest with interviewers
   const assessed = coverage?.summary ?? { pieces: 0, previous: 0 };
   const from = [street ? `${fmt(street.responses)} street survey replies` : null, assessed.pieces ? `${fmt(assessed.pieces)} assessed press and media pieces` : null, "published data"].filter(Boolean);
   const latest = d.evidence.surveys.filter((s) => s.year === d.evidence.surveys[0]?.year);
@@ -1179,8 +1180,8 @@ function surveyCard(a, d) {
     rows.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Year"), h("th", {}, "Measure"), h("th", { class: "r" }, "Score"), h("th", { class: "r" }, "Replies"), h("th", {}, "Source"))),
       h("tbody", {}, rows.map((s) => h("tr", {}, h("td", {}, s.year), h("td", {}, s.measure), h("td", { class: "r" }, `${s.score} / ${s.outOf}`), h("td", { class: "r" }, s.responses ? fmt(s.responses) : "–"), h("td", {}, link(s.url, s.source))))))) : null);
   if (d.evidence.streets.length) box.append(h("h3", {}, "Street surveys"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Survey"), h("th", { class: "r" }, "Replies"), h("th", { class: "r" }, "Satisfied"), h("th", { class: "r" }, "Dissatisfied"))),
-    h("tbody", {}, d.evidence.streets.map((x) => h("tr", {}, h("td", {}, h("a", { href: `#survey/${a.code}/${x.id}/results` }, x.title)), h("td", { class: "r" }, fmt(x.responses)), h("td", { class: "r" }, x.satisfied === null ? "–" : `${fmt(x.satisfied)}%`), h("td", { class: "r" }, x.dissatisfied === null ? "–" : `${fmt(x.dissatisfied)}%`)))))),
-    h("p", { class: "note" }, "Street samples aren't random, so these are indicative."));
+    h("tbody", {}, d.evidence.streets.map((x) => h("tr", {}, h("td", {}, h("a", { href: `#survey/${a.code}/${x.id}/results` }, x.title), x.selfOnly ? h("div", { class: "note" }, "People who chose to reply, with no interviewers") : null), h("td", { class: "r" }, fmt(x.responses)), h("td", { class: "r" }, x.satisfied === null ? "–" : `${fmt(x.satisfied)}%`), h("td", { class: "r" }, x.dissatisfied === null ? "–" : `${fmt(x.dissatisfied)}%`)))))),
+    h("p", { class: "note" }, "Street samples aren't random, so these are indicative. A survey with no interviewers is weaker still, and doesn't count as a street survey in a mood reading."));
   if (d.canEdit) box.append(surveyForm(a));
   return box;
 }
@@ -1517,7 +1518,7 @@ async function surveysView(page, a) {
   if (view !== App.viewId) return;
   add(clear(body), d.paused ? pausedNote() : null, h("section", { class: "card" }, h("h2", {}, "Surveys so far"), d.surveys.length ? d.surveys.map((s) => h("div", { class: "note-row" },
     h("div", { class: "row" }, h("a", { href: `#survey/${a.code}/${s.id}` }, s.title), statusPill(s.status)),
-    h("div", { class: "note" }, `${fmt(s.responses)} of ${fmt(s.target)} replies. Started ${fmtDate(s.created)} by ${s.by}.`))) : h("p", { class: "muted" }, "No surveys yet.")));
+    h("div", { class: "note" }, `${fmt(s.responses)} of ${fmt(s.target)} replies${s.byLink ? `, plus ${fmt(s.byLink)} by link` : ""}. Started ${fmtDate(s.created)} by ${s.by}.`))) : h("p", { class: "muted" }, "No surveys yet.")));
   if (d.canEdit) body.append(newSurveyCard(a));
 }
 function newSurveyCard(a) {
@@ -1890,7 +1891,7 @@ function collectPart(top, a, d) {
   if (s.status === "draft" && d.paused) open.append(h("p", {}, "This survey can't be opened until the pause ends."));
   else if (s.status === "draft") open.append(h("p", {}, "Opening the survey fixes its questions and gives interviewers a link. Nobody on the team needs an account."), h("p", { class: "note" }, `It's set to say it's run by ${s.collector}. Check that's right before any real fieldwork.`), m2, h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => setStatus("open", m2) }, "Open the survey")));
   else if (s.status === "open") open.append(h("p", {}, d.paused ? "Tablets can't send forms until the pause ends, and new ones can't start. Forms stay on each tablet. Until then, open this link on each one and press Try again at least once a week, as some tablets clear forms on sites they haven't used." : "Open this link on each tablet. It carries on without a signal, and sends the forms when it can."), h("div", { class: "link-box" }, url), h("p", { class: "note" }, `Interviewers can also go to ${location.origin}/s and type the code ${s.access}. Anyone with the code can add answers while the survey is open, so keep it to the team.`),
-    d.paused ? null : h("p", { class: "note" }, "On an iPad, add the link to the home screen before fieldwork starts and use it from there, so that forms are kept if they have to wait."), d.results.total || d.paused ? null : h("p", { class: "note" }, "Back to draft changes the code, so forms still on tablets couldn't then be sent. Check none are waiting first."), m2,
+    d.paused ? null : h("p", { class: "note" }, "On an iPad, add the link to the home screen before fieldwork starts and use it from there, so that forms are kept if they have to wait."), d.results.total || d.paused ? null : h("p", { class: "note" }, "Back to draft changes the code, so forms still on tablets couldn't then be sent, and any link people have been sent stops working for good. Check first."), m2,
     h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("closed", m2) }, "Close the survey"), d.results.total || d.paused ? null : h("button", { class: "btn ghost", type: "button", onclick: () => setStatus("draft", m2) }, "Back to draft")));
   else if (s.status === "closed" && d.paused) open.append(h("p", {}, "The survey is closed, and can't be opened again until the pause ends."));
   else if (s.status === "closed") open.append(h("p", {}, "The survey is closed, so the tablet link has stopped working. You can still add paper forms."), m2, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("open", m2) }, "Open it again")));
@@ -2012,10 +2013,16 @@ function checkPart(top, a, d) {
     h("h3", {}, "Put a mistake right"), h("p", { class: "note" }, "Leave out the form, then enter it again with the same number."),
     h("div", { class: "row" }, h("label", { class: "field" }, "Form number", number), h("button", { class: "btn", type: "button", onclick: async () => { try { await API.call("/api/survey/form", { code: a.code, id: s.id, form: number.value, excluded: true }); route(); } catch (e) { said(msg, e.message, "err"); } } }, "Leave out this form")),
     d.excluded.length ? h("div", { class: "stack" }, h("h3", {}, "Left out"), h("div", { class: "row" }, d.excluded.map((x) => h("button", { class: "btn small", type: "button", onclick: () => leave(x.n, false) }, `Put back form ${x.form}`)))) : null));
+  if (d.selfDays.length) {
+    const day = (x, excluded) => h("button", { class: "btn small", type: "button", onclick: async () => { try { await API.call("/api/survey/selfday", { code: a.code, id: s.id, day: x.day, excluded }); route(); } catch (e) { said(msg, e.message, "err"); } } }, excluded ? "Leave out this day" : "Put this day back");
+    add(top, h("section", { class: "card" }, h("h2", {}, "Replies by link, day by day"), h("p", { class: "note" }, "The link can be passed on, so a campaign could share it. A sudden burst is worth a look. Leaving out a day leaves out every reply by link that day, and you can put it back."),
+      h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Day"), h("th", { class: "r" }, "Replies"), h("th", { class: "r" }, "Left out"), h("th", {}))), h("tbody", {}, d.selfDays.map((x) => h("tr", {}, h("td", {}, fmtDate(x.day)), h("td", { class: "r" }, fmt(x.replies)), h("td", { class: "r" }, fmt(x.left)), h("td", { class: "r" }, h("div", { class: "row" }, x.left < x.replies ? day(x, true) : null, x.left ? day(x, false) : null)))))))));
+  }
 
   const progressBox = h("div", {});
   const c = h("section", { class: "card" }, h("h2", {}, "Written comments"),
     h("p", {}, "Before anyone can read them, Claude takes out names and anything else that identifies a person, and sorts each comment into a topic. Only people in the authority can see them."));
+  if (d.waiting > 1000) c.append(h("p", { class: "note" }, `Clarion sorts up to 1,000 at a time, and each costs a little of the FHRG's monthly budget for AI. If a lot of replies arrived by link at once, check them above first.`));
   if (d.waiting) c.append(h("p", {}, h("strong", {}, `${fmt(d.waiting)} comment${d.waiting === 1 ? "" : "s"} waiting.`)), h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => askHelp(a, s.id, "/api/survey/sort", {}, progressBox, () => route()) }, "Take out names and sort")));
   else c.append(h("p", { class: "muted" }, "No comments waiting."));
   if (d.dropped) c.append(h("p", { class: "note" }, `${fmt(d.dropped)} comment${d.dropped === 1 ? " was" : "s were"} taken out, because Claude wouldn't process ${d.dropped === 1 ? "it" : "them"}. Nobody has seen ${d.dropped === 1 ? "it" : "them"}.`));
@@ -2025,7 +2032,7 @@ function checkPart(top, a, d) {
   if (d.sample.length) {
     const left = d.sample.filter((x) => !x.checked).length;
     c.append(h("h3", {}, "Check a sample"), h("p", { class: "note" }, `Please read one comment in ten, in case a name has got through. ${left ? `${left} still to check.` : "All checked."}`));
-    const topics = [...new Set([...d.topics.map((x) => x.topic), "Other"])];
+    const topics = [...new Set([...d.topics.map((x) => x.topic), ...d.sample.map((x) => x.topic), "Other"])];
     for (const x of d.sample) {
       const area = h("textarea", { rows: 2, maxlength: 1000, "aria-label": "Comment" }), pick = h("select", { "aria-label": "Topic" }, topics.map((t) => h("option", { value: t }, t))), m = saveNote();
       area.value = x.text; pick.value = x.topic;
@@ -2082,7 +2089,7 @@ function selfResults(d, answersOf) {
     h("p", { class: "note" }, "These people chose to reply, so they may not be typical. They aren't in the figures above unless no interviewers took part."),
     r ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Measure"), h("th", { class: "r" }, "Interviewers"), h("th", { class: "r" }, "Filled in themselves"))),
       h("tbody", {}, h("tr", {}, h("td", {}, "Replies"), h("td", { class: "r" }, fmt(d.results.used)), h("td", { class: "r" }, fmt(r.used))), row("Satisfied", "c1", ["Very satisfied", "Fairly satisfied"]), row("Dissatisfied", "c1", ["Fairly dissatisfied", "Very dissatisfied"]), row("Say it's got worse", "c2", ["Worse"]), row("Say it's got better", "c2", ["Better"])))) : null,
-    h("p", {}, `${fmt(x.here)} said they live in the area and ${fmt(x.notSaid)} didn't say, so ${x.notSaid === 1 ? "that reply is" : "those replies are"} counted. ${fmt(x.elsewhere)} live${x.elsewhere === 1 ? "s" : ""} elsewhere and ${x.elsewhere === 1 ? "isn't" : "aren't"} in these figures.`),
+    h("p", {}, `${fmt(x.here)} said they live in the area and ${fmt(x.notSaid)} didn't say, so ${x.notSaid === 1 ? "that reply is" : "those replies are"} counted. ${fmt(x.elsewhere)} live${x.elsewhere === 1 ? "s" : ""} elsewhere and ${x.elsewhere === 1 ? "isn't" : "aren't"} in these figures.${x.left ? ` ${fmt(x.left)} left out on the Check tab ${x.left === 1 ? "isn't" : "aren't"} in these figures, though the postcode areas below can't take them out.` : ""}`),
     x.areas.named.length || x.areas.pooled ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Postcode area"), h("th", { class: "r" }, "Replies"))),
       h("tbody", {}, x.areas.named.map((y) => h("tr", {}, h("td", {}, y.area), h("td", { class: "r" }, fmt(y.count)))), x.areas.pooled ? h("tr", {}, h("td", {}, "Other areas, each under 10"), h("td", { class: "r" }, fmt(x.areas.pooled))) : null))) : null,
     x.topics.length ? [h("h3", {}, "What they said"), x.topics.map((t) => (d.ownComments ? h("details", {}, h("summary", {}, `${t.topic} (${fmt(t.count)})`), x.comments.filter((y) => y.topic === t.topic).map((y) => h("div", { class: "comment" }, y.text))) : h("p", {}, `${t.topic}: ${fmt(t.count)}`)))] : null,

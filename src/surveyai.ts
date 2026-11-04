@@ -313,14 +313,19 @@ export async function sharedTopics(c: Config): Promise<string[]> {
 // A last check by code on what comes back: an email address or phone number never gets through
 export const scrubContacts = (text: string) => text
   .replace(/[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+/g, "[removed]")
-  .replace(/(?<!\d)\+?\d(?:[\s().-]*\d){9,12}(?!\d)/g, "[removed]");
+  .replace(/(?<!\d)\+?\d(?:[\s().-]*\d){9,12}(?!\d)/g, "[removed]")
+  .replace(/\b[a-z]{1,2}\d[a-z\d]?[\s-]*\d[a-z]{2}\b/gi, "[removed]"); // a whole postcode
 
+export const MAX_SORT = 1000;
 export async function startSorting(c: Config, me: Member, p: Pilot, s: Survey): Promise<Help> {
   return await withLock(sortPath(c, p.code, s.id), async () => {
     const running = await sortJob(c, p.code, s.id);
     if (running?.status === "working") return running;
     const ids = textQuestionIds(s);
-    const waiting = (await loadAnswers(c, s.code, s.id)).filter((r) => !r.excluded).flatMap((r) => ids.filter((id) => r.answers[id] && !r.clean?.[id]).map((id) => ({ ref: `${r.n}:${id}`, text: r.answers[id] })));
+    // Interviewers' forms first. Replies from outside the authority aren't sorted: they aren't in any figure, and nobody reads them.
+    // The limit keeps one click, after a flood of replies by link, from using up the month's budget for every authority
+    const wanted = (await loadAnswers(c, s.code, s.id)).filter((r) => !r.excluded && r.where !== "elsewhere").sort((a, b) => Number(a.via === "self") - Number(b.via === "self"));
+    const waiting = wanted.flatMap((r) => ids.filter((id) => r.answers[id] && !r.clean?.[id]).map((id) => ({ ref: `${r.n}:${id}`, text: r.answers[id] }))).slice(0, MAX_SORT);
     if (!waiting.length) throw new FriendlyError("There are no comments waiting.");
     return await startHelp(c, me, p, s, "sort", waiting.length, async ({ usage, onCall, save }) => {
       const topics = [...(await sharedTopics(c)).filter((t) => t !== "Other"), "Other"];
