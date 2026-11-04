@@ -158,6 +158,16 @@ ok(kid(m.tree, "mps").mood.v === 10 && /1 rated/.test(kid(m.tree, "mps").mood.ti
 const point = (ran, sat, dis) => ({ id: "s", title: "S", status: "closed", ran, current: true, responses: 400, weighted: true, satisfied: sat, dissatisfied: dis, better: null, worse: null, blameCouncil: null, topics: [], note: "", selfOnly: false, service: "highways", questions: [], groups: [], byLink: { n: 0, sat: null } });
 m = t.buildMap({ ...baseData(), enquiries: { "2026-06": { total: 100, byTopic: {} }, "2026-07": { total: 100, byTopic: {} }, "2026-08": { total: 100, byTopic: {} }, "2026-09": { total: 100, byTopic: {} }, "2026-10": { total: 100, byTopic: {} } } }, t.readFilters({}, "2026-11-02", []));
 ok(m.direction.word === "No change reported", "nothing moving reports no change");
+const paper = { id: "p", name: "Paper", type: "Local Newspaper", domain: "", reach: 20000, reachUnit: "copies", reachBand: "", reachFrom: "", platform: "", leaning: "Not known", stance: "Balanced", campaign: [], added: "", by: "" };
+const said = (date, tone, i) => ({ id: `${date}-${i}`, source: "p", date, summary: "x", topic: "Potholes", relevance: "High", tone, prominence: "Inside page", functions: [], reach: 20000, by: "x", at: "2026-01-01T00:00:00Z" });
+const steady = Object.fromEntries(["2026-06", "2026-07", "2026-08", "2026-09"].map((k) => [k, { total: 100, byTopic: {} }]));
+const both = { ...baseData(), sources: [paper], assessments: [...[1, 2, 3, 4, 5].map((i) => said("2026-09-10", "Critical", i)), ...[1, 2, 3, 4, 5].map((i) => said("2026-10-10", "Supportive", i))], streets: [point("2026-10-10", 60, 20), point("2026-09-10", 40, 40)], enquiries: { ...steady, "2026-10": { total: 200, byTopic: {} } }, questions: [{ date: "2026-10-09", heading: "Roads" }], rated: { "question|2026-10-09|Roads": "Critical" } };
+m = t.buildMap(both, t.readFilters({}, "2026-11-02", []));
+ok(m.direction.word === "No change reported" && /pulling both ways/.test(m.direction.note), "two signals up and two down isn't a change");
+m = t.buildMap({ ...both, questions: [], rated: {}, streets: [] }, t.readFilters({}, "2026-11-02", []));
+ok(m.direction.word === "No change reported" && /needs two kinds/.test(m.direction.note), "one up and one down isn't either");
+m = t.buildMap({ ...both, streets: [point("2026-10-10", 20, 60), point("2026-09-10", 40, 40)], assessments: [...[1, 2, 3, 4, 5].map((i) => said("2026-09-10", "Supportive", i)), ...[1, 2, 3, 4, 5].map((i) => said("2026-10-10", "Critical", i))] }, t.readFilters({}, "2026-11-02", []));
+ok(m.direction.word === "Worsening" && /Four kinds of signal agree/.test(m.direction.note), "and when they all agree, it says so");
 
 // ---- a survey tells people things
 ok(t.readTell([{ text: "  Report a pothole online. ", topic: "Potholes", how: ["Printed on the form", "nonsense"], aware: true }])[0].how.join() === "Printed on the form", "a message keeps only real ways of telling people");
@@ -432,10 +442,19 @@ d = browser(`/#briefings/${WSX}`, boss);
 await shows(d, /Where we are/);
 ok(true, "a site administrator can read the officers' briefing");
 
-// the tablet shows what to tell people
-const tb = browser(`/s/${opened.access}`, "", tablet);
-await until(() => /Start|Site|Begin/.test(text(tb.body)), "the tablet");
-ok(/told/.test(tablet) && /readOut/.test(tablet), "the tablet page shows messages after the last question");
+// the tablet shows what to tell people, once the last question is done
+const tb = browser(`/s/${opened.access}`, "", tablet), tw = tb.defaultView;
+await until(() => tw.eval("!!(S.survey && S.survey.questions)"), "the tablet");
+tw.eval(`S.form = { client: "t1", site: "", started: Date.now(), answers: { c1: "Fairly satisfied" } }; finish();`);
+await until(() => /Thank you/.test(text(tb.body)), "the end of the form");
+ok(/Interviewer: please read this out/.test(text(tb.body)) && /You can report a pothole online/.test(text(tb.body)), "the tablet shows what to read out");
+ok(/What West Sussex County Council would like you to know/.test(text(tb.body)), "and what the person can read for themselves");
+const lk = browser(`/r/${self}`, "", tablet), lw = lk.defaultView;
+await until(() => lw.eval("!!(S.survey && S.survey.questions)"), "the page for people with the link");
+await lw.eval(`sendSelf({ client: "self-1", secs: 100, answers: { c1: "Fairly satisfied" }, postcode: "" })`);
+await until(() => /Your answers have been sent/.test(text(lk.body)), "the reply to send");
+ok(/Diversions are on one page/.test(text(lk.body)) && !/You can report a pothole online/.test(text(lk.body)), "someone replying by link sees only what's meant for that page");
+ok(!/Diversions/.test(tablet), "and neither page holds any message of its own");
 
 // the routes stay shut when the demonstration is off, and it never calls Claude
 ok(claude.refused.length === 0, "every call to Claude was one the real service would accept");

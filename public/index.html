@@ -957,7 +957,7 @@ async function dashView(page, a) {
     stat("Adults in the authority", d.adults ? fmt(d.adults) : "–", "Census 2021, aged 16 and over"),
   ];
   add(clear(body), head, h("div", { class: "grid g2" }, moodCard(a, map), readingCard(a, d)), h("div", { class: "grid g4" }, tiles), h("div", { class: "grid g2" }, functionCard(map), heatCard(a, map)));
-  if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
+  if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att, a));
   else add(body, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Shows what's loud, what's felt, and what nobody is reporting yet."))), h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, att.needs ? `This needs ${att.needs}.` : "This can't be worked out just now."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))));
   add(body, h("div", { class: "grid g2 top-align" },
     h("section", { class: "card" }, h("h3", {}, "Published evidence"), h("div", { class: "rows" }, map.considerations.filter((x) => x.kind === "Published figures").map((x) => h("div", { class: "fact" }, h("strong", {}, x.title), h("span", { class: "note" }, x.sub)))), h("div", { class: "row" }, h("a", { class: "btn small", href: `#evidence/${a.code}` }, "All published evidence and officer notes"))),
@@ -1130,14 +1130,15 @@ function attentionCard(att) {
 }
 function earlySignsCard(a, att) {
   return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Early signs"), h("p", {}, "What people raise that nobody is reporting yet."))),
-    att.earlySigns.length ? att.earlySigns.map((x) => h("div", { class: "quiet-row" }, h("strong", {}, x.topic), h("span", {}, `${ordinal(x.concern)} for concern, ${ordinal(x.attention)} in the media. ${x.why}`))) : h("p", { class: "muted" }, "None at the moment."),
+    att.earlySigns.length ? att.earlySigns.map((x) => h("div", { class: "quiet-row" }, h("strong", {}, topicLink(a, x.topic)), h("span", {}, `${ordinal(x.concern)} for concern, ${ordinal(x.attention)} in the media. ${x.why}`))) : h("p", { class: "muted" }, "None at the moment."),
     h("p", { class: "note" }, "A pointer for officers to check, not a finding."));
 }
 const ordinal = (n) => `${n}${["th", "st", "nd", "rd"][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || "th"}`;
-function drivingCard(att) {
+const topicLink = (a, topic) => h("a", { href: `#a/${a.code}`, onclick: () => { App.filters.topic = topic; App.map.view = "authority"; App.map.path = []; } }, topic);
+function drivingCard(att, a) {
   return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "What's driving it"), h("p", {}, "Topics sorted by public concern."))), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" },
     h("thead", {}, h("tr", {}, h("th", {}, "Topic"), h("th", { class: "r" }, "Public concern"), h("th", { class: "r" }, "Media attention"), h("th", {}, "What to do"), h("th", {}, "Kinds of signal"))),
-    h("tbody", {}, att.topics.map((t) => h("tr", {}, h("td", {}, t.topic), h("td", { class: "r" }, ordinal(t.concern)), h("td", { class: "r" }, ordinal(t.attention)), h("td", {}, t.action), h("td", {}, t.kinds)))))));
+    h("tbody", {}, att.topics.map((t) => h("tr", {}, h("td", {}, a ? topicLink(a, t.topic) : t.topic), h("td", { class: "r" }, ordinal(t.concern)), h("td", { class: "r" }, ordinal(t.attention)), h("td", {}, t.action), h("td", {}, t.kinds)))))));
 }
 const comingCard = (what) => h("section", { class: "card" }, h("div", { class: "empty" }, what));
 async function attentionView(page, a, part) {
@@ -1151,7 +1152,7 @@ async function attentionView(page, a, part) {
   try { att = await API.call("/api/attention", { code: a.code }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
   if (att.ready) add(clear(body), h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
-  else add(clear(body), h("section", { class: "card" }, h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, `This compares what's being said with what people tell you. It needs ${att.needs}.`), h("a", { class: "btn small", href: `#said/${a.code}` }, "Go to What's being said"))));
+  else add(clear(body), h("section", { class: "card" }, h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, `This compares what's being said with what people tell you. It needs ${att.needs}.`), h("a", { class: "btn small", href: `#said/${a.code}` }, "Go to Sources"))));
 }
 // Works and weather, from the Climate Toolkit: weekly totals and weather events only
 function worksChart(f) {
@@ -1860,7 +1861,7 @@ function noteBody(a, n) {
 }
 
 // ---------------------------------------------------------------- councillor briefings
-const pausedNote = () => h("div", { class: "callout warn" }, h("strong", {}, "Pre-election period. "), "Street surveys are paused, so no forms can be printed or added. Forms on tablets stay there, and paper forms wait, until your lead turns the setting off on the Councillor briefings page.");
+const pausedNote = () => h("div", { class: "callout warn" }, h("strong", {}, "Pre-election period. "), "Street surveys are paused, so no forms can be printed or added. Forms on tablets stay there, and paper forms wait, until your lead turns the setting off in Set-up or under Briefings.");
 const paragraphs = (text) => String(text || "").split(/\n+/).filter(Boolean).map((t) => h("p", {}, t));
 // Runs a button's action once at a time, however often it's clicked. Buttons sharing a lock wait for one another
 const once = (fn, fail, lock = {}) => async (ev) => {

@@ -33,7 +33,7 @@
 //   POST /api/briefing/word        {code, id}: a released briefing as a Word file
 //   POST /api/briefing/election    {code, on}: the pre-election setting
 //   POST /api/coverage/get         {code}: sources, assessments, and what's been read automatically
-//   POST /api/coverage/summary     {code}: the last four weeks' assessments, for the Summary page
+//   POST /api/coverage/summary     {code}: the last four weeks' assessments
 //   POST /api/coverage/source      {code, ...source}: add or change a source
 //   POST /api/coverage/unsource    {code, id}: take a source off
 //   POST /api/coverage/assess      {code, ...assessment}: record an assessment
@@ -281,7 +281,7 @@ async function handleCoverage(c: Config, request: Request): Promise<Response> {
   });
 }
 
-// Only what the Summary page needs, from Clarion's own storage, so it never waits on anyone else
+// Only the recent assessments, from Clarion's own storage, so it never waits on anyone else
 async function handleCoverageSummary(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
