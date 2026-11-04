@@ -60,7 +60,7 @@ ok(/Condition of highways/.test(page) && /24 \/ 100/.test(page) && /Amber/.test(
 ok(/This needs assessed press and media pieces/.test(page), "and says what the comparison is waiting for");
 ok(/Not enough authorities have results yet/.test(page), "and no FHRG figure appears yet");
 ok(!d.querySelector(".demo-banner"), "there's no demonstration banner for a member");
-ok([...d.querySelectorAll(".nav button")].map((b) => b.textContent).join() === "Summary,What's being said,Attention and concern,Impact notes,Street surveys,Evidence,Sources & method", "the rail lists the sections");
+ok([...d.querySelectorAll(".nav button")].map((b) => b.textContent).join() === "Summary,What's being said,Attention and concern,Impact notes,Councillor briefings,Street surveys,Evidence,Sources & method", "the rail lists the sections");
 ok(d.querySelector(".brand-logo img") && /West Sussex County Council/.test(text(d.querySelector(".brand-sub"))), "with the FHRG logo and the member's authority");
 
 // write the first reading

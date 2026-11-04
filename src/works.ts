@@ -13,7 +13,7 @@ import type { Member } from "./accounts";
 import type { Config } from "./config";
 import { FUNCTIONS, loadAssessments } from "./coverage";
 import { looksPersonal } from "./enquiries";
-import { canEdit, type Pilot } from "./pilots";
+import { canEdit, isOwnLead, sameAuthority, type Pilot } from "./pilots";
 import { latestReadings } from "./reading";
 import { savePretty, storageJson } from "./storage";
 import { streetSummaries } from "./surveys";
@@ -49,7 +49,6 @@ const path = (c: Config, code: string) => `${c.root}authorities/${code}/works.js
 const blank = (): Held => ({ on: false, toolkitId: 0, toolkitName: "", by: "", at: "", checked: "", uploaded: "", from: "", to: "", weatherTo: "", weeks: [], wards: {}, events: [], problem: "" });
 export const toolkitReady = (c: Config) => !!(c.toolkitKey && c.toolkitZone);
 // The Toolkit holds every authority's records, so this has to be the very authority, not one with a similar name
-const sameAuthority = (name: string, p: Pilot) => name.trim().toLowerCase() === p.websiteName.toLowerCase();
 const FN_IDS = new Set<string>(FUNCTIONS.map((f) => f[0]));
 
 export async function loadWorks(c: Config, code: string): Promise<Held> {
@@ -230,7 +229,7 @@ export async function refreshWorks(c: Config, p: Pilot): Promise<Held> {
   return next;
 }
 
-const canTurnOn = (me: Member, p: Pilot) => me.role === "lead" && !!me.authorityId && sameAuthority(me.authority, p);
+const canTurnOn = isOwnLead;
 
 export async function turnOn(c: Config, me: Member, p: Pilot): Promise<void> {
   if (!toolkitReady(c)) throw new FriendlyError("Clarion isn't connected to the Climate Toolkit yet. Ask the FHRG team.");

@@ -88,6 +88,7 @@ function drawStatus() {
 async function send() {
   if (S.sending || !CODE) return;
   S.sending = true;
+  const wasClosed = S.closed;
   try {
     for (;;) {
       const waiting = queue();
@@ -97,17 +98,18 @@ async function send() {
       const gone = new Set(r.done || []);
       store.set("clarion_queue", queue().filter((f) => !gone.has(f.client)));
       S.stuck = gone.size < batch.length; // refused, perhaps because the survey is full: keep them and say so
-      S.closed = false;
+      S.closed = false; S.paused = false;
       drawStatus();
       if (S.stuck) break;
     }
   } catch (e) {
-    if (e.status === 409) { S.closed = true; drawStatus(); if (!S.form) closedScreen(); }
+    if (e.status === 409) { S.closed = true; S.paused = /paused/.test(e.message); drawStatus(); if (!S.form) closedScreen(); }
     if (e.status === 404) S.stuck = true; // the survey has gone back to a draft, so its code no longer works
   } finally {
     S.sending = false;
     drawStatus();
   }
+  if (wasClosed && !S.closed && !S.form) load(); // the survey is open again, and the screen shouldn't still say otherwise
 }
 
 function frame(...kids) {
@@ -127,7 +129,8 @@ function codeScreen(message) {
 
 function closedScreen() {
   const n = queue().length;
-  frame(h("h1", {}, "This survey is closed"), n ? [h("p", { class: "bad" }, `${n} form${n === 1 ? " is" : "s are"} still on this tablet.`), h("p", {}, "Ask your officer to open the survey again, then press the button below."), h("button", { class: "main-btn", type: "button", onclick: () => load() }, "Try again")] : h("p", {}, "Thank you. All your forms have been sent."));
+  const again = h("button", { class: "main-btn", type: "button", onclick: () => load() }, "Try again");
+  frame(h("h1", {}, S.paused ? "This survey is paused" : "This survey is closed"), S.paused ? h("p", {}, "Street surveys stop during a pre-election period.") : null, n ? [h("p", { class: "bad" }, `${n} form${n === 1 ? " is" : "s are"} still on this tablet.`), h("p", {}, S.paused ? "They'll send when the pause ends. Until then, open this page and press Try again at least once a week, as some tablets clear forms on sites they haven't used." : "Ask your officer to open the survey again, then press the button below."), again] : [h("p", {}, "Thank you. All your forms have been sent."), S.paused ? again : null]);
 }
 
 function startScreen() {
@@ -177,14 +180,15 @@ function finish() {
 
 async function load() {
   if (!CODE) return codeScreen();
+  navigator.storage?.persist?.()?.catch?.(() => {}); // asks the browser to keep the waiting forms
   frame(h("p", { role: "status" }, "Opening the survey…"));
   try {
     S.survey = (await call("/api/s/get", { access: CODE })).survey;
-    S.closed = false;
+    S.closed = false; S.paused = false;
     store.set("clarion_survey", S.survey);
   } catch (e) {
     if (e.status === 404) return codeScreen(e.message);
-    if (e.status === 409) { S.closed = true; drawStatus(); return closedScreen(); }
+    if (e.status === 409) { S.closed = true; S.paused = /paused/.test(e.message); drawStatus(); return closedScreen(); }
     if (e.status === 429) return codeScreen(e.message);
     S.survey = store.get("clarion_survey", null); // no signal: carry on with what the tablet already has
     if (!S.survey) return codeScreen("There's no signal here, and this survey hasn't been opened on this tablet before.");
