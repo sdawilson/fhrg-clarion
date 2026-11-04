@@ -51,7 +51,7 @@ ok(kid(map.tree, "enquiries").notes.some((n) => /6 largest/.test(n)), "and the e
 ok(t.demoOfficers({}).briefing.parts[1].bullets.every((b) => /before weighting/.test(b) || !/mood/.test(b)), "the officers' briefing gives raw figures beside adjusted ones");
 ok(map.topics.every((x) => "raw" in x) && map.functions.every((x) => "raw" in x), "raw figures stay with the adjusted ones");
 ok(t.demoMap({ bias: "right" }).pieces.length < map.pieces.length && t.demoMap({ bias: "right" }).pieces.every((p) => p), "the leaning filter narrows the pieces");
-ok(t.demoMap({ topic: "Potholes" }).pieces.every((p) => p.topic === "Potholes") && t.demoMap({ topic: "Potholes" }).planned.length === 3, "a topic narrows pieces and campaign events");
+ok(t.demoMap({ topic: "Potholes" }).pieces.every((p) => p.topic === "Potholes") && t.demoMap({ topic: "Potholes" }).planned.length === 3, "a topic narrows pieces and actions");
 ok(map.leftOut.some((q) => q.name === "Dale Highways" && q.pieces.length === 6), "pieces about a partner are left out of the authority's position, and say so");
 const withDale = t.demoMap({ include: ["dale"] });
 ok(withDale.pieces.length === map.pieces.length + 6 && !withDale.leftOut.some((q) => q.id === "dale"), "until they're added");
@@ -69,7 +69,7 @@ ok(!JSON.stringify(map).match(/resident's|Jane/), "nothing about a person is on 
 
 // the election setting holds a campaign back, even in the demonstration
 const held = t.demoMap({ election: true });
-ok(held.election === true && held.planned.length === 0, "the election setting takes campaign events off the map");
+ok(held.election === true && held.planned.length === 0, "the election setting takes actions off the map");
 ok(t.demoOfficers({ election: true }).briefing.parts.find((p) => p.heading === "Coming up").paras[0] === "Held back by the election setting." && !/We are repairing/.test(JSON.stringify(t.demoOfficers({ election: true }))), "and key messages and events out of the officers' briefing");
 
 // ---- Set-up
@@ -121,24 +121,83 @@ r = await api("/api/issue/set", { code: WSX, topic: "Our own worry", status: "co
 ok(r.issue.own === true, "and can add their own");
 ok((await api("/api/map", { code: WSX }, lead)).topicList.includes("Our own worry"), "which becomes a topic");
 ok((await api("/api/coverage/assess", piece({ topic: "Our own worry" }), lead)).assessment?.topic === "Our own worry", "that a mention can use");
-r = await api("/api/campaign/item", { code: WSX, title: "Pothole week", date: "2027-01-12", channel: "x", topics: ["Potholes"], origin: "Mention: Gazette" }, lead);
-const item = r.item.id;
-ok(item && r.item.origin === "Mention: Gazette", "an event says where it came from");
-ok((await api("/api/campaign/item", { code: WSX, title: "", date: "2027-01-12" }, lead)).status === 400, "and needs a title");
-ok((await api("/api/campaign/item", { code: WSX, title: "x", date: "soon" }, lead)).status === 400, "and a date");
-ok((await api("/api/campaign/get", { code: WSX }, member)).items.length === 1, "a member can read the calendar");
-ok((await api("/api/campaign/get", { code: WSX, service: "waste" }, lead)).items.length === 0, "which follows the service");
+r = await api("/api/action/save", { code: WSX, title: "Pothole week", date: "2027-01-12", channel: "x", topics: ["Potholes"], origin: "Mention: Gazette" }, lead);
+const item = r.action.id;
+ok(item && r.action.origin === "Mention: Gazette" && r.action.campaign === "", "an action says where it came from, and needn't be in a campaign");
+ok((await api("/api/action/save", { code: WSX, title: "", date: "2027-01-12" }, lead)).status === 400, "and needs a title");
+ok((await api("/api/action/save", { code: WSX, title: "x", date: "soon" }, lead)).status === 400, "and a date");
+ok((await api("/api/campaign/get", { code: WSX }, member)).actions.length === 1, "a member can read the calendar");
+ok((await api("/api/campaign/get", { code: WSX, service: "waste" }, lead)).actions.length === 0, "which follows the service");
+
+// ---- campaigns
+const plan = (extra) => ({ code: WSX, name: "Pothole promise", topic: "Potholes", messages: ["We are fixing more."], start: "2027-01-01", end: "2027-02-28", budget: "12,500", ...extra });
+ok((await api("/api/campaign/save", plan(), member)).status === 403, "a member can't start a campaign");
+ok((await api("/api/campaign/save", plan({ name: "" }), lead)).status === 400 && (await api("/api/campaign/save", plan({ topic: "" }), lead)).status === 400, "a campaign needs a name and a topic");
+ok((await api("/api/campaign/save", plan({ end: "" }), lead)).status === 400, "and an end date");
+ok((await api("/api/campaign/save", plan({ end: "2026-12-01" }), lead)).status === 400, "that isn't before it starts");
+ok((await api("/api/campaign/save", plan({ messages: ["a", "b", "c", "d", "e", "f"] }), lead)).status === 400, "and up to five key messages");
+ok((await api("/api/campaign/save", plan({ budget: "lots" }), lead)).status === 400 && (await api("/api/campaign/save", plan({ budget: -5 }), lead)).status === 400, "a budget has to be a sum of money");
+const promise = (await api("/api/campaign/save", plan(), lead)).campaign;
+ok(promise.budget === 12500 && promise.messages[0] === "We are fixing more." && promise.ongoing === false, "a campaign holds its topic, key messages, dates and budget");
+const act = (extra) => ({ code: WSX, title: "Radio piece", date: "2027-01-15", channel: "x", topics: ["Potholes"], campaign: promise.id, planned: "1,500.50", ...extra });
+r = await api("/api/action/save", act(), lead);
+const first = r.action;
+ok(first.campaign === promise.id && first.planned === 1500.5 && first.actual === null, "an action belongs to a campaign, with a planned cost");
+ok((await api("/api/action/save", act({ date: "2026-12-31" }), lead)).status === 400 && (await api("/api/action/save", act({ date: "2027-03-01" }), lead)).status === 400, "an action can't fall outside its campaign's dates");
+ok(/outside Pothole promise/.test((await api("/api/action/save", act({ date: "2027-03-01" }), lead)).error), "and it says why");
+ok((await api("/api/action/save", act({ date: "2027-01-01" }), lead)).action && (await api("/api/action/save", act({ date: "2027-02-28" }), lead)).action, "its first and last days are inside");
+ok((await api("/api/action/save", { ...act(), planned: "a lot" }, lead)).status === 400, "a cost has to be a sum of money");
+ok((await api("/api/action/save", act({ campaign: "nope" }), lead)).status === 404, "and the campaign has to exist");
+r = await api("/api/campaign/save", plan({ id: promise.id, end: "2027-01-10" }), lead);
+ok(r.status === 400 && /move them first/.test(r.error) && /Radio piece/.test(r.error), "shortening a campaign can't leave its actions outside it");
+ok((await api("/api/campaign/remove", { code: WSX, id: promise.id }, lead)).status === 400, "and a campaign with actions can't be taken out, so no costs are lost");
+ok((await api("/api/campaign/get", { code: WSX }, lead)).campaigns.find((x) => x.id === promise.id).end === "2027-02-28", "so it stays as it was");
+ok((await api("/api/campaign/save", plan({ name: "Forever", ongoing: true, end: "" }), lead)).status === 400, "an ongoing campaign needs a review date");
+const forever = (await api("/api/campaign/save", plan({ name: "Forever", ongoing: true, end: "", review: "2027-06-01", budgets: { "2026-27": "5,000", junk: "9" }, budget: "" }), lead)).campaign;
+ok(forever.ongoing && forever.end === "" && forever.budgets["2026-27"] === 5000 && !("junk" in forever.budgets), "and a budget for each financial year");
+ok((await api("/api/action/save", act({ campaign: forever.id, date: "2031-01-01" }), lead)).action?.campaign === forever.id, "and has no date limits");
+const spare = (await api("/api/campaign/save", plan({ name: "Spare" }), lead)).campaign;
+ok((await api("/api/campaign/remove", { code: WSX, id: spare.id }, lead)).ok && !(await api("/api/campaign/get", { code: WSX }, lead)).campaigns.some((x) => x.id === spare.id), "a campaign with no actions can be taken out");
+ok((await api("/api/action/save", act({ service: "waste" }), lead)).status === 404, "and another service's campaign can't be used");
+// money stays with the authority's own members
+r = await api("/api/campaign/get", { code: WSX }, member);
+ok(r.money === true && r.campaigns.find((x) => x.id === promise.id).budget === 12500 && r.actions.find((x) => x.id === first.id).planned === 1500.5, "the authority's own members can read the money");
+r = await api("/api/campaign/get", { code: WSX }, boss);
+ok(r.money === false && r.campaigns.every((x) => x.budget === null && !Object.keys(x.budgets).length) && r.actions.every((x) => x.planned === null && x.actual === null), "a site administrator from outside can't");
+await api("/api/action/save", { ...act(), id: first.id, title: "Radio interview", planned: 1, actual: 2 }, boss);
+await api("/api/campaign/save", plan({ id: promise.id, name: "Pothole promises", budget: 1 }), boss);
+r = await api("/api/campaign/get", { code: WSX }, lead);
+ok(r.actions.find((x) => x.id === first.id).title === "Radio interview" && r.actions.find((x) => x.id === first.id).planned === 1500.5 && r.actions.find((x) => x.id === first.id).actual === null, "and can't change it, though they can help with the rest");
+ok(r.campaigns.find((x) => x.id === promise.id).name === "Pothole promises" && r.campaigns.find((x) => x.id === promise.id).budget === 12500, "on a campaign either");
+await api("/api/campaign/save", plan({ id: promise.id }), lead);
+const noMoney = JSON.stringify(await api("/api/map", { code: WSX }, lead)) + JSON.stringify(await api("/api/briefing/officers", { code: WSX }, lead));
+ok(!/budget|1500\.5/.test(noMoney), "money isn't on the map or in the officers' briefing");
+ok(!/budget/i.test(JSON.stringify(await api("/api/admin/overview", {}, boss))), "or in all authorities");
+const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10), tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+const heldOne = (await api("/api/action/save", { code: WSX, title: "Already held", date: yesterday, topics: ["Potholes"], planned: 500 }, lead)).action;
+const comingOne = (await api("/api/action/save", { code: WSX, title: "Still to come", date: tomorrow, topics: ["Potholes"] }, lead)).action;
+// files from before campaigns
+putText("clarion/authorities/E08000034/campaign.json", JSON.stringify({ issues: [{ topic: "Potholes", status: "confirmed", key: "An old message", service: "highways", own: false, by: "x", at: "x" }], items: [{ id: "old", title: "Old event", date: "2026-11-20", channel: "c", topics: ["Potholes"], service: "highways", origin: "", survey: "", by: "x", at: "x" }] }));
+r = await api("/api/campaign/get", { code: "E08000034" }, kit);
+ok(r.actions.length === 1 && r.actions[0].title === "Old event" && r.actions[0].campaign === "" && r.actions[0].planned === null && r.issues[0].key === "An old message", "what was saved before campaigns carries on");
 ok((await api("/api/campaign/get", { code: "E08000034" }, lead)).status === 403, "and it's your own authority's");
 
 // the election setting
 await api("/api/briefing/election", { code: WSX, on: true }, lead);
 r = await api("/api/campaign/get", { code: WSX }, lead);
-ok(r.election === true && r.items.length === 0 && r.issues.every((x) => x.key === ""), "the election setting holds back campaign events and key messages");
+ok(r.election === true && r.actions.length === 0 && r.campaigns.length === 0 && r.issues.every((x) => x.key === ""), "the election setting holds back campaigns, actions and key messages");
 ok((await api("/api/map", { code: WSX }, lead)).planned.length === 0, "on the map too");
-ok((await api("/api/campaign/item", { code: WSX, title: "x", date: "2027-01-12" }, lead)).status === 409 && (await api("/api/issue/set", { code: WSX, topic: "Potholes" }, lead)).status === 409 && (await api("/api/campaign/remove", { code: WSX, id: item }, lead)).status === 409, "and nothing can be changed");
+ok((await api("/api/action/save", { code: WSX, title: "x", date: "2027-01-12" }, lead)).status === 409 && (await api("/api/issue/set", { code: WSX, topic: "Potholes" }, lead)).status === 409 && (await api("/api/action/remove", { code: WSX, id: item }, lead)).status === 409, "and nothing can be changed");
+ok((await api("/api/campaign/save", plan(), lead)).status === 409 && (await api("/api/campaign/remove", { code: WSX, id: promise.id }, lead)).status === 409, "campaigns included");
+ok(r.held.length === 1 && r.held[0].title === "Already held" && Object.keys(r.held[0]).sort().join() === "actual,date,id,planned,title", "but actions already held are listed, for their costs");
+ok((await api("/api/campaign/get", { code: WSX }, boss)).held.length === 0, "for the authority's own members only");
+ok((await api("/api/action/actual", { code: WSX, id: heldOne.id, actual: "480" }, lead)).action.actual === 480, "so what one really cost can still be added");
+ok((await api("/api/action/actual", { code: WSX, id: comingOne.id, actual: "1" }, lead)).status === 409, "but not for one that hasn't happened");
+ok((await api("/api/action/actual", { code: WSX, id: heldOne.id, actual: "1" }, boss)).status === 403 && (await api("/api/action/actual", { code: WSX, id: heldOne.id, actual: "1" }, member)).status === 403, "or by anyone but the authority's own leads");
+ok(!(await api("/api/campaign/get", { code: WSX }, lead)).actions.length, "and the campaign stays held back");
 await api("/api/briefing/election", { code: WSX, on: false }, lead);
 r = await api("/api/campaign/get", { code: WSX }, lead);
-ok(r.items.length === 1 && r.issues.find((x) => x.topic === "Potholes").key === "We are fixing more.", "it all comes back when it's off");
+ok(r.actions.length > 1 && r.campaigns.some((x) => x.id === promise.id) && r.actions.find((x) => x.id === heldOne.id).actual === 480 && r.issues.find((x) => x.topic === "Potholes").key === "We are fixing more.", "it all comes back when it's off");
 
 // ---- petitions and questions
 const Q = await api("/api/map", { code: WSX, month }, lead);
@@ -173,7 +232,7 @@ m = t.buildMap({ ...baseData(), streets: [{ ...wasteDay, questions: [{ id: "c1",
 ok(kid(m.tree, "street").mood.v === null && !kid(m.tree, "street").kids.length, "a roads answer isn't taken for another service's mood");
 m = t.buildMap({ ...baseData(), streets: [{ ...wasteDay, questions: [{ id: "l1", text: "Collections", fn: "", topic: "", sat: 70, dis: 20 }] }] }, t.readFilters({ service: "waste" }, "2026-11-02", []));
 ok(kid(m.tree, "street").mood.v === 50, "its own local questions are");
-function baseData() { return { today: "2026-11-02", unread: [], setup: { functions: { highways: [] }, partners: [], channels: [] }, weights: { surveys: 40, contact: 20, print: 15, broadcast: 10, social: 10, events: 5 }, topics: [], sources: [], assessments: [], streets: [], adults: null, ageAdults: null, residents: null, enquiries: {}, monthly: {}, questions: [], rated: {}, announcements: [], works: { on: false, weeks: [], events: [] }, notes: [], posts: [], published: [], campaign: { issues: [], items: [] }, election: false, channels: [], ages: [] }; }
+function baseData() { return { today: "2026-11-02", unread: [], setup: { functions: { highways: [] }, partners: [], channels: [] }, weights: { surveys: 40, contact: 20, print: 15, broadcast: 10, social: 10, events: 5 }, topics: [], sources: [], assessments: [], streets: [], adults: null, ageAdults: null, residents: null, enquiries: {}, monthly: {}, questions: [], rated: {}, announcements: [], works: { on: false, weeks: [], events: [] }, notes: [], posts: [], published: [], plans: { issues: [], campaigns: [], actions: [] }, election: false, channels: [], ages: [] }; }
 const pet = (title, above = true) => ({ title, local: 500, above });
 m = mapWith({}, { "2026-09": { perDay: null, reports: 0, petitions: [] }, "2026-10": { perDay: null, reports: 0, petitions: [pet("New one")] } });
 ok(kid(m.tree, "petitions").mood.v === null && kid(m.tree, "petitions").mood.unit === "to rate", "a new petition doesn't count until an officer rates it");
@@ -235,10 +294,10 @@ let qs = t.allQuestions(r.survey);
 ok(qs.some((q) => q.id === "k1" && /^Did you know\? You can report/.test(q.text) && q.options.join() === "Yes,No"), "\"Did you know?\" becomes a question, asked before the message is given");
 ok(qs.findIndex((q) => q.id === "k1") < qs.findIndex((q) => q.part === "about"), "before the questions about the person");
 r = await api("/api/campaign/get", { code: WSX }, lead);
-const told = r.items.filter((x) => x.survey === made.id);
-ok(told.length === 1 && told[0].topics.join() === "Potholes", "a message tied to a topic shows on the calendar, and can open its survey");
+const told = r.actions.filter((x) => x.survey === made.id);
+ok(told.length === 1 && told[0].topics.join() === "Potholes" && told[0].campaign === forever.id, "a message tied to a topic shows on the calendar as an action in a running campaign, and can open its survey");
 await api("/api/survey/save", { code: WSX, id: made.id, tell: [{ text: "You can report a pothole online.", topic: "Potholes", how: ["Read out by the interviewer", "On the tablet after the last question"], aware: true }, { text: "Diversions are on one page.", topic: "", how: ["On the page after replying by link", "Printed on the form"], aware: false }] }, lead);
-ok((await api("/api/campaign/get", { code: WSX }, lead)).items.filter((x) => x.survey === made.id).length === 1, "saved again, it doesn't appear twice");
+ok((await api("/api/campaign/get", { code: WSX }, lead)).actions.filter((x) => x.survey === made.id).length === 1, "saved again, it doesn't appear twice");
 await api("/api/briefing/election", { code: WSX, on: true }, lead);
 ok((await api("/api/survey/save", { code: WSX, id: made.id, tell: [] }, lead)).status === 409, "messages can't change during the election setting");
 r = await api("/api/survey/get", { code: WSX, id: made.id }, member);
@@ -291,8 +350,8 @@ ok(point2.byLink.n === 30 && point2.byLink.sat === 0, "replies from elsewhere ar
 ok((await api("/api/briefing/officers", { code: WSX })).status === 401, "the officers' briefing needs a sign-in");
 ok((await api("/api/briefing/officers", { code: WSX }, kit)).status === 403, "and it's for your own authority");
 r = await api("/api/briefing/officers", { code: WSX, month }, member);
-ok(r.briefing.parts.map((p) => p.heading).join() === "Where we are,High-impact issues,Early signs to check,Coming up,Bear in mind for campaigns,What's missing", "it has six parts");
-ok(/We are fixing more/.test(JSON.stringify(r.briefing)), "with confirmed issues and their key messages");
+ok(r.briefing.parts.map((p) => p.heading).join() === "Where we are,High-impact issues,Campaigns,Early signs to check,Coming up,Bear in mind for campaigns,What's missing", "it has seven parts");
+ok(/We are fixing more/.test(JSON.stringify(r.briefing)), "with confirmed issues, and campaigns and their key messages");
 r = await api("/api/briefing/officers", { code: WSX, month, word: true }, lead);
 ok(r.name.endsWith(".docx") && r.file.length > 100, "it can be taken out as a Word file");
 await api("/api/briefing/election", { code: WSX, on: true }, lead);
@@ -411,13 +470,63 @@ await shows(d, /What's driving it/);
 go(d, "#issues/NORTHBRIDGE");
 await shows(d, /Proposed by Clarion/);
 ok(/Confirmed/.test(text(d.querySelector(".main"))) && /Potholes/.test(text(d.querySelector(".main"))) && /before weighting/.test(text(d.querySelector(".main"))) && clean(d), "issues show concern, reach and mood, raw and adjusted");
+ok(/Fixing potholes faster/.test(text(d.querySelector(".main"))) && [...d.querySelectorAll(".main a")].some((x) => x.textContent === "Start a campaign"), "and their campaigns, with a way to start one");
 const firstProposed = d.querySelector(".main article h3").textContent;
 button(d, "Confirm").click();
 await until(() => [...d.querySelectorAll(".main section:nth-child(2) h3")].some((x) => x.textContent === firstProposed), "the issue to move");
 ok(true, "confirming moves an issue across");
 go(d, "#campaign/NORTHBRIDGE");
 await until(() => d.querySelector(".cal"), "the calendar");
-ok(d.querySelectorAll(".ev").length >= 5 && /Mood −/.test(text(d.querySelector(".cal"))) && clean(d), "the calendar lists events by topic, with each topic's mood");
+ok(d.querySelectorAll(".ev").length >= 4 && /Mood −/.test(text(d.querySelector(".cal"))) && /Fixing potholes faster/.test(text(d.querySelector(".cal"))) && clean(d), "the calendar lists actions by campaign, with each topic's mood");
+ok(!/[Cc]ampaign events?\b/.test(text(d.getElementById("app"))), "they're called actions");
+main = text(d.querySelector(".main"));
+ok(/Budget/.test(main) && /£12,000/.test(main) && /£6,300/.test(main) && /£5,700/.test(main), "each campaign shows its budget, what's planned and what's left");
+ok(/£20,000/.test(main) && /£3,250/.test(main) && /£14,250/.test(main), "what's left counts an actual cost once it's known");
+const later = button(d, "Later");
+later.click();
+await until(() => /From Mon 30 Nov|From Mon 28 Dec/.test(text(d.querySelector(".cal"))) && !/From Mon 2 Nov/.test(text(d.querySelector(".cal"))), "the next weeks");
+button(d, "Later").click();
+await until(() => /From Mon 25 Jan/.test(text(d.querySelector(".cal"))) || /From Mon 28 Dec/.test(text(d.querySelector(".cal"))), "later weeks");
+button(d, "Later").click();
+await until(() => d.querySelector(".cal-c.off"), "weeks past the campaign's end");
+ok(!d.querySelector(".cal-c.off .ev-add"), "weeks outside a campaign are marked, and nothing can be added to them");
+for (let i = 0; i < 3; i++) { button(d, "Earlier").click(); await new Promise((done) => setTimeout(done, 15)); }
+await until(() => /From Mon 2 Nov/.test(text(d.querySelector(".cal"))), "back to the start");
+[...d.querySelectorAll(".cal-name")].find((b) => b.textContent === "Fixing potholes faster").click();
+await until(() => /Key messages, one on each line/.test(text(d.querySelector(".panel"))), "the campaign");
+ok(/Must|Budget/.test(text(d.querySelector(".panel"))) && /Its actions/.test(text(d.querySelector(".panel"))) && d.querySelector(".panel .scorebox"), "a campaign opens with its totals and its actions");
+button(d, "Take it out").click();
+await until(() => /Move or take out/.test(text(d.querySelector(".panel"))), "the refusal");
+ok(true, "a campaign with actions can't be taken out");
+button(d, "Cancel").click();
+await until(() => button(d, "New campaign"), "the side panel");
+button(d, "New campaign").click();
+await until(() => /Key messages, one on each line/.test(text(d.querySelector(".panel"))), "the form");
+const form = d.querySelector(".panel"), boxesOf = () => [...form.querySelectorAll("input, select, textarea")];
+form.querySelector('input[type="checkbox"]').click();
+await until(() => /Budget for 2026-27/.test(text(d.querySelector(".panel"))), "the ongoing form");
+ok(/Budget for 2026-27/.test(text(form)) && [...form.querySelectorAll("label")].find((x) => /End date/.test(x.textContent)).hidden && ![...form.querySelectorAll("label")].find((x) => /Review date/.test(x.textContent)).hidden, "an ongoing campaign asks for a review date and a year's budget");
+form.querySelector('input[type="checkbox"]').click();
+boxesOf()[0].value = "Pavements first"; form.querySelector("select").value = "Pavements";
+[...form.querySelectorAll("label")].find((x) => /End date/.test(x.textContent)).querySelector("input").value = "2027-03-31";
+[...form.querySelectorAll("label")].find((x) => /^Budget/.test(x.textContent)).querySelector("input").value = "100";
+button(d, "Save").click();
+await until(() => /Pavements first/.test(text(d.querySelector(".cal"))), "the new campaign");
+ok(/£100/.test(text(d.querySelector(".main"))), "a new campaign joins the calendar, with its budget");
+const pavedRow = [...d.querySelectorAll(".cal-r")].find((x) => /Pavements first/.test(x.textContent));
+const addHere = d.querySelector(`.ev-add[aria-label^="Add to Pavements first"]`);
+addHere.click();
+await until(() => /Must fall within/.test(text(d.querySelector(".panel"))), "the new action");
+const costBox = [...d.querySelectorAll(".panel label")].find((x) => /Planned cost/.test(x.textContent)).querySelector("input");
+costBox.value = "250"; costBox.dispatchEvent(new d.defaultView.Event("change"));
+await until(() => /£150 over/.test(text(d.querySelector(".main"))), "the overspend");
+ok(true, "costs add up to the campaign, and an overspend shows before it happens");
+const dateBox = [...d.querySelectorAll(".panel label")].find((x) => /^Date/.test(x.textContent)).querySelector("input"), wasDate = dateBox.value;
+dateBox.value = "2030-01-01"; dateBox.dispatchEvent(new d.defaultView.Event("change"));
+await new Promise((done) => setTimeout(done, 40));
+ok([...d.querySelectorAll(".panel label")].find((x) => /^Date/.test(x.textContent)).querySelector("input").value === wasDate, "a date outside the campaign doesn't stick");
+button(d, "Done").click();
+await until(() => /Not counted in the mood/.test(text(d.querySelector(".panel"))), "the list");
 ok(/Potholes/.test(text(d.querySelector(".panel"))) && /Key messages/.test(text(d.querySelector(".panel"))), "with what to bear in mind and the key messages");
 d.querySelector(".ev").click();
 await until(() => /Came from/.test(text(d.querySelector(".panel"))), "the event");
@@ -438,6 +547,7 @@ const ids = JSON.parse(d.defaultView.eval("JSON.stringify(Demo.pack.surveyList.s
 go(d, `#survey/NORTHBRIDGE/${ids[1]}/tell`);
 await shows(d, /What to tell people/);
 ok(/What people see after the last question/.test(text(d.querySelector(".main"))) && d.querySelector(".phone") && clean(d), "a survey has a step for what to tell people");
+ok([...d.querySelectorAll(".main .chip")].some((b) => /^Key message: We are repairing more potholes/.test(b.textContent)) && [...d.querySelectorAll(".main .chip")].some((b) => /^Key message: We will tell you about roadworks/.test(b.textContent)), "a survey can use a campaign's key messages");
 button(d, "Something else").click();
 await until(() => d.querySelectorAll(".main textarea").length === 2, "a new message");
 ok(/Did you know/.test(text(d.querySelector(".main"))), "a message can ask \"Did you know?\"");
@@ -542,10 +652,10 @@ ok(pinnedName && [...d.querySelectorAll(".site-name strong")].some((x) => x.text
 // a double click plans one event
 d = browser(`/#a/${WSX}`, lead);
 await until(() => d.querySelector(".stage"), "the lead's map");
-const planned0 = (await api("/api/campaign/get", { code: WSX }, lead)).items.length;
+const planned0 = (await api("/api/campaign/get", { code: WSX }, lead)).actions.length;
 d.defaultView.eval(`planFrom({ code: "${WSX}" }, "Potholes", "Test"); planFrom({ code: "${WSX}" }, "Potholes", "Test");`);
 await until(() => d.querySelector(".cal"), "the calendar");
-ok((await api("/api/campaign/get", { code: WSX }, lead)).items.length === planned0 + 1, "a double click plans one event");
+ok((await api("/api/campaign/get", { code: WSX }, lead)).actions.length === planned0 + 1, "a double click plans one action");
 await api("/api/setup/save", { code: WSX, part: "functions", service: "highways", list: t.standardFunctions("highways") }, lead);
 
 // a member reads, and doesn't change
@@ -562,6 +672,14 @@ ok(!button(d, "Add") && !button(d, "Turn this on") && [...d.querySelectorAll(".e
 d = browser(`/#briefings/${WSX}`, boss);
 await shows(d, /Where we are/);
 ok(true, "a site administrator can read the officers' briefing");
+
+// the election setting in the demonstration
+d = browser("/demo", "");
+await until(() => d.querySelector(".stage"), "the map again");
+d.defaultView.eval("Demo.election.on = true");
+go(d, "#campaign/NORTHBRIDGE");
+await until(() => /Campaigns, actions and key messages are held back/.test(text(d.querySelector(".main"))), "the held calendar");
+ok(!d.querySelector(".ev") && !/Fixing potholes/.test(text(d.querySelector(".main"))) && /Actual costs for actions already held/.test(text(d.querySelector(".main"))) && /Diversions page launched/.test(text(d.querySelector(".main"))), "the election setting holds campaigns back, but past costs can still be added");
 
 // the tablet shows what to tell people, once the last question is done
 const tb = browser(`/s/${opened.access}`, "", tablet), tw = tb.defaultView;

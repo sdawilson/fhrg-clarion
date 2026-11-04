@@ -2,7 +2,7 @@
 // that mustn't hold up the page, so it's asked for briefly and the map says what's missing rather than waiting.
 
 import { loadElection } from "./briefings";
-import { held as campaignNow, loadCampaign } from "./campaign";
+import { held as plansNow, loadPlans } from "./campaign";
 import type { Config } from "./config";
 import { adultsByAge, channelsFrom, loadAssessments, loadRates, loadRatings, loadSources, type Rate } from "./coverage";
 import { enquiriesByMonth, loadEnquiries, readNews } from "./enquiries";
@@ -53,9 +53,9 @@ const headlineSurvey = (list: { year: number; measure: string; score: number; ou
 
 export async function loadMapData(c: Config, p: Pilot): Promise<MapData> {
   const today = londonToday();
-  const [setup, weights, topics, sources, assessments, streets, facts, heldEnquiries, works, notes, election, campaign, rated] = await Promise.all([
+  const [setup, weights, topics, sources, assessments, streets, facts, heldEnquiries, works, notes, election, plans, rated] = await Promise.all([
     loadSetup(c, p.code), loadWeights(c), sharedTopics(c), loadSources(c, p.code), loadAssessments(c, p.code), streetPoints(c, p.code), loadFacts(c, p.code),
-    loadEnquiries(c, p.code), loadWorks(c, p.code), listNotes(c, p.code), loadElection(c, p.code), loadCampaign(c, p.code), loadRatings(c, p.code),
+    loadEnquiries(c, p.code), loadWorks(c, p.code), listNotes(c, p.code), loadElection(c, p.code), loadPlans(c, p.code), loadRatings(c, p.code),
   ]);
   const page = heldEnquiries.page || p.newsPage;
   const [census, rates, signals, posts, figures, gov] = await Promise.all([
@@ -75,7 +75,7 @@ export async function loadMapData(c: Config, p: Pilot): Promise<MapData> {
     ...(signals?.fixMyStreet.ok ? [] : ["FixMyStreet"]), ...(signals?.petitions.ok ? [] : ["petitions"]), ...(signals?.questions.ok ? [] : ["MPs' questions"]),
     ...(gov ? [] : ["GOV.UK"]), ...(figures ? [] : ["published figures"]), ...(page && !posts ? ["the council's news page"] : []),
   ];
-  const own = campaign.issues.filter((x) => x.own).map((x) => x.topic);
+  const own = plans.issues.filter((x) => x.own).map((x) => x.topic);
   return {
     today, unread, setup, weights, topics: [...topics, ...own.filter((t) => !topics.includes(t))], sources, assessments, streets, adults: census?.adults ?? null, ageAdults: census ? adultsByAge(census) : null, rated, announcements: (gov ?? []).map((x) => ({ title: x.title, date: x.date })),
     residents: headlineSurvey([...p.surveys, ...facts.surveys]), enquiries: enquiriesByMonth(heldEnquiries, topics), monthly,
@@ -84,6 +84,6 @@ export async function loadMapData(c: Config, p: Pilot): Promise<MapData> {
     notes: notes.filter((n) => n.status === "ready").map((n) => ({ id: n.id, title: n.change?.title || n.input.title, date: n.created.slice(0, 10), effect: n.effect ?? null, topic: n.topic ?? "", routes: [...new Set(n.impacts.map((i) => i.route))] })),
     posts: (posts ?? []).map((x) => ({ title: x.title, date: x.date, topic: x.topic })),
     published: (figures?.condition ?? []).map((x) => ({ name: `${x.roadClass} roads to consider for repair, ${x.fye}`, here: `${x.value}%`, region: x.region === null ? "–" : `${x.region}%`, england: x.england === null ? "–" : `${x.england}%` })),
-    campaign: campaignNow(campaign, election.on), election: election.on, channels: channelsFrom(rates), ages: AGES.map(([age]) => age),
+    plans: plansNow(plans, election.on), election: election.on, channels: channelsFrom(rates), ages: AGES.map(([age]) => age),
   };
 }

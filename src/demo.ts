@@ -8,7 +8,7 @@ import {
   type Assessment, type Rate, type Source,
 } from "./coverage";
 import { ELECTION_NOTE, longDate, wordCopy, type Briefing } from "./briefings";
-import { held as heldCampaign, type Campaign } from "./campaign";
+import { held as heldPlans, type Plans } from "./campaign";
 import { buildMap, readFilters, type MapData } from "./mood";
 import { officersBriefing, officersWord } from "./officers";
 import type { Reading } from "./reading";
@@ -413,16 +413,22 @@ export const demoPack = () => cached("demo-pack", 24 * 60 * 60 * 1000, async () 
 
 // The map, from the same made-up data and the same calculations as a real authority
 const MAP_TODAY = "2026-11-02";
-const demoCampaign = (): Campaign => ({
+const demoAction = (id: string, title: string, date: string, channel: string, topics: string[], origin: string, campaign: string, planned: number | null, actual: number | null) => ({ id, title, date, channel, topics, service: "highways", origin, survey: "", campaign, planned, actual, by: "Demo officer", at: "2026-11-02" });
+const demoCampaign = (): Plans => ({
   issues: [
-    { topic: "Potholes", status: "confirmed", key: "We are repairing more potholes than last year. Tell us where they are and we will tell you when each one is fixed.", service: "highways", own: false, by: "Demo officer", at: WHEN },
-    { topic: "Roadworks information", status: "confirmed", key: "We will tell you about roadworks earlier, and show every diversion on one page.", service: "highways", own: false, by: "Demo officer", at: WHEN },
+    { topic: "Potholes", status: "confirmed", key: "", service: "highways", own: false, by: "Demo officer", at: WHEN },
+    { topic: "Roadworks information", status: "confirmed", key: "", service: "highways", own: false, by: "Demo officer", at: WHEN },
   ],
-  items: [
-    { id: "i1", title: "Pothole repair figures", date: "2026-11-10", channel: "press", topics: ["Potholes"], service: "highways", origin: "High-impact issue: Potholes", survey: "", by: "Demo officer", at: "2026-11-02" },
-    { id: "i2", title: "How to report a pothole", date: "2026-11-12", channel: "social", topics: ["Potholes"], service: "highways", origin: "Survey result: 21% satisfied with road surfaces", survey: "", by: "Demo officer", at: "2026-11-02" },
-    { id: "i3", title: "Roadworks forum with parish councils", date: "2026-11-18", channel: "liaison", topics: ["Roadworks information"], service: "highways", origin: "Mention: Dale Valley Gazette", survey: "", by: "Demo officer", at: "2026-11-02" },
-    { id: "i4", title: "Winter repairs and roadworks programme", date: "2026-11-24", channel: "press", topics: ["Potholes", "Roadworks information"], service: "highways", origin: "High-impact issue: Potholes", survey: "", by: "Demo officer", at: "2026-11-02" },
+  campaigns: [
+    { id: "c1", name: "Fixing potholes faster", topic: "Potholes", service: "highways", messages: ["We are repairing more potholes than last year.", "Tell us where they are and we will tell you when each one is fixed."], start: "2026-11-02", end: "2027-01-29", ongoing: false, review: "", budget: 12000, budgets: {}, by: "Demo officer", at: "2026-11-02" },
+    { id: "c2", name: "Roadworks: telling people sooner", topic: "Roadworks information", service: "highways", messages: ["We will tell you about roadworks earlier, and show every diversion on one page."], start: "2026-09-01", end: "", ongoing: true, review: "2027-03-01", budget: null, budgets: { "2026-27": 20000 }, by: "Demo officer", at: "2026-09-01" },
+  ],
+  actions: [
+    demoAction("i0", "Diversions page launched", "2026-10-20", "press", ["Roadworks information"], "Mention: Dale Valley Gazette", "c2", 3000, 3250),
+    demoAction("i1", "Pothole repair figures", "2026-11-10", "press", ["Potholes"], "High-impact issue: Potholes", "c1", 1500, null),
+    demoAction("i2", "How to report a pothole", "2026-11-12", "social", ["Potholes"], "Survey result: 21% satisfied with road surfaces", "c1", 800, null),
+    demoAction("i3", "Roadworks forum with parish councils", "2026-11-18", "liaison", ["Roadworks information"], "Mention: Dale Valley Gazette", "c2", 2500, null),
+    demoAction("i4", "Winter repairs and roadworks programme", "2026-11-24", "press", ["Potholes", "Roadworks information"], "High-impact issue: Potholes", "c1", 4000, null),
   ],
 });
 const demoSetup = (): Setup => {
@@ -430,7 +436,7 @@ const demoSetup = (): Setup => {
   return { functions: fns, partners: [{ id: "dale", name: "Dale Highways", role: "Term maintenance contractor" }, { id: "bright", name: "Brightway Lighting", role: "Street lighting partner" }, { id: "nwater", name: "Northern Valley Water", role: "Utility works" }], channels: [{ id: "press", name: "Press announcement", node: "press" }, { id: "social", name: "Social media post", node: "socialm" }, { id: "liaison", name: "Community liaison meeting", node: "meetings" }, { id: "radio", name: "Radio interview", node: "radio" }, { id: "survey", name: "Street survey", node: "street" }], updated: "", by: "" };
 };
 export const demoSetupPack = () => ({ setup: demoSetup(), weights: WEIGHTS, services: SERVICES, standard: Object.fromEntries(SERVICES.map((x) => [x.id, standardFunctions(x.id)])), canEdit: true, canApprove: true, election: false, isLead: true, canWeigh: false });
-export const demoCampaignPack = () => { const x = demoCampaign(); return { ...x, channels: demoSetup().channels, election: false, canEdit: true }; };
+export const demoCampaignPack = () => { const x = demoCampaign(); return { ...x, channels: demoSetup().channels, election: false, canEdit: true, money: true, today: MAP_TODAY, held: [] }; };
 
 function demoMapData(): MapData {
   const autumn = autumnSurvey(), point = pointOf(autumn, replies(), census);
@@ -448,13 +454,13 @@ function demoMapData(): MapData {
     notes: [{ id: "n1", title: "£4.2m extra for pothole repairs", date: "2026-10-12", effect: 20, topic: "Potholes", routes: ["Money", "Delivery capacity", "Public and media reaction"] }],
     posts: [{ title: "Winter gritting routes confirmed", date: "2026-10-28", topic: "Winter service" }, { title: "Moor Lane resurfacing starts next month", date: "2026-10-21", topic: "Potholes" }],
     published: [{ name: "A roads to consider for repair", here: "3.1%", region: "3.8%", england: "3.4%" }, { name: "B and C roads to consider for repair", here: "6.2%", region: "5.9%", england: "5.6%" }],
-    campaign: demoCampaign(), election: false, channels: channelsFrom([...DEMO_RATES, ...demoChannels()]), ages: AGE_BANDS.map(([from, to]) => (to ? `${from} to ${to}` : `${from} or over`)),
+    plans: demoCampaign(), election: false, channels: channelsFrom([...DEMO_RATES, ...demoChannels()]), ages: AGE_BANDS.map(([from, to]) => (to ? `${from} to ${to}` : `${from} or over`)),
   };
 }
 let mapData: MapData | null = null;
 const dataFor = (b: any) => {
   mapData ??= demoMapData();
-  return b?.election === true ? { ...mapData, election: true, campaign: heldCampaign(mapData.campaign, true) } : mapData;
+  return b?.election === true ? { ...mapData, election: true, plans: heldPlans(mapData.plans, true) } : mapData;
 };
 export function demoMap(b: any) {
   const data = dataFor(b);
@@ -463,7 +469,7 @@ export function demoMap(b: any) {
 export function demoOfficers(b: any) {
   const data = dataFor(b), map = buildMap(data, readFilters({ service: b?.service, month: b?.month }, data.today, data.topics));
   earlySigns ??= ((buildPack().attention as { earlySigns?: { topic: string }[] }).earlySigns ?? []).map((x) => x.topic);
-  const roads = map.service === DEFAULT_SERVICE, issues = data.campaign.issues.filter((x) => x.status === "confirmed" && x.service === map.service);
-  const briefing = officersBriefing(map, issues, roads ? (reading as unknown as Reading) : null, roads ? earlySigns : [], data.today);
+  const roads = map.service === DEFAULT_SERVICE, issues = data.plans.issues.filter((x) => x.status === "confirmed" && x.service === map.service), campaigns = data.plans.campaigns.filter((x) => x.service === map.service);
+  const briefing = officersBriefing(map, issues, campaigns, roads ? (reading as unknown as Reading) : null, roads ? earlySigns : [], data.today);
   return b?.word === true ? officersWord(briefing) : { briefing };
 }

@@ -8,7 +8,7 @@
 //
 // The weights are a starting judgement to test in the pilot. Surveys carry the most because they set the level.
 
-import type { Campaign } from "./campaign";
+import type { Plans } from "./campaign";
 import { pieceWeight, type Assessment, type Source } from "./coverage";
 import type { Setup, Weights } from "./setup";
 import { DEFAULT_SERVICE, SERVICES, serviceId } from "./setup";
@@ -25,7 +25,7 @@ export type MapData = {
   notes: { id: string; title: string; date: string; effect: number | null; topic: string; routes: string[] }[];
   posts: { title: string; date: string; topic: string }[];
   published: { name: string; here: string; region: string; england: string }[];
-  campaign: Campaign; election: boolean; channels: { key: string; label: string; rates: number[] }[]; ages: string[];
+  plans: Plans; election: boolean; channels: { key: string; label: string; rates: number[] }[]; ages: string[];
 };
 
 type Def = { id: string; label: string; kids?: Def[]; w?: number; medium?: string; sub?: string; add?: string; types?: string[]; blend?: boolean };
@@ -447,7 +447,7 @@ export function buildMap(data: MapData, f: Filters) {
   }));
   const leftOut = f.view === "authority" ? data.setup.partners.filter((q) => !f.include.includes(q.id)).map((q) => ({ id: q.id, name: q.name, pieces: piecesFor(x, { allAbout: true }).filter((p) => (p.about ?? "") === q.id).map((p) => trailOf(p.src)) })).filter((q) => q.pieces.length) : [];
   const channelsById = new Map(data.setup.channels.map((c) => [c.id, c]));
-  const planned = f.view === "authority" ? data.campaign.items.filter((i) => i.service === f.service && (f.topic === "all" || i.topics.includes(f.topic))).map((i) => {
+  const planned = f.view === "authority" ? data.plans.actions.filter((i) => i.service === f.service && (f.topic === "all" || i.topics.includes(f.topic))).map((i) => {
     const ch = channelsById.get(i.channel), node = ch?.node ? find(ch.node) : null, trail = node ? pathToDef(node.id) : [];
     return { id: i.id, title: i.title, date: i.date, channel: ch?.name ?? "No channel", topics: i.topics, nodes: ["root", ...trail] };
   }) : [];
