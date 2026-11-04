@@ -293,7 +293,7 @@ members(d);
 await see(d, /Briefings so far/);
 main = text(d.querySelector(".main"));
 ok(button(d, "Write a briefing") && button(d, "Turn this on") && /Released/.test(main) && /Draft/.test(main), "a lead sees the list, and can write one and set the election setting");
-ok([...d.querySelectorAll(".tabs button")].some((b) => b.textContent === "6Briefings"), "it has its place in the tabs");
+ok([...d.querySelectorAll(".rail .nav button")].some((b) => b.textContent === "Briefings"), "it has its place in the menu");
 d = await open(boss, `#briefings/${WSX}`);
 await until(() => button(d, "For members"), "the choice of briefing");
 members(d);
