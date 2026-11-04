@@ -97,8 +97,8 @@ export function briefing(p: Pilot, e: Evidence, facts: Facts): Record<string, un
     dft_rating: p.rating, reporting_route: p.reportingRoute,
     constituencies_shared_with_others: p.constituencies.filter((x) => x.shared).map((x) => `${x.name}: ${x.shared}`),
     survey_results: e.surveys, survey_note: p.surveyNote,
+    // a survey people only chose to answer isn't evidence for a reading or a note, so it doesn't reach them
     ...(interviewedOnly(e.streets).length ? { street_surveys: interviewedOnly(e.streets).map(({ id: _id, ...rest }) => rest) } : {}),
-    ...(e.streets.some((x) => x.selfOnly) ? { surveys_people_chose_to_answer: e.streets.filter((x) => x.selfOnly).map(({ id: _id, ...rest }) => rest) } : {}),
     published_figures: e.figures,
     public_signals: { fix_my_street: e.signals.fixMyStreet.data, petitions: e.signals.petitions.data, mps_written_questions: e.signals.questions.data },
     ...(e.said?.length ? { assessed_press_and_media_last_four_weeks: e.said } : {}),

@@ -78,6 +78,7 @@
 //   POST /api/r/submit             {access, client, secs, answers, postcode}: one person's reply
 //   POST /api/survey/self          {code, id, on}: turns the self-completion link on or off
 //   POST /api/survey/qr            {code, id, origin}: that link, and its QR code
+//   POST /api/survey/selfday       {code, id, day, action}: leave out, put back or delete a day's replies by link
 
 import { handleLogin, handleLogout, handleSso, networkOf, signedIn, type Member } from "./accounts";
 import { findTitles, saveTitles, titlesHeld } from "./abc";
@@ -104,8 +105,8 @@ import { announcements, fixMyStreetUrl, loadSignals } from "./signals";
 import { loadSites } from "./sites";
 import { MAX_SCAN_CHARS, getHelp, sharedTopics, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
-  addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, countArea, createSurvey, formNumber, leaveOutDay, listSurveys, loadAnswers, loadAreas,
-  loadCensus, loadSurvey, openSurvey, publicSelf, publicSurvey, readCsv, saveSurvey, setSelf, surveyByAccess, surveyBySelf, surveyPage, textQuestionIds, validAccess, validSelf, type Survey,
+  addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, changeDay, closeSurvey, countArea, createSurvey, formNumber, listSurveys, loadAnswers, loadAreas,
+  loadCensus, loadSurvey, openSurvey, publicSelf, publicSurvey, readAnswers, readCsv, saveSurvey, setSelf, surveyByAccess, surveyBySelf, surveyPage, textQuestionIds, validAccess, validSelf, type Survey,
 } from "./surveys";
 import { FriendlyError, briefly, tryAgainNow, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
 
@@ -477,7 +478,7 @@ async function handleSurveyExport(c: Config, request: Request): Promise<Response
 
 // Public routes: a wrong code costs a storage read, so wrong guesses are limited
 const WINDOW_MS = 10 * 60 * 1000;
-const MAX_WRONG = 30, MAX_FORMS = 1500, MAX_SELF_PER_ADDRESS = 20, MAX_SELF_REPLIES = 600;
+const MAX_WRONG = 30, MAX_FORMS = 1500, MAX_SELF_PER_ADDRESS = 20, MAX_SELF_PER_BLOCK = 200, MAX_SELF_REPLIES = 600;
 const tallies = new Map<string, { from: number; n: number }>();
 function countOf(key: string): { from: number; n: number } {
   const now = Date.now();
@@ -512,28 +513,30 @@ async function surveyFromCode(c: Config, request: Request, value: unknown, forms
 
 // The self-completion link. It's meant to travel, so nothing about it is secret, and the limits are on how fast replies
 // can arrive: a campaign can't fill a survey in a few minutes, and most of a shared office can still reply
-async function surveyFromSelf(c: Config, request: Request, value: unknown, replying = false): Promise<Survey> {
+async function surveyFromSelf(c: Config, request: Request, value: unknown): Promise<Survey> {
   fromOurPage(request);
   const wrong = countOf(`wronglink|${networkOf(request)}`); // apart from tablets, so an old poster can't lock out an interviewer
   if (wrong.n >= MAX_WRONG) throw new FriendlyError("Too many tries. Please wait a few minutes.", 429);
   const link = String(value ?? "").toUpperCase();
   const s = validSelf(link) ? await surveyBySelf(c, link) : null;
   if (!s || s.self !== link) { wrong.n++; throw new FriendlyError("This link isn't right. Check it with whoever sent it.", 404); }
-  if (replying) {
-    const person = countOf(`self|${networkOf(request)}`), all = countOf(`selfall|${link}`);
-    if (person.n >= MAX_SELF_PER_ADDRESS || all.n >= MAX_SELF_REPLIES) throw new FriendlyError("A lot of replies are arriving at once. Please try again in a few minutes.", 429);
-    person.n++; all.n++;
-  }
   if (s.status !== "open" || !s.selfOn) throw new FriendlyError("This survey has closed.", 409);
   await notPaused(c, s.code);
   return s;
 }
 
+function countReply(request: Request, link: string): void {
+  const person = countOf(`self|${networkOf(request)}`), block = countOf(`selfblock|${networkOf(request, 3)}`), all = countOf(`selfall|${link}`);
+  if (person.n >= MAX_SELF_PER_ADDRESS || block.n >= MAX_SELF_PER_BLOCK || all.n >= MAX_SELF_REPLIES) throw new FriendlyError("A lot of replies are arriving at once. Please try again in a few minutes.", 429);
+  person.n++; block.n++; all.n++;
+}
+
 async function handleSelfSubmit(c: Config, request: Request): Promise<Response> {
   const b = await readJsonBody(request, 20_000);
-  // before anything is counted, so empty requests can't use up the limits
-  if (typeof b.client !== "string" || !b.client.trim() || !b.answers || typeof b.answers !== "object" || !Object.keys(b.answers).length) throw new FriendlyError("That reply has no answers.");
-  const s = await surveyFromSelf(c, request, b.access, true);
+  const s = await surveyFromSelf(c, request, b.access);
+  // before anything is counted, so a request with nothing real in it can't use up the limits
+  if (!cleanText(b.client, 60) || !Object.keys(readAnswers(s, b.answers).answers).length) throw new FriendlyError("That reply has no answers.");
+  countReply(request, s.self as string);
   const outcode = outcodeOf(b.postcode), p = pilotByCode(s.code);
   const where = p && outcode ? whereIs(p, await areaOf(c, outcode)) : "unknown";
   const r = await addAnswers(c, s, [{ client: b.client, secs: b.secs, answers: b.answers, where }], "self");
@@ -654,7 +657,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/r/submit": return await handleSelfSubmit(c, request);
         case "/api/survey/self": { const { b, s } = await surveyEditor(c, request); if (b.on === true) await notPaused(c, s.code); return json({ survey: await setSelf(c, s, b.on === true) }); }
         case "/api/survey/qr": return await handleSurveyQr(c, request);
-        case "/api/survey/selfday": { const { b, s } = await surveyEditor(c, request); await leaveOutDay(c, s, b.day, b.excluded === true); return json({ ok: true }); }
+        case "/api/survey/selfday": { const { b, s } = await surveyEditor(c, request); await changeDay(c, s, b.day, b.action); return json({ ok: true }); }
       }
     }
     return json({ error: "Not found." }, 404);

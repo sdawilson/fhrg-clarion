@@ -32,7 +32,7 @@ export const MIN_GROUP = 30;
 export const WEIGHT_CAP = 5;
 const MAX_ANSWERS = 5000;
 const MAX_SELF = 3000; // replies by link. A link can be passed around, so these have their own limit, and interviewers keep theirs
-const MAX_SELF_HELD = 6000; // and including any left out, so a flood that's been dealt with can't fill the storage
+const MAX_SELF_HELD = 4000; // and including any left out, which an officer can delete
 const MIN_AREA = 10; // fewer replies from a postcode area than this are pooled
 const MAX_SITES = 40;
 const DEFAULT_TARGET = 120; // four sites of 30
@@ -82,7 +82,7 @@ export type Survey = {
   self?: string; selfOn?: boolean; // the link for people to fill it in themselves, which is a different code from interviewers'
 };
 export type Answer = {
-  n: number; form: string; via: "tablet" | "paper" | "scan" | "csv" | "self"; where?: Where; site: string; at: string; secs: number | null; client?: string;
+  n: number; form: string; via: "tablet" | "paper" | "scan" | "csv" | "self"; where?: Where; dayLeft?: boolean; site: string; at: string; secs: number | null; client?: string;
   answers: Record<string, string>; topics: Record<string, string>; clean: Record<string, boolean>; checked: Record<string, boolean>; excluded?: boolean;
 };
 
@@ -249,10 +249,22 @@ export async function setSelf(c: Config, s: Survey, on: boolean): Promise<Survey
   });
 }
 
-// A flood arrives on one or two days, so that's the handle for leaving it out, and it can be put back
-export async function leaveOutDay(c: Config, s: Survey, day: unknown, excluded: boolean): Promise<void> {
-  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new FriendlyError("That isn't a date.");
-  await changeAnswers(c, s, (all) => { for (const a of all) if (a.via === "self" && a.at.startsWith(day)) a.excluded = excluded; });
+// A flood arrives on one or two days, so that's the handle for leaving it out. Days are British ones. Only what a day's
+// action left out can be put back or deleted with it, so a form an officer left out by hand stays as it is.
+const britishDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" });
+const dayOf = (iso: string) => britishDay.format(new Date(iso));
+export async function changeDay(c: Config, s: Survey, day: unknown, action: unknown): Promise<void> {
+  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !["leave", "back", "delete"].includes(String(action))) throw new FriendlyError("That isn't a day.");
+  await changeAnswers(c, s, (all) => {
+    const live = new Set(all.filter((a) => !a.excluded).map((a) => a.form));
+    for (let i = all.length - 1; i >= 0; i--) {
+      const a = all[i];
+      if (a.via !== "self" || dayOf(a.at) !== day) continue;
+      if (action === "leave" && !a.excluded) { a.excluded = true; a.dayLeft = true; }
+      if (action === "back" && a.dayLeft && !live.has(a.form)) { a.excluded = false; delete a.dayLeft; live.add(a.form); }
+      if (action === "delete" && a.dayLeft) all.splice(i, 1);
+    }
+  });
 }
 
 export async function surveyByAccess(c: Config, access: string): Promise<Survey | null> {
@@ -312,6 +324,7 @@ export async function addAnswers(c: Config, s: Survey, items: Incoming[], via: A
       if (!form) { problems.push("A form has no number."); continue; }
       if (forms.has(form)) { problems.push(`Form ${form} has already been entered.`); continue; }
       const read = readAnswers(s, item?.answers);
+      if (item?.where === "elsewhere") for (const id of textQuestionIds(s)) delete read.answers[id]; // nobody would ever check these for names, so they aren't kept
       problems.push(...read.problems.map((x) => `Form ${form}: ${x}`));
       if (!Object.keys(read.answers).length) { problems.push(`Form ${form} has no answers.`); if (client) done.push(client); continue; }
       const secs = Number(item?.secs);
@@ -503,7 +516,6 @@ const effectiveSize = (w: number[]) => { const sum = w.reduce((a, b) => a + b, 0
 const fromSelf = (r: Answer) => r.via === "self";
 const counted = (r: Answer) => fromSelf(r) && r.where !== "elsewhere";
 const noSites = <T extends Pick<Survey, "plan">>(s: T): T => ({ ...s, plan: { ...s.plan, sites: [] } });
-const elsewhere = (r: Answer) => r.where === "elsewhere";
 /** Surveys with interviewers. A survey people only chose to answer isn't a street survey, and a link is too easily moved to count as one. */
 export const interviewedOnly = (list: StreetSummary[]) => list.filter((x) => !x.selfOnly);
 
@@ -663,11 +675,11 @@ export async function streetSummaries(c: Config, code: string): Promise<StreetSu
 
 // Everything a survey's page shows. `edit`: a lead or site administrator. `own`: a member of the authority, the
 // only people who get the words of a comment. Topic counts go to everyone who can see the survey.
-function selfDays(rows: Answer[]): { day: string; replies: number; left: number }[] {
-  const days = new Map<string, { day: string; replies: number; left: number }>();
+function selfDays(rows: Answer[]): { day: string; replies: number; left: number; byDay: number }[] {
+  const days = new Map<string, { day: string; replies: number; left: number; byDay: number }>();
   for (const r of rows.filter(fromSelf)) {
-    const day = r.at.slice(0, 10), x = days.get(day) ?? { day, replies: 0, left: 0 };
-    x.replies++; if (r.excluded) x.left++;
+    const day = dayOf(r.at), x = days.get(day) ?? { day, replies: 0, left: 0, byDay: 0 };
+    x.replies++; if (r.excluded) x.left++; if (r.dayLeft) x.byDay++;
     days.set(day, x);
   }
   return [...days.values()].sort((a, b) => b.day.localeCompare(a.day));
@@ -685,13 +697,13 @@ export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edi
     survey: edit ? s : { ...s, access: "", self: "", selfOn: false }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS,
     template: edit ? templateCsv(s) : "",
     census: census ? { adults: census.adults } : null, areas, targets: ageSexTargets(census, s.plan.target),
-    results: { ...headline, total: rows.length, bySource }, selfOnly, topics: topicCounts(shown), comments: own ? shown : [], ownComments: own, waiting: waitingComments(s, used.filter((r) => !elsewhere(r))),
-    self: replied.length ? {
+    results: { ...headline, total: rows.length, bySource }, selfOnly, topics: topicCounts(shown), comments: own ? shown : [], ownComments: own, waiting: waitingComments(s, used),
+    self: rows.some(fromSelf) ? {
       results: selfOnly ? null : surveyResults(noSites(s), rows.filter(counted), census), here: whereCount("here"), elsewhere: whereCount("elsewhere"), notSaid: whereCount("unknown"), areas: areaRows(tally),
       left: rows.filter((r) => fromSelf(r) && r.excluded).length,
       topics: selfOnly ? [] : topicCounts(theirs), comments: own && !selfOnly ? theirs : [],
     } : null,
-    problems: edit ? [...findProblems(s, rows.filter((r) => !fromSelf(r))), ...findProblems(s, rows.filter(fromSelf))] : [], excluded: edit ? rows.filter((r) => r.excluded && !fromSelf(r)).map((r) => ({ n: r.n, form: r.form })) : [],
+    problems: edit ? [...findProblems(s, rows.filter((r) => !fromSelf(r))), ...findProblems(s, rows.filter(fromSelf))] : [], excluded: edit ? rows.filter((r) => r.excluded && !r.dayLeft).map((r) => ({ n: r.n, form: r.form })) : [],
     selfDays: edit ? selfDays(rows) : [],
     sample: edit && own ? commentSample(everyone) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1,
   };

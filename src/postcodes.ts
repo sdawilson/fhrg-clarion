@@ -14,7 +14,8 @@ type Area = { districts: string[]; counties: string[] };
 const LOOKUP_MS = 3000;
 const OUTCODE = /^[A-Z]{1,2}[0-9][0-9A-Z]?$/;
 const MAX_REMEMBERED = 5000;
-const held = new Map<string, Area>(), looking = new Map<string, Promise<Area | null>>(), noSuchArea = new Set<string>();
+const MISS_MS = 24 * 60 * 60 * 1000; // a miss may only be a passing fault, so it isn't remembered for long
+const held = new Map<string, Area>(), looking = new Map<string, Promise<Area | null>>(), misses = new Map<string, number>();
 const filePath = (c: Config, outcode: string) => `${c.root}reference/outcodes/${outcode}.json`;
 const names = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
@@ -29,7 +30,7 @@ export function outcodeOf(v: unknown): string | null {
 export async function areaOf(c: Config, outcode: string): Promise<Area | null> {
   const known = held.get(outcode);
   if (known) return known;
-  if (noSuchArea.has(outcode)) return null;
+  if (Date.now() - (misses.get(outcode) ?? 0) < MISS_MS) return null;
   const going = looking.get(outcode) ?? lookUp(c, outcode).finally(() => looking.delete(outcode));
   looking.set(outcode, going);
   return await going;
@@ -41,8 +42,8 @@ async function lookUp(c: Config, outcode: string): Promise<Area | null> {
     if (!area) {
       const res = await fetchWithTimeout(`https://api.postcodes.io/outcodes/${outcode}`, {}, LOOKUP_MS);
       if (res.status === 404) {
-        if (noSuchArea.size >= MAX_REMEMBERED) noSuchArea.clear();
-        noSuchArea.add(outcode);
+        if (misses.size >= MAX_REMEMBERED) misses.clear();
+        misses.set(outcode, Date.now());
       }
       if (!res.ok) return null;
       const { result } = (await res.json()) as { result?: { admin_district?: unknown; admin_county?: unknown } };

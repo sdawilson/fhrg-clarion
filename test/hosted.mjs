@@ -10,6 +10,8 @@ const t = await import("./.build/internals.mjs");
 let failures = 0;
 const ok = (cond, what) => { console.log(`${cond ? "PASS" : "FAIL"}  ${what}`); if (!cond) failures++; };
 const WSX = "E10000032", KIRK = "E08000034";
+const pageHtml = fs.readFileSync(new URL("../public/survey.html", import.meta.url), "utf8"), mainHtml = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+const net = { down: false };
 
 // ---- the sums
 ok(t.outcodeOf("RH12 1AB") === "RH12" && t.outcodeOf("rh121ab") === "RH12" && t.outcodeOf(" rh12 ") === "RH12" && t.outcodeOf("M1 1AE") === "M1" && t.outcodeOf("EC1A 1BB") === "EC1A" && t.outcodeOf("SW1A1AA") === "SW1A", "the first half of a postcode is found, however it's typed");
@@ -25,13 +27,18 @@ const qr = t.qrCode("https://clarion.fhrg.co.uk/r/ABCDEFGHJKMN");
 ok(qr.length === 29 && qr.every((r) => r.length === 29) && qr[0].startsWith("1111111") && qr[6].startsWith("1111111") && qr[0].endsWith("1111111") && qr[28].startsWith("1111111"), "a QR code has its three corner squares");
 const fingerprint = (text) => createHash("sha256").update(t.qrCode(text).join("\n")).digest("hex").slice(0, 16);
 ok(fingerprint("https://clarion.fhrg.co.uk/r/ABCDEFGHJKMN") === "db2ad8cde4a24479", "and comes out as a real decoder read it");
-for (const [letter, length, size, print] of [["a", 10, 1, "72b02bb951d86eea"], ["b", 20, 2, "bedffd0c294095b9"], ["c", 60, 4, "159caa4cf09d92ca"], ["d", 90, 6, "2631e75034562723"], ["e", 130, 8, "d10d8fcfc1691daf"], ["f", 200, 10, "9f65c13b969907d5"]]) ok(fingerprint(letter.repeat(length)) === print && t.qrCode(letter.repeat(length)).length === size * 4 + 17, `at size ${size} too`);
+for (const [letter, length, size, print] of [["a", 10, 1, "72b02bb951d86eea"], ["b", 20, 2, "bedffd0c294095b9"], ["c", 60, 4, "159caa4cf09d92ca"], ["d", 90, 6, "2631e75034562723"], ["e", 130, 8, "d10d8fcfc1691daf"], ["f", 200, 10, "9f65c13b969907d5"], ["g", 70, 5, "392eaa98aab9d06b"], ["h", 110, 7, "f322077ad20e83aa"], ["i", 170, 9, "91459680a46fb885"]]) ok(fingerprint(letter.repeat(length)) === print && t.qrCode(letter.repeat(length)).length === size * 4 + 17, `at size ${size} too`);
 let tooLong = false;
 try { t.qrCode("x".repeat(300)); } catch { tooLong = true; }
 ok(tooLong, "and anything too long for one is refused");
-ok(t.scrubContacts("It's by RH12 1AB, near the A27") === "It's by [removed], near the A27" && t.scrubContacts("rh121ab") === "[removed]", "a whole postcode is taken out of a comment by code");
+ok(t.scrubComment("It's by RH12 1AB, near the A27") === "It's by [removed], near the A27" && t.scrubComment("rh121ab") === "[removed]" && t.scrubComment("EC1A 1BB") === "[removed]", "a whole postcode is taken out of a comment by code");
+ok(["the A27 5pm closure", "M25 3pm", "the A3 2nd junction", "M1 2am", "A1 3rd exit", "B2100 1st bend"].every((x) => t.scrubComment(x) === x), "without taking roads and times with it");
+ok(t.scrubContacts("the A27 RH12 1AB") === "the A27 RH12 1AB", "and an officer's own words are left as they were");
 const lane = (ip) => t.networkOf(new Request("https://x.test", { headers: { "x-real-ip": ip } }));
 ok(lane("2001:db8:1:2::1") === lane("2001:0db8:0001:0002:aaaa:bbbb:cccc:dddd") && lane("2001:db8:1:3::1") !== lane("2001:db8:1:2::1"), "a block of new-style addresses counts as one");
+const a = (satisfied, selfOnly = false) => ({ satisfied, worse: null, current: true, selfOnly });
+ok(t.benchmarkFrom([[a(0, true), a(30)], [a(40)], [a(50)], [a(60)], [a(70)]]).satisfied === 50, "the FHRG middle figure skips a newer survey with no interviewers");
+ok(t.benchmarkFrom([[a(0, true)], [a(40)], [a(50)], [a(60)], [a(70)]]) === null, "and doesn't count such an authority at all");
 ok(lane("::ffff:10.1.2.3") === "10.1.2.3" && lane("10.1.2.3") === "10.1.2.3" && lane("2001:db8::1") === "2001:db8:0:0", "and old-style addresses stay as they are");
 
 // ---- through the API
@@ -84,8 +91,22 @@ ok(JSON.parse(getText(answersFile())).length === 1 && JSON.parse(getText(areaFil
 const asked = postcodesDown.asked.length;
 await api("/api/r/submit", reply("b", "rh12"));
 ok(postcodesDown.asked.length === asked && JSON.parse(getText(areaFile())).RH12 === 2, "each area is looked up once");
-await api("/api/r/submit", reply("c", "M1 1AE"));
+await Promise.all([1, 2, 3, 4, 5].map((i) => api("/api/r/submit", reply(`together-${i}`, "HD1 1AA"))));
+ok(postcodesDown.asked.filter((x) => x.endsWith("/HD1")).length === 1, "even when replies arrive together");
+await api("/api/r/submit", reply("nowhere-1", "ZZ99 9ZZ"));
+await api("/api/r/submit", reply("nowhere-2", "ZZ99 9ZZ"));
+ok(postcodesDown.asked.filter((x) => x.endsWith("/ZZ99")).length === 1, "an area that doesn't exist isn't asked about again");
+const clock = Date.now;
+Date.now = () => clock() + 25 * 3600 * 1000;
+await api("/api/r/submit", reply("nowhere-3", "ZZ99 9ZZ"));
+Date.now = clock;
+ok(postcodesDown.asked.filter((x) => x.endsWith("/ZZ99")).length === 2, "at least for a day, in case that was only a fault");
+const near = JSON.parse(getText(answersFile()));
+near.splice(2);
+putText(answersFile(), JSON.stringify(near));
+await api("/api/r/submit", reply("c", "M1 1AE", { c3: "Jane Smith at 4 Acacia Avenue" }));
 ok(!getText(areaFile()).includes("M1"), "an area outside the authority is never named");
+ok(!getText(answersFile()).includes("Acacia") && JSON.parse(getText(answersFile())).at(-1).answers.c1, "and a comment from outside isn't kept, as nobody would check it for names");
 await api("/api/r/submit", reply("d", ""));
 await api("/api/r/submit", reply("e", "ZZ99 9ZZ"));
 postcodesDown.on = true;
@@ -97,7 +118,10 @@ ok(!getText(areaFile()).includes("ZZ99"), "a made-up area isn't counted");
 ok((await api("/api/r/submit", { ...reply("g", ""), where: "here", answers: { c1: "Fairly satisfied" }, via: "tablet", site: "High Street" })).ok && JSON.parse(getText(answersFile())).at(-1).where === "unknown" && JSON.parse(getText(answersFile())).at(-1).via === "self" && JSON.parse(getText(answersFile())).at(-1).site === "", "the sender can't set the route, the site or where they live");
 r = await api("/api/r/submit", { ...reply("h", ""), answers: {} });
 ok(r.status === 400 && !JSON.parse(getText(answersFile())).some((x) => x.client === "h"), "an empty reply is refused");
-ok((await api("/api/r/submit", { ...reply("", "") })).status === 400 && (await api("/api/r/submit", { access: link, answers: { c1: "Fairly satisfied" } })).status === 400, "and so is one with no id, which couldn't safely be sent again");
+ok((await api("/api/r/submit", { ...reply("", "") })).status === 400 && (await api("/api/r/submit", { access: link, answers: { c1: "Fairly satisfied" } })).status === 400 && (await api("/api/r/submit", reply("\u0001", ""))).status === 400, "and so is one with no id, which couldn't safely be sent again");
+for (let i = 0; i < 25; i++) r = await api("/api/r/submit", { ...reply(`junk-${i}`, ""), answers: { nonsense: "x" } }, undefined, "10.5.5.5");
+ok(r.status === 400 && (await api("/api/r/submit", reply("after-junk", ""), undefined, "10.5.5.5")).ok, "requests with nothing real in them don't use up the limits");
+ok(await raw("/api/r/get", JSON.stringify({ access: link }), { "content-type": "application/json; charset=utf-8" }) === 200, "and a real page's request gets through");
 const body = JSON.stringify(reply("cross", ""));
 ok(await raw("/api/r/submit", body, { "content-type": "text/plain" }) === 403 && await raw("/api/r/submit", body, { "content-type": "application/json", "sec-fetch-site": "cross-site" }) === 403 && await raw("/api/s/submit", JSON.stringify({ access, forms: [] }), { "content-type": "text/plain" }) === 403, "another website can't send replies from its visitors' browsers");
 ok(!JSON.parse(getText(answersFile())).some((x) => x.client === "cross"), "and nothing arrives");
@@ -109,6 +133,9 @@ ok((await api("/api/r/submit", reply("other", ""), undefined, "10.9.9.8")).ok, "
 let sixFour;
 for (let i = 0; i < 21; i++) sixFour = await api("/api/r/submit", reply(`v6-${i}`, ""), undefined, `2001:db8:5:6:${i + 1}::1`);
 ok(sixFour.status === 429, "and hopping around one block of new addresses doesn't get round it");
+let wide;
+for (let i = 0; i < 201; i++) wide = await api("/api/r/submit", reply(`v48-${i}`, ""), undefined, `2001:db8:7:${(i + 1).toString(16)}::1`);
+ok(wide.status === 429, "nor does hopping around a bigger block");
 for (let i = 0; i < 31; i++) r = await api("/api/r/get", { access: "AAAAAAAAAAAA" }, undefined, "10.8.8.8");
 ok(r.status === 429 && (await api("/api/s/get", { access }, undefined, "10.8.8.8")).survey, "guessing at links stops, without locking out an interviewer at the same address");
 const busy = (await api("/api/survey/new", { code: WSX, title: "Busy", purpose: "x" }, lead)).survey;
@@ -123,6 +150,7 @@ ok((await api("/api/r/submit", reply("elsewhere-link", ""), undefined, "10.7.7.6
 // the cap, so a link can't crowd out interviewers
 const beforeCap = getText(answersFile()), full = JSON.parse(beforeCap).slice(0, 8);
 const crowd = (n, more = {}) => Array.from({ length: n }, (_, i) => ({ ...full[0], n: 9000 + i, form: `R${9000 + i}`, client: `crowd-${i}`, ...more }));
+const fresh3 = () => api("/api/r/submit", reply("cap-d", ""), undefined, "172.16.0.1");
 const fresh2 = async (rows, words) => { putText(answersFile(), JSON.stringify(rows)); return await api("/api/r/submit", reply(`cap-${words}`, ""), undefined, `10.60.${++ip % 250}.1`); };
 r = await fresh2(crowd(3000), "a");
 ok(r.status === 409 && /all the replies/.test(r.error), "replies by link stop at 3,000");
@@ -131,9 +159,11 @@ const big = Array.from({ length: 4990 }, (_, i) => ({ ...full[0], via: "tablet",
 putText(answersFile(), JSON.stringify([...big, ...crowd(3000)]));
 ok((await api("/api/s/submit", { access, forms: [{ client: "t2", site: "High Street", answers: { c1: "Fairly satisfied" } }] })).added === 1, "a large survey keeps all of its own 5,000, however many came by link");
 r = await fresh2(crowd(3000, { excluded: true }), "b");
-ok(r.ok, "a flood that's been left out stops counting, so it can't kill a link for good");
-r = await fresh2(crowd(6000, { excluded: true }), "c");
+ok(r.ok, "a flood that's been left out stops counting");
+r = await fresh2(crowd(4000, { excluded: true, dayLeft: true, at: "2026-03-10T10:00:00.000Z" }), "c");
 ok(r.status === 409, "though there's a limit on how much is held");
+await api("/api/survey/selfday", { code: WSX, id, day: "2026-03-10", action: "delete" }, lead);
+ok(JSON.parse(getText(answersFile())).length === 0 && (await fresh3()).ok, "and deleting it for good makes room again");
 putText(answersFile(), beforeCap);
 
 await api("/api/survey/self", { code: WSX, id, on: false }, lead);
@@ -202,7 +232,7 @@ const callsBefore = claude.calls.length;
 const drafted = (await api("/api/briefing/start", { code: WSX }, lead)).briefing;
 await until(async () => (await api("/api/briefing/get", { code: WSX, id: drafted.id }, lead)).briefing.status !== "working", "the briefing");
 const briefingDraft = (await api("/api/briefing/get", { code: WSX, id: drafted.id }, lead)).briefing;
-ok(/"surveys_people_chose_to_answer":\[\{/.test(claude.calls[callsBefore].prompt) && /"street_surveys":\[\]/.test(claude.calls[callsBefore].prompt), "a briefing is told it's a survey people chose to answer, not a street survey");
+ok(/"surveys_people_chose_to_answer":\[\{/.test(claude.calls[callsBefore].prompt) && /"street_surveys":\[\]/.test(claude.calls[callsBefore].prompt) && /never call it a street survey/.test(claude.calls[callsBefore].sys), "a briefing is told it's a survey people chose to answer, not a street survey");
 ok(briefingDraft.sources.some((x) => /people who chose to reply \(indicative\)/.test(x)) && !briefingDraft.sources.some((x) => x.startsWith("Street survey")), "and its sources say so");
 const issued = (await api("/api/briefing/approve", { code: WSX, id: drafted.id, updated: briefingDraft.updated, hidden: false, title: briefingDraft.title, summary: "A summary.", feel: "F", matters: "M", questions: [], lines: [] }, lead)).briefing;
 const word = Buffer.from((await api("/api/briefing/word", { code: WSX, id: issued.id }, lead)).file, "base64").toString();
@@ -210,7 +240,22 @@ ok(word.includes("may not be typical") && !word.includes("a street sample"), "an
 const readingCalls = claude.calls.length;
 await api("/api/reading/start", { code: WSX }, lead);
 await until(() => claude.calls.length > readingCalls, "a reading");
-ok(/surveys_people_chose_to_answer/.test(JSON.stringify(claude.calls.at(-1).prompt)) && !/"street_surveys"/.test(JSON.stringify(claude.calls.at(-1).prompt).replace(/\\/g, "")), "and so is a mood reading");
+const readingPrompt = claude.calls.at(-1).prompt;
+ok(!/chose_to_answer|chose to reply/.test(readingPrompt) && !/street_surveys/.test(readingPrompt) && /"survey_results"/.test(readingPrompt), "a mood reading isn't given it at all");
+const second = (await api("/api/survey/new", { code: WSX, title: "Interviewers' survey", purpose: "x" }, lead)).survey;
+await api("/api/survey/status", { code: WSX, id: second.id, status: "open" }, lead);
+const secondFile = answersFile().replace(id, second.id);
+putText(secondFile, JSON.stringify(inter.slice(0, 35)));
+const callsMixed = claude.calls.length;
+const both = (await api("/api/briefing/start", { code: WSX }, lead)).briefing;
+await until(async () => (await api("/api/briefing/get", { code: WSX, id: both.id }, lead)).briefing.status !== "working", "the second briefing");
+const material = JSON.parse(/<evidence>\n([\s\S]*)\n<\/evidence>/.exec(claude.calls[callsMixed].prompt)[1]).position;
+ok(material.street_surveys.length === 1 && material.street_surveys[0].responses === 35 && material.surveys_people_chose_to_answer.some((x) => x.responses === 40) && !material.surveys_people_chose_to_answer.some((x) => x.responses === 35), "with both kinds held, a briefing is told which is which");
+const bothDraft = (await api("/api/briefing/get", { code: WSX, id: both.id }, lead)).briefing;
+const bothOut = (await api("/api/briefing/approve", { code: WSX, id: both.id, updated: bothDraft.updated, hidden: false, title: bothDraft.title, summary: "A summary.", feel: "F", matters: "M", questions: [], lines: [] }, lead)).briefing;
+const bothWord = Buffer.from((await api("/api/briefing/word", { code: WSX, id: bothOut.id }, lead)).file, "base64").toString();
+ok(bothWord.includes("may not be typical") && bothWord.includes("a street sample isn"), "and a Word copy carries both warnings");
+putText(secondFile, "[]");
 reset([...inter, ...selves, ...away]);
 ok(!(await api("/api/authority", { code: WSX }, lead)).evidence.streets.find((x) => x.id === id).selfOnly, "and a survey with interviewers reports their figure");
 ok((await api("/api/authority", { code: WSX }, lead)).evidence.streets.find((x) => x.id === id).satisfied === 100, "unmoved by anyone else's replies");
@@ -218,11 +263,14 @@ ok((await api("/api/authority", { code: WSX }, lead)).evidence.streets.find((x) 
 // comments
 const list = (await api("/api/survey/list", { code: WSX }, lead)).surveys.find((x) => x.id === id);
 ok(list.responses === 40 && list.byLink === 75, "the list of surveys counts interviewers against the aim, and link replies apart");
+const AGES = ["25 to 34", "45 to 54", "65 to 74"];
+const varied = inter.map((x, i) => ({ ...x, answers: { ...x.answers, a1: AGES[i % 3], a2: i % 2 ? "Male" : "Female" } }));
+reset([...varied, ...selves]);
 const alone = (await api("/api/survey/export", { code: WSX, id }, lead)).csv;
-reset(inter);
+reset(varied);
 const interOnly = (await api("/api/survey/export", { code: WSX, id }, lead)).csv;
 const weightOf = (text, form) => text.split("\n").find((x) => x.startsWith(`${form},`)).split(",")[3];
-ok(weightOf(alone, "T1") === weightOf(interOnly, "T1"), "interviewers' weights don't move when people's own replies arrive");
+ok(weightOf(interOnly, "T1") !== "1" && varied.every((x) => weightOf(alone, x.form) === weightOf(interOnly, x.form)), "interviewers' weights don't move when people's own replies arrive");
 reset([...inter, ...selves, ...away]);
 const twins = Array.from({ length: 6 }, (_, i) => row(i + 500, "tablet", "Fairly satisfied"));
 const mixed = twins.flatMap((x, i) => [x, row(i + 600, "self", i % 2 ? "Very satisfied" : "Fairly dissatisfied", { where: "here" })]);
@@ -239,14 +287,12 @@ r = await api("/api/survey/get", { code: WSX, id }, boss);
 ok(r.self.comments.length === 0 && r.self.topics.length === 1, "a site administrator from outside gets topic counts only");
 
 // sorting comments
-const farAway = { ...away[0], answers: { ...away[0].answers, c3: "From somewhere else" } };
-reset([...said, farAway]);
-ok((await api("/api/survey/get", { code: WSX, id }, lead)).waiting === 1, "a comment from outside the authority doesn't wait to be sorted");
+reset(said);
 claude.script.submit_comments = (body) => { const items = JSON.parse(/<comments>\n([\s\S]*)\n<\/comments>/.exec(body.messages[0].content)[1]); return { id: "m", type: "message", role: "assistant", model: "x", stop_reason: "tool_use", stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 }, content: [{ type: "tool_use", id: "t1", name: "submit_comments", input: { comments: items.map((x) => ({ ref: x.ref, text: "Sorted, at RH12 1AB", topic: "Other" })) } }] }; };
 let job = (await api("/api/survey/sort", { code: WSX, id }, lead)).job;
 await until(async () => { const held2 = JSON.parse(getText(answersFile())); return held2.find((x) => x.form === "R400")?.clean?.c3; }, "the comments to be sorted");
 held = JSON.parse(getText(answersFile()));
-ok(held.find((x) => x.form === "R400").answers.c3 === "Sorted, at [removed]" && !held.find((x) => x.n === farAway.n).clean?.c3, "Claude sees those from the authority, not those from elsewhere");
+ok(held.find((x) => x.form === "R400").answers.c3 === "Sorted, at [removed]", "a comment is sorted, and any postcode that comes back from Claude is taken out");
 const pile = Array.from({ length: 1100 }, (_, i) => ({ ...row(1000 + i, "self", "Very dissatisfied", { where: "here" }), answers: { c1: "Very dissatisfied", c3: `Comment number ${i}` } }));
 reset([...pile, { ...inter[0], answers: { ...inter[0].answers, c3: "An interviewer's comment" } }]);
 await until(async () => { job = (await api("/api/survey/sort", { code: WSX, id }, lead)).job; return job && job.total !== undefined; }, "the sort to start");
@@ -256,15 +302,34 @@ ok(JSON.parse(getText(answersFile())).find((x) => x.form === "T1").clean?.c3, "w
 reset([...inter, ...selves, ...away]);
 
 // leaving out a flood
-const today2 = new Date().toISOString().slice(0, 10), older = selves.slice(0, 5).map((x) => ({ ...x, at: "2026-01-02T10:00:00.000Z" }));
-reset([...inter, ...older, ...selves.slice(5)]);
-ok((await api("/api/survey/selfday", { code: WSX, id, day: today2, excluded: true }, member)).status === 403 && (await api("/api/survey/selfday", { code: WSX, id, day: "nonsense", excluded: true }, lead)).status === 400, "only a lead can leave out a day's replies");
-await api("/api/survey/selfday", { code: WSX, id, day: today2, excluded: true }, lead);
+const dayNow = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+const older = selves.slice(0, 5).map((x) => ({ ...x, at: "2026-01-02T10:00:00.000Z" })), handLeft = { ...selves[5], excluded: true };
+reset([...inter, ...older, handLeft, ...selves.slice(6)]);
+ok((await api("/api/survey/selfday", { code: WSX, id, day: dayNow, action: "leave" }, member)).status === 403 && (await api("/api/survey/selfday", { code: WSX, id, day: "nonsense", action: "leave" }, lead)).status === 400 && (await api("/api/survey/selfday", { code: WSX, id, day: dayNow, action: "wipe" }, lead)).status === 400, "only a lead can act on a day's replies");
+await api("/api/survey/selfday", { code: WSX, id, day: dayNow, action: "leave" }, lead);
 r = await api("/api/survey/get", { code: WSX, id }, lead);
-ok(r.self.results.used === 5 && r.self.left === 35 && r.results.used === 40 && r.selfDays.find((x) => x.day === today2).left === 35, "leaving out a day leaves out every reply by link that day, and no one else's");
-await api("/api/survey/selfday", { code: WSX, id, day: today2, excluded: false }, lead);
-ok((await api("/api/survey/get", { code: WSX, id }, lead)).self.left === 0, "and it can be put back");
-ok(!(await api("/api/survey/get", { code: WSX, id }, member)).selfDays.length, "a member isn't shown it");
+ok(r.self.results.used === 5 && r.self.left === 35 && r.results.used === 40 && r.selfDays.find((x) => x.day === dayNow).left === 35, "leaving out a day leaves out every reply by link that day, and no one else's");
+ok(r.excluded.length === 1 && r.excluded[0].form === handLeft.form, "and a form left out by hand keeps its own Put back button");
+await api("/api/survey/selfday", { code: WSX, id, day: dayNow, action: "back" }, lead);
+r = await api("/api/survey/get", { code: WSX, id }, lead);
+ok(r.self.left === 1 && r.excluded[0].form === handLeft.form, "putting the day back leaves that one out");
+ok(!(await api("/api/survey/get", { code: WSX, id }, member)).selfDays.length, "a member isn't shown any of this");
+const numberGone = { ...selves[6], excluded: true, dayLeft: true };
+reset([...inter, { ...selves[7], form: numberGone.form, n: 700, via: "paper" }, numberGone]);
+await api("/api/survey/selfday", { code: WSX, id, day: dayNow, action: "back" }, lead);
+ok(JSON.parse(getText(answersFile())).find((x) => x.n === numberGone.n).excluded === true, "a form whose number has been taken since stays left out");
+reset([{ ...selves[0], at: "2026-06-14T23:30:00.000Z" }]);
+r = await api("/api/survey/get", { code: WSX, id }, lead);
+ok(r.selfDays[0].day === "2026-06-15", "days are British ones, so half past midnight falls in the right day");
+reset(selves.slice(0, 3));
+await api("/api/survey/selfday", { code: WSX, id, day: dayNow, action: "leave" }, lead);
+r = await api("/api/survey/get", { code: WSX, id }, lead);
+ok(r.self?.left === 3, "if every reply by link is left out, the page still says so");
+reset(Array.from({ length: 12 }, (_, i) => ({ ...selves[i], answers: { ...selves[i].answers, c3: `Comment ${i}` }, clean: { c3: true }, topics: { c3: "Road safety" } })));
+r = await api("/api/survey/get", { code: WSX, id }, lead);
+ok(r.sample.length > 0 && r.sample.every((x) => x.form.startsWith("R")), "the sample to check takes in comments from the link");
+const sampled = await (async () => { const dom = browser(mainHtml, `/#survey/${WSX}/${id}/check`, (w) => { w.localStorage.setItem("clarion_token", lead); }); await until(() => dom.querySelector('.main select[aria-label="Topic"]'), "the sample"); return dom.querySelector('.main select[aria-label="Topic"]').value; })();
+ok(sampled === "Road safety", "and shows each comment's real topic");
 reset([...inter, ...selves, ...away]);
 
 // a change to the link doesn't make an old survey count as current again
@@ -274,8 +339,6 @@ await api("/api/survey/self", { code: WSX, id, on: true }, lead);
 ok(JSON.parse(getText(files(`clarion/authorities/${WSX}/surveys/`).find((f) => f.includes(id)))).updated === stamp, "turning the link on or off doesn't make a survey count as recent again");
 
 // ---- the pages
-const pageHtml = fs.readFileSync(new URL("../public/survey.html", import.meta.url), "utf8"), mainHtml = fs.readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-const net = { down: false };
 function browser(html, address, setup) {
   return new JSDOM(html, {
     url: `https://clarion.test${address}`, runScripts: "dangerously", pretendToBeVisual: true,
@@ -286,6 +349,7 @@ function browser(html, address, setup) {
       w.URL.revokeObjectURL = () => {};
       w.fetch = async (url, opts = {}) => {
         if (net.down) throw new TypeError("Failed to fetch");
+        if (w.noQr && String(url).includes("/api/survey/qr")) return { ok: false, status: 500, json: async () => ({ error: "The QR code couldn't be made." }) };
         const res = await handleRequest(new Request(new URL(url, "https://clarion.test").href, { ...opts, headers: { ...(opts.headers || {}), "x-real-ip": `10.1.1.${++ip % 250}` } }));
         const text = await res.text();
         return { ok: res.ok, status: res.status, json: async () => JSON.parse(text) };
@@ -317,34 +381,32 @@ d.querySelector("input").dispatchEvent(new d.defaultView.Event("input"));
 net.down = true;
 button(d, "Send my answers").click();
 await shows(d, /haven't been sent yet/);
-ok(/rh12|RH12/.test(d.defaultView.localStorage.getItem(`clarion_reply_${link}`)) && !/1AB/i.test(d.defaultView.localStorage.getItem(`clarion_reply_${link}`)), "with no connection the answers wait, with only the first half of the postcode");
+ok(/RH12/.test(d.defaultView.sessionStorage.getItem(`clarion_reply_${link}`)) && !/1AB/i.test(d.defaultView.sessionStorage.getItem(`clarion_reply_${link}`)), "with no connection the answers wait in that tab, with only the first half of the postcode");
+ok(!Object.keys(d.defaultView.localStorage).some((k) => k.includes("reply")), "and aren't kept beyond it");
 net.down = false;
 const lastBefore = JSON.parse(getText(answersFile())).length;
 button(d, "Try again").click();
 await shows(d, /Thank you/);
 ok(JSON.parse(getText(answersFile())).length === lastBefore + 1 && JSON.parse(getText(answersFile())).at(-1).where === "here", "and send when it comes back");
-ok(d.defaultView.localStorage.getItem(`clarion_reply_${link}`) === null && Object.keys(d.defaultView.localStorage).filter((k) => k.includes(link)).join() === `clarion_done_${link}`, "and then nothing of it is left on the device, only a mark that it replied");
+ok(d.defaultView.sessionStorage.getItem(`clarion_reply_${link}`) === null && Object.keys(d.defaultView.localStorage).filter((k) => k.includes(link)).join() === `clarion_done_${link}`, "and then nothing of it is left on the device, only a mark that it replied");
 const storage = d.defaultView.localStorage.getItem(`clarion_done_${link}`);
 d = browser(pageHtml, `/r/${link}`, (w) => { w.localStorage.setItem(`clarion_done_${link}`, storage); });
 await shows(d, /already been sent from this device/);
 ok(!button(d, "Start"), "the same device can't reply twice");
 
-const waiting = { at: Date.now(), client: "waited", secs: 90, postcode: "", answers: { c1: "Fairly satisfied", c3: "PRIVATE-WORDS of the last person" } };
-const leftBehind = (w, reply = waiting) => { w.localStorage.setItem(`clarion_reply_${link}`, JSON.stringify(reply)); };
+const waiting = { client: "waited", secs: 90, postcode: "", answers: { c1: "Fairly satisfied", c3: "PRIVATE-WORDS of the last person" } };
+const leftBehind = (w, reply = waiting) => { w.sessionStorage.setItem(`clarion_reply_${link}`, JSON.stringify(reply)); };
 d = browser(pageHtml, `/r/${link}`, leftBehind);
 await shows(d, /An unsent reply is on this device/);
 ok(!JSON.parse(getText(answersFile())).some((x) => x.client === "waited") && !text(app(d)).includes("PRIVATE-WORDS"), "a reply left on a shared device isn't sent or shown without asking");
 button(d, "Delete it").click();
 await shows(d, /Roads survey/);
-ok(button(d, "Start") && d.defaultView.localStorage.getItem(`clarion_reply_${link}`) === null && !JSON.parse(getText(answersFile())).some((x) => x.client === "waited"), "it can be deleted, and the next person can start");
+ok(button(d, "Start") && d.defaultView.sessionStorage.getItem(`clarion_reply_${link}`) === null && !JSON.parse(getText(answersFile())).some((x) => x.client === "waited"), "it can be deleted, and the next person can start");
 d = browser(pageHtml, `/r/${link}`, leftBehind);
 await shows(d, /An unsent reply is on this device/);
 button(d, "Send it").click();
 await shows(d, /Thank you/);
 ok(JSON.parse(getText(answersFile())).some((x) => x.client === "waited"), "or sent, by someone who says it's theirs");
-d = browser(pageHtml, `/r/${link}`, (w) => leftBehind(w, { ...waiting, client: "stale", at: Date.now() - 25 * 3600 * 1000 }));
-await shows(d, /Roads survey/);
-ok(button(d, "Start") && d.defaultView.localStorage.getItem(`clarion_reply_${link}`) === null, "a reply over a day old is removed");
 
 d = browser(pageHtml, `/r/${link}`);
 await shows(d, /Roads survey/);
@@ -359,15 +421,27 @@ ok(button(d, "Start"), "someone who skips everything sends nothing");
 await api("/api/survey/self", { code: WSX, id, on: false }, lead);
 d = browser(pageHtml, `/r/${link}`, leftBehind);
 await shows(d, /This survey has closed/);
-ok(!button(d, "Start") && d.defaultView.localStorage.getItem(`clarion_reply_${link}`) === null && /removed from this device/.test(text(app(d))), "a closed link says so, and clears anything left waiting");
+ok(!button(d, "Start") && d.defaultView.sessionStorage.getItem(`clarion_reply_${link}`) === null && /removed from this device/.test(text(app(d))), "a closed link says so, and clears anything left waiting");
+await api("/api/survey/self", { code: WSX, id, on: true }, lead);
+d = browser(pageHtml, `/r/${link}`);
+await shows(d, /Roads survey/);
+button(d, "Start").click();
+await shows(d, /Question 1 of/);
+d.querySelector(".choice").click();
+for (let i = 1; i < total; i++) { await shows(d, new RegExp(`Question ${i + 1} of`)); (button(d, "Skip") ?? button(d, "Next")).click(); }
+await shows(d, /first half of your postcode/);
+await api("/api/survey/self", { code: WSX, id, on: false }, lead);
+button(d, "Send my answers").click();
+await shows(d, /removed from this device/);
+ok(d.defaultView.sessionStorage.getItem(`clarion_reply_${link}`) === null && /This survey has closed/.test(text(app(d))), "if it closes while someone's filling it in, they're told, and nothing stays behind");
 await api("/api/survey/self", { code: WSX, id, on: true }, lead);
 await api("/api/briefing/election", { code: WSX, on: true }, lead);
 d = browser(pageHtml, `/r/${link}`);
 await shows(d, /This survey is paused/);
 await api("/api/briefing/election", { code: WSX, on: false }, lead);
-d = browser(pageHtml, "/r/ZZZZZZZZZZZZ", (w) => { w.localStorage.setItem("clarion_reply_ZZZZZZZZZZZZ", JSON.stringify(waiting)); });
+d = browser(pageHtml, "/r/ZZZZZZZZZZZZ", (w) => { w.sessionStorage.setItem("clarion_reply_ZZZZZZZZZZZZ", JSON.stringify(waiting)); });
 await shows(d, /This link isn't working/);
-ok(d.defaultView.localStorage.getItem("clarion_reply_ZZZZZZZZZZZZ") === null, "a dead link clears anything left waiting");
+ok(d.defaultView.sessionStorage.getItem("clarion_reply_ZZZZZZZZZZZZ") === null, "a dead link clears anything left waiting");
 d = browser(pageHtml, `/R/${link}`);
 await shows(d, /Roads survey/);
 ok(button(d, "Start") && !/Where are you/.test(text(app(d))), "a capital letter in the address makes no difference");
@@ -405,6 +479,16 @@ ok(!/null|undefined/.test(results), "with nothing broken on the page");
 d = await open(lead, `#survey/${WSX}/${id}/check`);
 await see(d, /Replies by link, day by day/);
 ok(button(d, "Leave out this day"), "the Check tab lists replies by link by day");
+button(d, "Leave out this day").click();
+await until(() => button(d, "Delete for good"), "the day to be left out");
+button(d, "Delete for good").click();
+ok(button(d, "Sure? This can't be undone"), "deleting for good asks first");
+d = await open(lead, `#survey/${WSX}/${id}/results`);
+await see(d, /left out on the Check tab/);
+d = await open(lead, `#survey/${WSX}/${id}/check`);
+await see(d, /Put this day back/);
+button(d, "Put this day back").click();
+await until(async () => (await api("/api/survey/get", { code: WSX, id }, lead)).self.left === 0, "the day to come back");
 d = await open(lead, `#survey/${WSX}/${id}/collect`);
 await see(d, /Filled in by people themselves\s*\d+/);
 ok(Number(/Filled in by people themselves\s*(\d+)/.exec(text(d.querySelector(".main")))[1]) >= 75, "the Collect page counts them by route");
@@ -434,14 +518,10 @@ d = await open("", `#survey/NORTHBRIDGE/${demoPage.survey.id}/collect`, "/demo")
 await see(d, /A link for people to fill in themselves/);
 await until(() => d.querySelector("svg.qr"), "the demonstration's QR code");
 ok(/no real link/.test(text(d.querySelector(".main"))) && !/https?:/.test(JSON.stringify(pack.qr)), "with no real link");
-const broken = await open(lead, `#survey/${WSX}/${fresh.id}/collect`);
-const stop = broken.defaultView;
-await until(() => broken.querySelector("svg.qr"), "the QR code again");
-stop.fetch = async () => { throw new TypeError("Failed to fetch"); };
-stop.location.hash = `#survey/${WSX}/${fresh.id}/check`;
-stop.location.hash = `#survey/${WSX}/${fresh.id}/collect`;
-await new Promise((done) => setTimeout(done, 100));
-ok(!/null|undefined/.test(text(broken.querySelector(".main"))), "with no connection the page fails quietly");
+const noQr = browser(mainHtml, `/#survey/${WSX}/${fresh.id}/collect`, (w) => { w.localStorage.setItem("clarion_token", lead); w.noQr = true; });
+await until(() => noQr.querySelector(".main .page > *"), "the page to start");
+await see(noQr, /The QR code couldn't be made/);
+ok(!noQr.querySelector("svg.qr"), "if the QR code can't be made, the page says so");
 
 console.log(failures ? `\n${failures} failed` : "\nAll passed");
 process.exit(failures ? 1 : 0);

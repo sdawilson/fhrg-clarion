@@ -313,8 +313,10 @@ export async function sharedTopics(c: Config): Promise<string[]> {
 // A last check by code on what comes back: an email address or phone number never gets through
 export const scrubContacts = (text: string) => text
   .replace(/[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+/g, "[removed]")
-  .replace(/(?<!\d)\+?\d(?:[\s().-]*\d){9,12}(?!\d)/g, "[removed]")
-  .replace(/\b[a-z]{1,2}\d[a-z\d]?[\s-]*\d[a-z]{2}\b/gi, "[removed]"); // a whole postcode
+  .replace(/(?<!\d)\+?\d(?:[\s().-]*\d){9,12}(?!\d)/g, "[removed]");
+// and, in what residents write, a whole postcode. Its second half never uses C, I, K, M, O or V, which is what tells it from
+// a road and a time ("the A27 5pm") or a road and a junction ("the A3 2nd")
+export const scrubComment = (text: string) => scrubContacts(text).replace(/\b[a-z]{1,2}\d[a-z\d]?[\s-]*\d(?!(?:st|nd|rd|th)\b)[abd-hjlnp-uw-z]{2}\b/gi, "[removed]");
 
 export const MAX_SORT = 1000;
 export async function startSorting(c: Config, me: Member, p: Pilot, s: Survey): Promise<Help> {
@@ -322,9 +324,9 @@ export async function startSorting(c: Config, me: Member, p: Pilot, s: Survey): 
     const running = await sortJob(c, p.code, s.id);
     if (running?.status === "working") return running;
     const ids = textQuestionIds(s);
-    // Interviewers' forms first. Replies from outside the authority aren't sorted: they aren't in any figure, and nobody reads them.
-    // The limit keeps one click, after a flood of replies by link, from using up the month's budget for every authority
-    const wanted = (await loadAnswers(c, s.code, s.id)).filter((r) => !r.excluded && r.where !== "elsewhere").sort((a, b) => Number(a.via === "self") - Number(b.via === "self"));
+    // Interviewers' forms first. The limit keeps one click, after a flood of replies by link, from using up the month's
+    // budget for every authority
+    const wanted = (await loadAnswers(c, s.code, s.id)).filter((r) => !r.excluded).sort((a, b) => Number(a.via === "self") - Number(b.via === "self"));
     const waiting = wanted.flatMap((r) => ids.filter((id) => r.answers[id] && !r.clean?.[id]).map((id) => ({ ref: `${r.n}:${id}`, text: r.answers[id] }))).slice(0, MAX_SORT);
     if (!waiting.length) throw new FriendlyError("There are no comments waiting.");
     return await startHelp(c, me, p, s, "sort", waiting.length, async ({ usage, onCall, save }) => {
@@ -337,7 +339,7 @@ export async function startSorting(c: Config, me: Member, p: Pilot, s: Survey): 
         await changeAnswers(c, s, (all) => {
           for (const item of batch) {
             const x = back.get(item.ref);
-            const text = scrubContacts(cleanLong(x?.text, 1000));
+            const text = scrubComment(cleanLong(x?.text, 1000));
             if (!text) continue; // not handed back, so it stays held back
             const [n, id] = item.ref.split(":");
             const a = all.find((r) => r.n === Number(n));

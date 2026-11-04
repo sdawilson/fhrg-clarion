@@ -72,7 +72,5 @@ export function middleFigure(latest: Pick<StreetSummary, "satisfied" | "worse">[
   return { authorities: latest.length, satisfied: median(latest.map((x) => x.satisfied as number)), worse: worse.length >= BENCHMARK_MIN ? median(worse) : null };
 }
 
-export const benchmark = (c: Config) => cached("benchmark", 10 * 60 * 1000, async () => {
-  const latest = (await Promise.all(PILOTS.map((p) => streetSummaries(c, p.code)))).map((x) => interviewedOnly(x).find((y) => y.current)).filter((x): x is StreetSummary => !!x);
-  return middleFigure(latest);
-});
+export const benchmarkFrom = (authorities: StreetSummary[][]) => middleFigure(authorities.map((x) => interviewedOnly(x).find((y) => y.current)).filter((x): x is StreetSummary => !!x));
+export const benchmark = (c: Config) => cached("benchmark", 10 * 60 * 1000, async () => benchmarkFrom(await Promise.all(PILOTS.map((p) => streetSummaries(c, p.code)))));

@@ -122,14 +122,14 @@ export function clientIp(request: Request): string {
 }
 
 // One person on a modern connection has a whole block of addresses, so limits count the block and not the address
-export function networkOf(request: Request): string {
+export function networkOf(request: Request, parts = 4): string {
   const ip = clientIp(request).toLowerCase();
   if (!ip.includes(":")) return ip;
   if (ip.includes(".")) return ip.slice(ip.lastIndexOf(":") + 1); // an ordinary address written the new way
   const [head, tail] = ip.split("::");
   const front = head ? head.split(":") : [], back = tail ? tail.split(":") : [];
   const groups = ip.includes("::") ? [...front, ...new Array<string>(Math.max(0, 8 - front.length - back.length)).fill("0"), ...back] : front;
-  return groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, "")).join(":");
+  return groups.slice(0, parts).map((g) => g.replace(/^0+(?=.)/, "")).join(":");
 }
 
 export type Member = { id: number; email: string; name: string; title: string; role: string; siteAdmin: boolean; authorityId: number; authority: string };
