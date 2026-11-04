@@ -62,7 +62,7 @@ ok(/Condition of highways/.test(page) && /24 \/ 100/.test(page) && /Amber/.test(
 ok(/This needs assessed press and media pieces/.test(page), "and says what the comparison is waiting for");
 ok(/Not enough authorities have results yet/.test(page), "and no FHRG figure appears yet");
 ok(!d.querySelector(".demo-banner") && d.querySelector(".foot .circles") && [...d.querySelectorAll(".foot a")].some((x) => x.textContent === "FHRG website") && /hello@fhrg.co.uk/.test(text(d.querySelector(".foot"))), "there's no demonstration strip for a member, and the footer is the website's, with the way back to it");
-ok([...d.querySelectorAll(".tabs button")].map((b) => b.textContent).join() === "1Map,2Surveys,3Dashboard,4High-impact issues,5Campaign calendar,6Briefings,Sources,Set-up", "the tabs list the sections, numbered in the order of the work");
+ok([...d.querySelectorAll(".rail .nav button")].map((b) => b.textContent).join() === "Map,Surveys,Dashboard,High-impact issues,Campaign calendar,Briefings,Sources,Set-up,Published evidence,Attention and concern,Impact notes,Sources and method" && d.querySelectorAll(".rail .nav button svg").length === 12 && !d.querySelector(".tabs"), "the sections are a menu down the left, each with its icon and no numbers");
 ok(d.querySelector(".brand-logo img") && /West Sussex/.test(text(d.querySelector(".brand-sub"))), "with the FHRG logo and the member's authority");
 
 // write the first reading
@@ -93,7 +93,7 @@ w.location.hash = "#said/E10000032";
 await until(() => /Assessed by your officers/.test(text(d.querySelector(".main"))), "the Sources page");
 w.location.hash = "#said/E10000032/latest";
 await until(() => /Nothing assessed yet/.test(text(d.querySelector(".main"))), "the What's being said page");
-ok(d.querySelector('.tabs button[aria-current="page"]').textContent === "Sources", "the tabs show where you are");
+ok(d.querySelector('.rail .nav button[aria-current="page"]').textContent === "Sources", "the menu shows where you are");
 w.location.hash = "#attention/E10000032";
 await until(() => /It needs assessed press and media pieces/.test(text(d.querySelector(".main"))), "the comparison page");
 w.location.hash = "#about/E10000032";

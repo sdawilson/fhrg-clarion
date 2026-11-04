@@ -61,7 +61,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .demo-banner-in { max-width: 1320px; margin-inline: auto; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; padding: 6px clamp(16px, 3vw, 36px); }
 .demo-banner a { color: inherit; font-weight: 600; }
 .top { background: var(--surface); color: var(--ink); border-bottom: 1px solid var(--line); }
-.top-in, .defaults, .tabs-in, .page, .foot-in { max-width: 1320px; margin-inline: auto; }
+.top-in, .defaults, .page, .foot-in { max-width: 1320px; margin-inline: auto; }
 .top-in { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; min-height: 80px; padding: 10px clamp(16px, 3vw, 36px); }
 .top-in .pickers { margin-left: auto; } .top-in .top-who { margin-left: 8px; }
 .brand { display: flex; align-items: center; gap: 14px; } .brand-logo { padding: 0; background: none; border-radius: 0; } .brand-logo .fhrg-logo { width: 170px; }
@@ -70,12 +70,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .picker { display: grid; gap: 3px; font-size: 0.8rem; font-weight: 600; color: var(--ink-2); } .picker select { min-height: 42px; max-width: 200px; padding: 6px 8px; border-radius: 8px; border: 1.5px solid var(--line-2); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 0.95rem; }
 .top-who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 0.88rem; color: var(--ink-2); }
 .defaults { margin-block: 0; padding: 0 clamp(16px, 3vw, 36px) 8px; font-size: 0.84rem; color: var(--ink-3); }
-.tabs { background: var(--surface); border-bottom: 1px solid var(--line); } .tabs-in { display: flex; flex-wrap: wrap; gap: 2px; padding-inline: clamp(16px, 3vw, 36px); }
-.tab { display: inline-flex; align-items: center; gap: 7px; min-height: 48px; padding: 8px 10px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--ink); font-weight: 600; font-size: 0.98rem; cursor: pointer; border-radius: 6px 6px 0 0; }
-.tab:hover { background: var(--bg); color: var(--heading); }
-.tab[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; } .tab.gap { margin-left: auto; }
-.tab-n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); color: var(--heading); font-size: 0.8rem; font-weight: 800; } .tab[aria-current="page"] .tab-n { background: var(--accent); color: var(--accent-ink); }
+/* the sections in a menu down the left, as in the Climate Toolkit; on a narrow screen it becomes a row under the header */
+.body { display: grid; grid-template-columns: 236px minmax(0, 1fr); align-items: stretch; }
+.rail { padding: 18px 12px 18px clamp(12px, 2vw, 24px); border-right: 1px solid var(--line); background: var(--surface); }
+.nav { display: grid; gap: 2px; position: sticky; top: 16px; }
+.nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: 8px; color: var(--ink); cursor: pointer; font-weight: 600; font-size: 0.96rem; line-height: 1.3; }
+.nav button svg { flex: none; color: var(--ink-3); }
+.nav button:hover { background: var(--bg); color: var(--heading); }
+.nav button[aria-current="page"] { background: var(--accent); color: var(--accent-ink); } .nav button[aria-current="page"] svg { color: var(--accent-ink); }
+.nav-sep { height: 1px; background: var(--line); margin: 8px 6px; }
+.nav-head { padding: 8px 10px 2px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
 .main { min-width: 0; padding-inline: clamp(16px, 3vw, 36px); padding-block: 22px 60px; }
+@media (max-width: 880px) {
+  .body { grid-template-columns: minmax(0, 1fr); }
+  .rail { border-right: 0; border-bottom: 1px solid var(--line); padding: 8px clamp(16px, 3vw, 36px); }
+  .nav { display: flex; flex-wrap: wrap; gap: 4px; position: static; } .nav button { width: auto; padding: 7px 10px; } .nav-sep, .nav-head { display: none; }
+}
 .page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
 .page-head > div:not(.row) { display: grid; gap: 6px; min-width: 0; }
@@ -85,7 +95,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .foot-in { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 28px; padding: 36px clamp(16px, 3vw, 36px) 40px; }
 .foot .circles { display: flex; margin-bottom: 12px; } .foot .circles i { display: block; width: 2.2rem; height: 2.2rem; border-radius: 50%; margin-right: -0.7rem; }
 .foot p { margin: 0 0 8px; } .foot ul { list-style: none; margin: 0; padding: 0; columns: 2; } .foot li { margin-bottom: 6px; break-inside: avoid; }
-@media (max-width: 720px) { .foot-in { grid-template-columns: 1fr; } .top-in .pickers { margin-left: 0; width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .picker select { max-width: none; width: 100%; } .top-in .top-who { margin-left: 0; } }
+@media (max-width: 720px) { .foot-in { grid-template-columns: 1fr; } .top-in > .pickers { margin-left: 0; width: 100%; display: grid; gap: 8px; } .top-in .pickers .pickers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } .picker select { max-width: none; width: 100%; } .top-in .top-who { margin-left: 0; } }
 .scrim { position: fixed; inset: 0; background: rgba(10, 20, 32, 0.45); z-index: 35; }
 
 /* blocks */
@@ -419,6 +429,8 @@ const logo = () => h("img", { class: "fhrg-logo", src: LOGO, alt: "Future Highwa
 const ICONS = {
   overview: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z", media: "M3 8h10a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7", attention: "M4 20h16M4 20V4M8 16l3-4 3 2 5-7",
   notes: "M13 3 5 14h6l-1 7 8-11h-6z", surveys: "M5 12l5 5 9-10", evidence: "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
+  map: "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 3v6M12 15v6M4 7l5.4 3.1M20 7l-5.4 3.1M4 17l5.4-3.1M20 17l-5.4-3.1", issues: "M12 3 2 21h20zM12 10v5M12 18h.01", calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
+  setup: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1", all: "M3 20h18M5 20V9l7-5 7 5v11M10 20v-6h4v6",
   briefings: "M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7", sources: "M4 19.5V5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2zM4 19.5A2 2 0 0 0 6 21.5h14M9 7h7", logout: "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11",
 };
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -627,8 +639,8 @@ function route() {
   App.viewId++;
   shell();
 }
-const TABS = [["a", "Map", 1], ["surveys", "Surveys", 2], ["dash", "Dashboard", 3], ["issues", "High-impact issues", 4], ["campaign", "Campaign calendar", 5], ["briefings", "Briefings", 6], ["said", "Sources", 0, "gap"], ["setup", "Set-up", 0]];
-const SECTION_OF = { note: "a", notes: "a", briefing: "briefings", survey: "surveys", print: "surveys", plan: "surveys", evidence: "dash", attention: "dash", about: "setup" };
+const NAV = [["a", "Map", "map"], ["surveys", "Surveys", "surveys"], ["dash", "Dashboard", "overview"], ["issues", "High-impact issues", "issues"], ["campaign", "Campaign calendar", "calendar"], ["briefings", "Briefings", "briefings"], "sep", ["said", "Sources", "media"], ["setup", "Set-up", "setup"], "sep", ["evidence", "Published evidence", "evidence"], ["attention", "Attention and concern", "attention"], ["notes", "Impact notes", "notes"], ["about", "Sources and method", "sources"]];
+const SECTION_OF = { note: "notes", briefing: "briefings", survey: "surveys", print: "surveys", plan: "surveys" };
 const signOut = async () => { try { await API.call("/api/logout"); } catch (e) { /* */ } API.setToken(""); location.hash = ""; location.reload(); };
 function shell() {
   const st = App.status;
@@ -645,7 +657,8 @@ function shell() {
   const note = h("p", { class: "defaults" });
   App.pick.note = note;
   const head = h("header", { class: "top no-print" }, h("div", { class: "top-in" }, h("div", { class: "brand" }, h("a", { class: "brand-logo", href: "https://fhrg.co.uk", target: "_blank", rel: "noopener noreferrer", title: "Future Highways Research Group" }, logo()), h("div", {}, brand(), h("div", { class: "brand-sub" }, all ? "FHRG administrators" : current?.name ?? st.user.authority))), h("div", { class: "pickers" }, pickAuthority, current ? pickerRow() : null), h("div", { class: "top-who" }, who)), current ? note : null);
-  const tabs = current ? h("nav", { class: "tabs no-print", "aria-label": "Sections" }, h("div", { class: "tabs-in" }, [...TABS, ...(admin ? [["all", "All authorities", 0]] : [])].map(([key, words, n, cls]) => h("button", { type: "button", class: `tab${cls ? ` ${cls}` : ""}`, "aria-current": section === key ? "page" : null, onclick: () => { location.hash = key === "all" ? "#all" : `#${key}/${current.code}`; } }, n ? h("span", { class: "tab-n" }, n) : null, h("span", {}, words))))) : null;
+  const item = (key, words, ic) => h("button", { type: "button", "aria-current": section === key ? "page" : null, onclick: () => { location.hash = key === "all" ? "#all" : `#${key}/${current.code}`; } }, icon(ic), h("span", {}, words));
+  const rail = current ? h("nav", { class: "rail no-print", "aria-label": "Sections" }, h("div", { class: "nav" }, admin ? [item("all", "All authorities", "all"), h("div", { class: "nav-sep" })] : null, NAV.map((n) => (n === "sep" ? h("div", { class: "nav-sep" }) : item(...n))))) : null;
   const main = h("main", { class: "main", id: "main" });
   // the website's footer: the five circles, who provides Clarion, and the way to the rest
   const foot = current ? h("footer", { class: "foot no-print" }, h("div", { class: "foot-in" },
@@ -657,7 +670,7 @@ function shell() {
   const strip = App.demo ? h("div", { class: "demo-banner no-print" }, h("div", { class: "demo-banner-in" },
     h("span", {}, h("strong", {}, "Demonstration with sample content. "), "Northbridge is fictional and nothing you change here is saved."),
     h("a", { href: `#about/${list[0]?.code ?? ""}` }, "About the data"), h("a", { href: "/" }, "Sign in to use your own data"))) : null;
-  add(clear($app), h("div", { class: "app" }, strip, head, tabs, main, foot));
+  add(clear($app), h("div", { class: "app" }, strip, head, rail ? h("div", { class: "body" }, rail, main) : main, foot));
   fillPickers();
   if (current && !App.meta && !["a", "dash", "issues", "campaign"].includes(view)) loadMap(current, true).catch(() => {});
   const page = h("div", { class: "page" });

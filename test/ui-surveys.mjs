@@ -46,7 +46,7 @@ const see = (d, pattern) => until(() => pattern.test(text(d.querySelector(".main
 // ---- starting a survey
 let dom = await open(lead, `#surveys/${WSX}`), d = dom.window.document, w = dom.window;
 await see(d, /No surveys yet/);
-ok(d.querySelector('.tabs button[aria-current="page"]').textContent === "2Surveys", "Surveys has its own tab");
+ok(d.querySelector('.rail .nav button[aria-current="page"]').textContent === "Surveys", "Surveys has its own place in the menu");
 let f = d.querySelector(".card form");
 f.querySelector("input").value = "Autumn roads";
 f.querySelector("textarea").value = "How people feel about the A27 works.";
