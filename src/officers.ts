@@ -20,6 +20,8 @@ export function officersBriefing(map: MapPage, issues: Issue[], campaigns: Campa
   const where = [root.v === null ? "There isn't enough yet to give a mood for this month." : `Mood is ${root.word}, at ${root.txt}. ${map.direction.word}. ${map.direction.note}`];
   if (map.street) where.push(`Street survey: ${map.street.satisfied === null ? "–" : Math.round(map.street.satisfied)}% satisfied, from ${map.street.responses.toLocaleString("en-GB")} replies. Indicative: a street sample isn't random.`);
   if (reading) where.push(`Clarion's latest reading, written on ${day(reading.created)}: ${reading.headline} How sure: ${reading.confidenceReason}`);
+  const pulling = map.functions.filter((f) => f.pull).sort((a, b) => (b.pull ?? 0) - (a.pull ?? 0)).slice(0, 3);
+  if (pulling.length) where.push(`Pulling most on public opinion: ${pulling.map((f) => `${f.name} (${f.pull}%)`).join(", ")}. Each function's share of ${pulling[0].signals.join(", ")}, with no function chosen meaning the service overall.`);
   const held = map.election, ahead = map.planned.filter((x) => x.date >= today).sort((x, y) => x.date.localeCompare(y.date)), coming = ahead.slice(0, 6);
   const none = (list: unknown[], words: string) => (list.length ? [] : [words]);
   const onIssue = (i: Issue) => {

@@ -125,6 +125,11 @@ ok((await api("/api/coverage/assess", piece({ topic: "Our own worry" }), lead)).
 r = await api("/api/action/save", { code: WSX, title: "Pothole week", date: "2027-01-12", channel: "x", topics: ["Potholes"], origin: "Mention: Gazette" }, lead);
 const item = r.action.id;
 ok(item && r.action.origin === "Mention: Gazette" && r.action.campaign === "", "an action says where it came from, and needn't be in a campaign");
+r = await api("/api/action/save", { code: WSX, title: "Drains week", date: "2027-01-13", channel: "x", topics: ["Potholes"], functions: ["dr", "nope", "dr", 7] }, lead);
+ok(JSON.stringify(r.action.functions) === '["dr"]', "an action can name the functions it concerns, from the service's own list, once each");
+ok((await api("/api/action/save", { code: WSX, id: r.action.id, title: "Drains week", date: "2027-01-13" }, lead)).action.functions[0] === "dr", "and keeps them when a change doesn't mention them");
+ok((await api("/api/action/save", { code: WSX, id: r.action.id, title: "Drains week", date: "2027-01-13", functions: [] }, lead)).action.functions.length === 0, "while choosing none means the service overall");
+await api("/api/action/remove", { code: WSX, id: r.action.id }, lead);
 ok((await api("/api/action/save", { code: WSX, title: "", date: "2027-01-12" }, lead)).status === 400, "and needs a title");
 ok((await api("/api/action/save", { code: WSX, title: "x", date: "soon" }, lead)).status === 400, "and a date");
 ok((await api("/api/campaign/get", { code: WSX }, member)).actions.length === 1, "a member can read the calendar");
@@ -241,6 +246,23 @@ m = t.buildMap({ ...baseData(), streets: [{ ...wasteDay, questions: [{ id: "l1",
 ok(kid(m.tree, "street").mood.v === 50, "its own local questions are");
 function baseData() { return { today: "2026-11-02", unread: [], setup: { functions: { highways: [] }, partners: [], channels: [] }, weights: { surveys: 40, contact: 20, print: 15, broadcast: 10, social: 10, events: 5 }, topics: [], sources: [], assessments: [], streets: [], adults: null, ageAdults: null, residents: null, enquiries: {}, monthly: {}, questions: [], rated: {}, announcements: [], works: { on: false, weeks: [], events: [] }, notes: [], posts: [], published: [], plans: { issues: [], campaigns: [], actions: [] }, election: false, channels: [], ages: [] }; }
 const pet = (title, above = true) => ({ title, local: 500, above });
+
+// ---- which functions pull most on opinion
+const fnSetup = { functions: { highways: [{ id: "cw", name: "Carriageways", orig: "" }, { id: "dr", name: "Drainage", orig: "" }, { id: "sl", name: "Lighting", orig: "" }] }, partners: [], channels: [] };
+const tagged = (i, tone, functions) => ({ ...bp("big", tone, i), functions });
+const pullOf = (m, id) => m.functions.find((f) => f.id === id).pull;
+let pull = t.buildMap({ ...baseData(), setup: fnSetup, sources: [band("big", "Large")], assessments: [tagged(1, "Critical", ["cw"]), tagged(2, "Critical", ["cw"]), tagged(3, "Neutral", ["dr"]), tagged(4, "Supportive", ["sl"]), tagged(5, "Critical", [])] }, t.readFilters({}, "2026-11-02", []));
+ok(pullOf(pull, "cw") === 80 && pullOf(pull, "dr") === 20 && pullOf(pull, "sl") === 0, "a function's pull is its share of coverage, with a critical piece counting double a neutral one and a supportive one nothing");
+ok(pull.functions.every((f) => f.pieces < 3) && pull.functions.reduce((n, f) => n + f.pieces, 0) === 4, "a piece with no function chosen is about the service overall, and counts for none of them");
+ok(JSON.stringify(pull.functions[0].signals) === '["coverage"]' && pull.functions[0].jobs === null, "with only coverage to go on, it says so, and jobs stay blank until Works and weather is on");
+pull = t.buildMap({ ...baseData(), setup: fnSetup, sources: [band("big", "Large")], assessments: [tagged(1, "Critical", ["cw"])], streets: [{ ...point("2026-10-10", 60, 20), questions: [{ id: "q", text: "Drains?", fn: "dr", topic: "", sat: 30, dis: 60 }] }], works: { on: true, weeks: [{ week: "2026-10-05", public: 10, fns: { sl: 30, cw: 10 } }, { week: "2025-01-05", public: 10, fns: { dr: 999 } }], events: [] } }, t.readFilters({}, "2026-11-02", []));
+ok(pullOf(pull, "cw") === 42 && pullOf(pull, "dr") === 33 && pullOf(pull, "sl") === 25, "coverage, the street survey's dissatisfied replies and the month's jobs by function each give a share, and the pull is their average");
+ok(JSON.stringify(pull.functions[0].signals) === '["coverage","the street survey","jobs by function"]' && pull.functions.find((f) => f.id === "dr").jobs === 0, "it names the three, and jobs from another month don't count");
+ok(pull.functions.find((f) => f.id === "dr").survey === 30 && pull.functions.find((f) => f.id === "cw").mood === null && pull.functions.find((f) => f.id === "cw").pieces === 1, "each row still shows the survey's satisfied figure and the media mood, which needs five pieces");
+pull = t.buildMap({ ...baseData(), setup: fnSetup, plans: { issues: [], campaigns: [], actions: [{ id: "a", title: "x", date: "2026-12-01", channel: "", topics: [], functions: ["cw"], service: "highways", origin: "", survey: "", campaign: "", planned: null, actual: null, by: "", at: "" }, { id: "b", title: "y", date: "2026-01-01", channel: "", topics: [], functions: ["cw"], service: "highways", origin: "", survey: "", campaign: "", planned: null, actual: null, by: "", at: "" }] } }, t.readFilters({}, "2026-11-02", []));
+ok(pull.functions.find((f) => f.id === "cw").actions === 1 && pull.functions.every((f) => f.pull === null && !f.signals.length), "actions ahead that name a function are counted, and with nothing pulling there's no pull");
+const demoPull = t.demoMap({}).functions;
+ok(demoPull.filter((f) => f.pull).length >= 3 && Math.abs(demoPull.reduce((n, f) => n + (f.pull ?? 0), 0) - 100) <= 2 && /Pulling most on public opinion: .*\(\d+%\)/.test(t.demoOfficers({}).briefing.parts[0].paras.join(" ")), "the demonstration ranks its functions, the shares add up to 100, and the officers' briefing names the top ones");
 m = mapWith({}, { "2026-09": { perDay: null, reports: 0, petitions: [] }, "2026-10": { perDay: null, reports: 0, petitions: [pet("New one")] } });
 ok(kid(m.tree, "petitions").mood.v === null && kid(m.tree, "petitions").mood.unit === "to rate", "a new petition doesn't count until an officer rates it");
 m = mapWith({ "petition|New one": "Critical" }, { "2026-09": { perDay: null, reports: 0, petitions: [] }, "2026-10": { perDay: null, reports: 0, petitions: [pet("New one")] } });
@@ -455,6 +477,12 @@ ok(text(d.querySelector(".crumbs")).endsWith("Radio"), "and back one level");
 button(d, "Add a mention").click();
 await until(() => /Please don't paste the article/.test(text(d.querySelector(".panel"))), "the form");
 ok(!d.querySelector(".panel textarea").hasAttribute("maxlength"), "a pasted article isn't cut short: the server refuses it");
+const fnChip = (words) => [...d.querySelectorAll(".panel .fn-chips .chip")].find((b) => b.textContent === words);
+ok(fnChip("Service overall").getAttribute("aria-pressed") === "true" && fnChip("Carriageways").getAttribute("aria-pressed") === "false", "a mention is about the service overall until a function is chosen");
+fnChip("Carriageways").click(); fnChip("Drainage & flooding").click();
+ok(fnChip("Service overall").getAttribute("aria-pressed") === "false" && fnChip("Carriageways").getAttribute("aria-pressed") === "true" && fnChip("Drainage & flooding").getAttribute("aria-pressed") === "true", "choosing functions turns Service overall off");
+fnChip("Service overall").click();
+ok(fnChip("Service overall").getAttribute("aria-pressed") === "true" && fnChip("Carriageways").getAttribute("aria-pressed") === "false" && fnChip("Drainage & flooding").getAttribute("aria-pressed") === "false", "and Service overall clears them again");
 d.querySelector(".panel textarea").value = "Half typed";
 [...d.querySelectorAll(".chip")].find((b) => b.textContent === "Left").click();
 await until(() => [...d.querySelectorAll(".chip")].find((b) => b.textContent === "Left").getAttribute("aria-pressed") === "true", "the filter");
@@ -482,6 +510,9 @@ ok(zoneAt("Early signs").getAttribute("x") === "590" && Number(zoneAt("Early sig
 const dot = (words) => { const name = [...d.querySelectorAll(".q-name")].find((x) => x.textContent === words); return Number(name.previousSibling.getAttribute("cx")); };
 ok(dot("Potholes") > dot("Parking"), "the topic of most concern sits furthest right");
 ok(/higher to the right/.test(text(d.querySelector(".quad"))) && d.querySelectorAll(".quad .q-arrow").length === 2, "and each axis has an arrow below its label");
+const fnRows = [...d.querySelectorAll(".fn:not(.head)")], pulls = fnRows.map((r) => Number((r.children[2].textContent.match(/\d+/) || [0])[0]));
+ok(/Which functions pull most on opinion/.test(main) && /Pulling most: .*\(\d+%\)/.test(main) && pulls.length > 3 && pulls.every((v, i) => !i || v <= pulls[i - 1]) && fnRows[0].querySelector(".pull-fill"), "the Dashboard ranks functions by their pull on opinion, highest first, with a bar");
+ok(/Pull is a function's share of coverage, the street survey, jobs by function/.test(main) && /no function chosen is about the service overall/.test(main) && /Jobs/.test(text(d.querySelector(".fn.head"))) && /Actions ahead/.test(text(d.querySelector(".fn.head"))), "and says what the pull is made of");
 d.defaultView.eval(`App.cal.camp = "new"; App.cal.seed = { topic: "Potholes" }; App.cal.draft = { name: "x" };`);
 d.querySelectorAll(".pickers select")[0].value = "waste"; d.querySelectorAll(".pickers select")[0].dispatchEvent(new d.defaultView.Event("change"));
 await shows(d, /Nothing collected yet/);
@@ -601,6 +632,14 @@ ok(/Potholes/.test(text(d.querySelector(".panel"))) && /Key messages/.test(text(
 d.querySelector(".ev").click();
 await until(() => /Came from/.test(text(d.querySelector(".panel"))), "the event");
 ok(/What it is/.test(text(d.querySelector(".panel"))) && /Key message/.test(text(d.querySelector(".panel"))), "an event says where it came from, and carries its key message");
+const actFn = (words) => [...d.querySelectorAll(".panel .fn-chips .chip")].find((b) => b.textContent === words);
+ok(/Which functions does it concern/.test(text(d.querySelector(".panel"))) && actFn("Carriageways").getAttribute("aria-pressed") === "true" && actFn("Service overall").getAttribute("aria-pressed") === "false", "an action shows the functions it concerns");
+actFn("Drainage & flooding").click();
+await until(() => actFn("Drainage & flooding").getAttribute("aria-pressed") === "true", "the function saved");
+ok(d.defaultView.eval("Demo.campaign().actions.find((x) => x.title === 'Pothole repair figures').functions.join()") === "cw,dr", "and a chosen function is saved with it");
+actFn("Service overall").click();
+await until(() => actFn("Service overall").getAttribute("aria-pressed") === "true", "the service overall");
+ok(d.defaultView.eval("Demo.campaign().actions.find((x) => x.title === 'Pothole repair figures').functions.length") === 0, "while Service overall clears them");
 const chipNow = [...d.querySelectorAll(".panel .chip")].find((b) => b.textContent === "Radio interview"), lastCost = () => [...d.querySelectorAll(".panel label")].find((x) => /Planned cost/.test(x.textContent)).querySelector("input");
 lastCost().value = "275"; lastCost().dispatchEvent(new d.defaultView.Event("change")); chipNow.click();
 await until(() => /£5,075/.test(text(d.querySelector(".main table"))), "the second cost");

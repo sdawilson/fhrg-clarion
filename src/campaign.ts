@@ -20,7 +20,7 @@ export type Campaign = {
   budget: number | null; budgets: Record<string, number>; by: string; at: string;
 };
 export type Action = {
-  id: string; title: string; date: string; channel: string; topics: string[]; service: string; origin: string; survey: string; campaign: string;
+  id: string; title: string; date: string; channel: string; topics: string[]; functions: string[]; service: string; origin: string; survey: string; campaign: string; // no functions means the service overall
   planned: number | null; actual: number | null; by: string; at: string;
 };
 export type Plans = { issues: Issue[]; campaigns: Campaign[]; actions: Action[] };
@@ -55,7 +55,7 @@ export async function loadPlans(c: Config, code: string): Promise<Plans> {
   const actions = (Array.isArray(held.actions) ? held.actions : Array.isArray(held.items) ? held.items : []) as Action[]; // files from before campaigns called these items
   return {
     issues: Array.isArray(held.issues) ? held.issues : [], campaigns: Array.isArray(held.campaigns) ? held.campaigns : [],
-    actions: actions.map((x) => ({ ...x, campaign: x.campaign ?? "", planned: x.planned ?? null, actual: x.actual ?? null })),
+    actions: actions.map((x) => ({ ...x, functions: Array.isArray(x.functions) ? x.functions : [], campaign: x.campaign ?? "", planned: x.planned ?? null, actual: x.actual ?? null })),
   };
 }
 const change = <T>(c: Config, code: string, fn: (held: Plans) => T): Promise<T> => withLock(path(c, code), async () => {
@@ -131,16 +131,18 @@ export function syncTell(c: Config, code: string, survey: { id: string; title: s
     for (const topic of wanted) {
       if (all.actions.some((x) => theirs(x) && x.topics.includes(topic)) || all.actions.length >= MAX_ACTIONS) continue;
       const running = all.campaigns.find((x) => x.topic === topic && x.service === service && (x.ongoing || (today >= x.start && today <= x.end)));
-      all.actions.push({ id: newId(), title: `${topic}: told on the survey`.slice(0, TITLE_CHARS), date: today, channel, topics: [topic], service, origin, survey: survey.id, campaign: running?.id ?? "", planned: null, actual: null, by, at: new Date().toISOString() });
+      all.actions.push({ id: newId(), title: `${topic}: told on the survey`.slice(0, TITLE_CHARS), date: today, channel, topics: [topic], functions: [], service, origin, survey: survey.id, campaign: running?.id ?? "", planned: null, actual: null, by, at: new Date().toISOString() });
     }
   });
 }
 
-export function saveAction(c: Config, code: string, b: any, service: string, by: string, money: boolean): Promise<Action> {
+/** known: the service's function ids from Set-up. An action with none chosen is about the service overall. */
+export function saveAction(c: Config, code: string, b: any, service: string, by: string, money: boolean, known: string[] = []): Promise<Action> {
   const title = cleanText(b?.title, TITLE_CHARS);
   if (!title) throw new FriendlyError("Say what the action is.");
   const date = readDate(b?.date, "Give the action a date.");
   const topics = (Array.isArray(b?.topics) ? b.topics : []).map((t: unknown) => cleanText(t, 80)).filter(Boolean).slice(0, 8);
+  const functions = b?.functions === undefined ? undefined : [...new Set((Array.isArray(b.functions) ? b.functions : []).map((t: unknown) => cleanText(t, 24)).filter((f: string) => known.includes(f)))] as string[];
   const planned = money && b?.planned !== undefined ? readCost(b.planned) : undefined, actual = money && b?.actual !== undefined ? readCost(b.actual) : undefined;
   return change(c, code, (all) => {
     const was = b?.id ? all.actions.find((x) => x.id === b.id) : null;
@@ -150,7 +152,7 @@ export function saveAction(c: Config, code: string, b: any, service: string, by:
     if (id && !owner) throw new FriendlyError("That campaign wasn't found.", 404);
     if (owner && !owner.ongoing && (date < owner.start || date > owner.end)) throw new FriendlyError(`That date is outside ${owner.name}, which runs from ${day(owner.start)} to ${day(owner.end)}.`);
     const action: Action = {
-      id: was?.id ?? newId(), title, date, channel: cleanText(b?.channel, 24), topics, service, origin: cleanText(b?.origin ?? was?.origin, 160), survey: cleanText(b?.survey ?? was?.survey, 40), campaign: owner?.id ?? "",
+      id: was?.id ?? newId(), title, date, channel: cleanText(b?.channel, 24), topics, functions: functions ?? was?.functions ?? [], service, origin: cleanText(b?.origin ?? was?.origin, 160), survey: cleanText(b?.survey ?? was?.survey, 40), campaign: owner?.id ?? "",
       planned: planned === undefined ? was?.planned ?? null : planned, actual: actual === undefined ? was?.actual ?? null : actual, by: was?.by ?? by, at: was?.at ?? londonToday(),
     };
     all.actions = was ? all.actions.map((x) => (x === was ? action : x)) : [...all.actions, action];
