@@ -413,7 +413,7 @@ export const demoPack = () => cached("demo-pack", 24 * 60 * 60 * 1000, async () 
 
 // The map, from the same made-up data and the same calculations as a real authority
 const MAP_TODAY = "2026-11-02";
-const demoAction = (id: string, title: string, date: string, channel: string, topics: string[], origin: string, campaign: string, planned: number | null, actual: number | null) => ({ id, title, date, channel, topics, service: "highways", origin, survey: "", campaign, planned, actual, by: "Demo officer", at: "2026-11-02" });
+const demoAction = (id: string, title: string, date: string, channel: string, topics: string[], origin: string, campaign: string, planned: number | null, actual: number | null, functions: string[] = []) => ({ id, title, date, channel, topics, functions, service: "highways", origin, survey: "", campaign, planned, actual, by: "Demo officer", at: "2026-11-02" });
 const demoCampaign = (): Plans => ({
   issues: [
     { topic: "Potholes", status: "confirmed", key: "", service: "highways", own: false, by: "Demo officer", at: WHEN },
@@ -424,9 +424,9 @@ const demoCampaign = (): Plans => ({
     { id: "c2", name: "Roadworks: telling people sooner", topic: "Roadworks information", service: "highways", messages: ["We will tell you about roadworks earlier, and show every diversion on one page."], start: "2026-09-01", end: "", ongoing: true, review: "2027-03-01", budget: null, budgets: { "2026-27": 20000 }, by: "Demo officer", at: "2026-09-01" },
   ],
   actions: [
-    demoAction("i0", "Diversions page launched", "2026-10-20", "press", ["Roadworks information"], "Mention: Dale Valley Gazette", "c2", 3000, 3250),
-    demoAction("i1", "Pothole repair figures", "2026-11-10", "press", ["Potholes"], "High-impact issue: Potholes", "c1", 1500, null),
-    demoAction("i2", "How to report a pothole", "2026-11-12", "social", ["Potholes"], "Survey result: 21% satisfied with road surfaces", "c1", 800, null),
+    demoAction("i0", "Diversions page launched", "2026-10-20", "press", ["Roadworks information"], "Mention: Dale Valley Gazette", "c2", 3000, 3250, ["nm"]),
+    demoAction("i1", "Pothole repair figures", "2026-11-10", "press", ["Potholes"], "High-impact issue: Potholes", "c1", 1500, null, ["cw"]),
+    demoAction("i2", "How to report a pothole", "2026-11-12", "social", ["Potholes"], "Survey result: 21% satisfied with road surfaces", "c1", 800, null, ["cw"]),
     demoAction("i3", "Roadworks forum with parish councils", "2026-11-18", "liaison", ["Roadworks information"], "Mention: Dale Valley Gazette", "c2", 2500, null),
     demoAction("i4", "Winter repairs and roadworks programme", "2026-11-24", "press", ["Potholes", "Roadworks information"], "High-impact issue: Potholes", "c1", 4000, null),
   ],
@@ -450,7 +450,7 @@ function demoMapData(): MapData {
     rated: { "petition|Keep the lights on at night in Northbridge": "Critical", "question|2026-10-09|Roads: Northbridge": "Critical" }, ageAdults: census ? adultsByAge(census) : null,
     announcements: [{ title: "£4.2m extra for pothole repairs", date: "2026-10-06" }],
     questions: [{ date: "2026-10-09", heading: "Roads: Northbridge" }],
-    works: { on: true, weeks: w.weeks.map((x) => ({ week: x.week, public: x.public })), events: w.events.map((e) => ({ label: e.label, start: e.start, end: e.end })) },
+    works: { on: true, weeks: w.weeks.map((x) => ({ week: x.week, public: x.public, fns: x.fns })), events: w.events.map((e) => ({ label: e.label, start: e.start, end: e.end })) },
     notes: [{ id: "n1", title: "£4.2m extra for pothole repairs", date: "2026-10-12", effect: 20, topic: "Potholes", routes: ["Money", "Delivery capacity", "Public and media reaction"] }],
     posts: [{ title: "Winter gritting routes confirmed", date: "2026-10-28", topic: "Winter service" }, { title: "Moor Lane resurfacing starts next month", date: "2026-10-21", topic: "Potholes" }],
     published: [{ name: "A roads to consider for repair", here: "3.1%", region: "3.8%", england: "3.4%" }, { name: "B and C roads to consider for repair", here: "6.2%", region: "5.9%", england: "5.6%" }],

@@ -202,9 +202,6 @@ table.heat { border-collapse: separate; border-spacing: 2px; font-size: 0.84rem;
 .site-head p { margin: 2px 0 0; }
 .site-num { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 0.9rem; }
 .site-name { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; }
-.plates { display: flex; flex-wrap: wrap; gap: 6px; }
-.plates button { min-height: 34px; padding: 4px 11px; border: 1.5px solid var(--line-2); border-radius: 999px; background: var(--surface); color: var(--ink-2); font: inherit; font-size: 0.86rem; cursor: pointer; }
-.plates button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .g3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); }
 .aud-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 10px; align-items: center; font-size: 0.86rem; margin: 5px 0; }
 .aud-row > div { display: grid; gap: 2px; }
@@ -305,7 +302,8 @@ tr.selected td { background: var(--surface-2); }
 .gauge { position: relative; height: 10px; border-radius: 5px; background: var(--surface-2); } .gauge-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--line-2); } .gauge-m { position: absolute; top: 50%; width: 18px; height: 18px; border-radius: 50%; transform: translate(-50%, -50%); background: var(--navy-deep); box-shadow: 0 0 0 2px var(--surface); }
 .gauge-l { display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--ink-3); }
 .mrow { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(50px, 1.2fr) 44px 36px; gap: 10px; align-items: center; min-height: 40px; padding: 2px 4px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 0.88rem; } .mrow:hover { background: var(--bg); }
-.tbl-wrap.plain { border: 0; } .fn { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(110px, 2fr) 64px 76px 110px; gap: 10px; align-items: center; min-width: 560px; padding: 4px 0; font-size: 0.88rem; } .fn.head { color: var(--ink-3); font-size: 0.8rem; }
+.tbl-wrap.plain { border: 0; } .fn { display: grid; grid-template-columns: minmax(150px, 1.3fr) minmax(120px, 2fr) 48px minmax(120px, 2fr) 56px 76px 120px 56px 64px; gap: 12px; align-items: center; min-width: 820px; padding: 4px 0; font-size: 0.88rem; } .fn.head { color: var(--ink-3); font-size: 0.8rem; } .fn .r { text-align: right; }
+.pull-bar { position: relative; display: block; height: 14px; background: var(--surface-2); border-radius: 4px; overflow: hidden; } .pull-fill { position: absolute; top: 0; bottom: 0; left: 0; background: var(--accent); border-radius: 4px; }
 .fn-bar { position: relative; display: block; height: 14px; } .fn-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); } .fn-fill { position: absolute; top: 0; bottom: 0; } .fn-fill.lean-down { background: var(--lean-down); border-radius: 4px 0 0 4px; } .fn-fill.lean-up { background: var(--lean-up); border-radius: 0 4px 4px 0; } .fn-fill.lean-mixed { background: var(--lean-mixed); }
 .heat-grid { display: grid; grid-template-columns: minmax(120px, 1.5fr) repeat(5, minmax(52px, 1fr)); gap: 6px; align-items: center; min-width: 410px; } .heat-h { font-size: 0.8rem; color: var(--ink-3); text-align: center; } .heat-l { font-weight: 700; font-size: 0.88rem; }
 .heat-c small { font-size: 0.68rem; font-weight: 600; } .mrow-raw { grid-column: 1 / -1; text-align: right; margin-top: -6px; }
@@ -764,6 +762,8 @@ const hubEl = (x) => h("button", { type: "button", class: `hub lean-${x.lean}`, 
 const cap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 const chipRow = (list, on, pick) => h("div", { class: "chips" }, list.map(([id, words]) => h("button", { type: "button", class: "chip", "aria-pressed": String(on(id)), onclick: () => pick(id) }, words)));
 const filterBox = (label, ...kids) => h("div", { class: "filter" }, h("span", { class: "note" }, label), ...kids);
+// Functions for a piece or an action: "Service overall" is pressed while none is chosen, and pressing it clears the rest
+const functionChips = (fns, chosen, set) => { const row = () => chipRow([["", "Service overall"], ...fns.map((f) => [f.id, f.name])], (x) => (x ? chosen().includes(x) : !chosen().length), (x) => { set(!x ? [] : chosen().includes(x) ? chosen().filter((y) => y !== x) : [...chosen(), x]); add(clear(box), row()); }); const box = h("div", { class: "fn-chips" }, row()); return box; };
 const mapLegend = () => h("div", { class: "pic-legend" }, [["down", "Mood −10 or lower"], ["up", "Mood +10 or higher"], ["mixed", "Mixed"], ["none", "Too little to read yet"], ["ctx", "Informs campaigns, not counted in the mood"]].map(([k, words]) => h("span", {}, h("i", { class: `sw sw-${k}` }), words)), h("span", {}, "A bigger circle means a bigger share"));
 const trailOf = (tree, path) => { const out = [tree]; for (const id of path) { const next = out.at(-1).kids.find((k) => k.id === id); if (!next) break; out.push(next); } return out; };
 const sourcesUnder = (node) => (node.source ? [{ id: node.source, label: node.label }] : node.kids.flatMap(sourcesUnder));
@@ -921,16 +921,15 @@ function mentionForm(a, d, cur, redraw, again) {
   const topic = h("select", {}, h("option", { value: "" }, "Choose a topic"), d.topicList.map((t) => h("option", { value: t }, t))), about = h("select", {}, h("option", { value: "" }, "The authority"), d.partners.map((p) => h("option", { value: p.id }, p.name)));
   if (App.filters.topic !== "all") topic.value = App.filters.topic;
   if (m.view === "partners") about.value = m.partner;
-  const fns = []; // whole service unless functions are chosen
-  const covers = chipRow(d.functions.map((f) => [f.id, f.name]), () => false, () => {});
-  covers.querySelectorAll("button").forEach((b, i) => b.addEventListener("click", () => { const id = d.functions[i].id, at = fns.indexOf(id); if (at < 0) fns.push(id); else fns.splice(at, 1); b.setAttribute("aria-pressed", String(at < 0)); }));
+  const fns = []; // the service overall unless functions are chosen
+  const covers = functionChips(d.functions, () => fns, (list) => { fns.length = 0; fns.push(...list); });
   const save = once(async () => {
     await API.call("/api/coverage/assess", { code: a.code, service: App.filters.service, source: source.value, date: date.value, summary: text.value, topic: topic.value, relevance: relevance.value, tone: tone.value, prominence: prominence.value, functions: fns, reach: reach.value, scope: scope.value, about: about.value });
     m.form = null; toast(App.demo ? "In the demonstration, nothing is saved." : "Saved. The mood has been worked out again."); await again();
   }, (e) => { add(clear(msg), failure(e)); });
   return h("div", { class: "stack" }, h("h2", {}, "Add a mention"), h("p", { class: "note" }, "You find the piece outside Clarion and record it in your own words. Please don't paste the article."),
     h("label", { class: "field" }, "Source", source), h("label", { class: "field" }, "Date", date), h("label", { class: "field" }, "What was said, in one line of your own words", text, h("span", { class: "hint" }, "Your own words. Please don't paste the article, and leave out residents' names.")), h("label", { class: "field" }, "Tone", tone), h("label", { class: "field" }, "Relevance", relevance), h("label", { class: "field" }, "Prominence", prominence),
-    h("label", { class: "field" }, "Local or national", scope), h("label", { class: "field" }, "Reach, if different from the source's", reach), h("div", { class: "field" }, "Covers the whole service, or choose functions", covers), h("label", { class: "field" }, "Topic", topic), h("label", { class: "field" }, "About", about), msg,
+    h("label", { class: "field" }, "Local or national", scope), h("label", { class: "field" }, "Reach, if different from the source's", reach), h("div", { class: "field" }, "Which functions does it affect?", covers), h("label", { class: "field" }, "Topic", topic), h("label", { class: "field" }, "About", about), msg,
     h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: save }, "Save"), h("button", { class: "btn ghost", type: "button", onclick: () => { m.form = null; redraw(); } }, "Cancel")));
 }
 
@@ -958,11 +957,15 @@ function moodCard(a, d) {
     h("div", { class: "gauge" }, h("i", { class: "gauge-mid" }), v === null ? null : h("i", { class: "gauge-m", style: { left: `${(v + 100) / 2}%` } })), h("div", { class: "gauge-l" }, h("span", {}, "−100"), h("span", {}, "0"), h("span", {}, "+100")),
     h("h4", {}, "What makes it up"), t.kids.map((k) => h("a", { class: "mrow", href: `#a/${a.code}`, title: k.mood.tip || null, onclick: () => { App.map.view = "authority"; App.map.path = [k.id]; } }, h("span", {}, k.label), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(k.mood.v)), h("strong", {}, k.mood.txt), h("span", { class: "note" }, k.pct === null ? "–" : `${k.pct}%`), k.mood.raw === undefined || k.mood.raw === null ? null : h("span", { class: "note mrow-raw" }, `${moodFmt(k.mood.raw)} before weighting`))));
 }
+// Which functions pull most on public opinion: each one's share of the signals that name functions, averaged. A calculation on counts, never Claude's opinion
 function functionCard(d) {
-  const used = d.functions.filter((f) => f.pieces || f.survey !== null).sort((x, y) => (x.mood ?? 999) - (y.mood ?? 999)), empty = d.functions.filter((f) => !f.pieces && f.survey === null).map((f) => f.name);
-  return h("section", { class: "card" }, h("h3", {}, "By function"), h("div", { class: "tbl-wrap plain" }, h("div", { class: "fn head" }, h("span", {}, "Function"), h("span", {}, "Media mood, from −100 to +100"), h("span", {}, "Mood"), h("span", {}, "Before weighting"), h("span", {}, "Street survey, indicative")),
-    used.map((f) => h("div", { class: "fn" }, h("span", {}, f.name), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(f.mood)), h("span", {}, f.mood === null ? `${f.pieces} ${f.pieces === 1 ? "piece" : "pieces"}` : moodFmt(f.mood)), h("span", {}, f.raw === null || f.raw === undefined ? "–" : moodFmt(f.raw)), h("span", {}, f.survey === null ? "–" : `${fmt(f.survey)}% satisfied`)))),
-    empty.length ? h("p", { class: "note" }, `Nothing yet for: ${empty.join(", ")}.`) : null);
+  const has = (f) => f.pull || f.pieces || f.survey !== null || f.jobs || f.actions;
+  const used = d.functions.filter(has).sort((x, y) => (y.pull ?? -1) - (x.pull ?? -1) || (x.mood ?? 999) - (y.mood ?? 999)), empty = d.functions.filter((f) => !has(f)).map((f) => f.name);
+  const signals = used[0]?.signals ?? [], top = used.filter((f) => f.pull).slice(0, 3), works = d.functions.some((f) => f.jobs !== null);
+  return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Which functions pull most on opinion"), h("p", {}, top.length ? `Pulling most: ${top.map((f) => `${f.name} (${f.pull}%)`).join(", ")}.` : "Nothing names a function yet."))),
+    h("div", { class: "tbl-wrap plain" }, h("div", { class: "fn head" }, h("span", {}, "Function"), h("span", {}, "Pull on opinion"), h("span", { class: "r" }, "Share"), h("span", {}, "Media mood, −100 to +100"), h("span", { class: "r" }, "Mood"), h("span", { class: "r" }, "Before weighting"), h("span", {}, "Street survey, indicative"), h("span", { class: "r", title: "Jobs logged by function in the four weeks to the month's end" }, "Jobs"), h("span", { class: "r", title: "Actions planned from today that name this function" }, "Actions ahead")),
+      used.map((f) => h("div", { class: "fn" }, h("span", {}, f.name), h("span", { class: "pull-bar", title: f.actions ? `${f.actions} planned` : null }, f.pull ? h("i", { class: "pull-fill", style: { width: `${f.pull}%` } }) : null), h("span", { class: "r" }, f.pull === null ? "–" : `${f.pull}%`), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(f.mood)), h("span", { class: "r" }, f.mood === null ? (f.pieces ? `${f.pieces} ${f.pieces === 1 ? "piece" : "pieces"}` : "–") : moodFmt(f.mood)), h("span", { class: "r" }, f.raw === null || f.raw === undefined ? "–" : moodFmt(f.raw)), h("span", {}, f.survey === null ? "–" : `${fmt(f.survey)}% satisfied`), h("span", { class: "r" }, works ? fmt(f.jobs) : "–"), h("span", { class: "r" }, fmt(f.actions))))),
+    h("p", { class: "note" }, signals.length ? `Pull is a function's share of ${signals.join(", ")}, averaged. ` : "", "Jobs aren't counted until Works and weather is on. A piece or action with no function chosen is about the service overall, so it isn't counted here.", empty.length ? ` Nothing yet for: ${empty.join(", ")}.` : ""));
 }
 function heatCard(a, d) {
   return h("section", { class: "card" }, h("h3", {}, "Month by month"), h("div", { class: "tbl-wrap plain" }, h("div", { class: "heat-grid" }, h("div", {}), d.heatMonths.map((m) => h("div", { class: "heat-h" }, m.id === d.today?.slice(0, 7) ? "So far" : m.label.split(" ")[0])),
@@ -991,7 +994,7 @@ async function dashView(page, a) {
     stat("Fault reports", fig.faults === null ? "–" : fmt(fig.faults), fig.faultChange === null ? "A sample from FixMyStreet" : `A sample, ${changeWords(fig.faultChange)} on the month before`),
     stat("Adults in the authority", d.adults ? fmt(d.adults) : "–", "Census 2021, aged 16 and over"),
   ];
-  add(clear(body), head, h("div", { class: "grid g2" }, moodCard(a, map), readingCard(a, d)), h("div", { class: "grid g4" }, tiles), h("div", { class: "grid g2" }, functionCard(map), heatCard(a, map)));
+  add(clear(body), head, h("div", { class: "grid g2" }, moodCard(a, map), readingCard(a, d)), h("div", { class: "grid g4" }, tiles), functionCard(map), heatCard(a, map));
   if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att, a));
   else add(body, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Shows what's loud, what's felt, and what nobody is reporting yet."))), h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, att.needs ? `This needs ${att.needs}.` : "This can't be worked out just now."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))));
   add(body, h("div", { class: "grid g2 top-align" },
@@ -1101,6 +1104,7 @@ function actionPanel(panel, a, d, camp, it, draw) {
   add(panel, h("h2", {}, "Action"), it.origin ? h("p", { class: "note" }, `Came from: ${it.origin}`) : null, h("label", { class: "field" }, "What it is", title), h("label", { class: "field" }, "Campaign", choose), h("label", { class: "field" }, "Date", date, owner ? h("span", { class: "hint" }, owner.ongoing ? "This campaign is ongoing, so any date will do." : `Must fall within ${spanOf(owner)}.`) : null),
     camp.money ? h("div", { class: "form-grid" }, h("label", { class: "field" }, "Planned cost", cost("planned")), h("label", { class: "field" }, "Actual cost", cost("actual"))) : null,
     h("div", { class: "field" }, "Channel", chipRow(camp.channels.map((c) => [c.id, c.name]), (x) => x === it.channel, (x) => save({ channel: x }).then(draw))), h("div", { class: "field" }, "Topics it answers: choose one or more", chipRow(d.topicList.map((t) => [t, t]), (x) => it.topics.includes(x), (x) => save({ topics: it.topics.includes(x) ? it.topics.filter((y) => y !== x) : [...it.topics, x] }).then(draw))),
+    canPlan || it.functions?.length ? h("div", { class: "field" }, "Which functions does it concern?", canPlan ? functionChips(d.functions, () => it.functions ?? [], (list) => save({ functions: list }).then(draw)) : h("p", { class: "note" }, (it.functions ?? []).map((id) => d.functions.find((f) => f.id === id)?.name ?? id).join(", "))) : null,
     keys.length ? h("div", { class: "field" }, "Key messages", keys.map((t) => h("p", { class: "note" }, t))) : null, tiedBear.length ? h("div", { class: "field" }, "Bear in mind", tiedBear.map((b) => h("p", { class: "note" }, `${b.title}: ${b.sub}`))) : null,
     h("div", { class: "row" }, h("button", { class: "btn primary small", type: "button", onclick: () => { showPanel(); draw(); } }, "Done"), it.survey ? h("a", { class: "btn small", href: `#survey/${a.code}/${it.survey}/tell` }, "Open the survey") : null, canPlan ? h("button", { class: "btn ghost small", type: "button", onclick: once(async () => { await API.call("/api/action/remove", { code: a.code, id: it.id }); showPanel(); await draw(); }, (e) => toast(e.message)) }, "Take it out") : null));
 }
@@ -1450,9 +1454,9 @@ function saidAssess(top, a, d) {
     return { el: h("div", { class: "field" }, label, row), draw };
   };
   const rel = choice("How relevant is it to the topic?", "relevance", d.relevance), tone = choice("Tone towards the council", "tone", d.tones), prom = choice("How prominent was it?", "prominence", d.prominence);
-  const plates = h("div", { class: "plates" });
+  const plates = h("div");
   const fnList = App.meta?.functions.length ? App.meta.functions.map((f) => [f.id, f.name]) : d.functions;
-  const drawPlates = () => add(clear(plates), ...fnList.map(([id, name]) => h("button", { type: "button", "aria-pressed": String(form.functions.includes(id)), onclick: () => { form.functions = form.functions.includes(id) ? form.functions.filter((x) => x !== id) : [...form.functions, id]; drawPlates(); } }, name)));
+  const drawPlates = () => add(clear(plates), functionChips(fnList.map(([id, name]) => ({ id, name })), () => form.functions, (list) => { form.functions = list; drawPlates(); }));
   drawPlates();
   let saving = false;
   async function saveIt(done) {
