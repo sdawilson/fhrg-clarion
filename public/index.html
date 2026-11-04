@@ -1229,7 +1229,7 @@ async function setupView(page, a) {
   const names = { surveys: "Surveys", broadcast: "TV and radio", print: "Press and magazines", social: "Social and video", contact: "People getting in touch", events: "Events and context" };
   const weightMsg = saveNote(), weights = Object.keys(names).map((k) => { const el = h("input", { type: "number", min: 0, max: 100, step: 5, value: d.weights[k], disabled: !d.canWeigh, "aria-label": `Weight for ${names[k]}` }); return { k, el }; });
   add(clear(body), h("div", { class: "grid g2 top-align" },
-    h("section", { class: "card" }, h("h2", {}, `Functions for ${label}`), h("p", { class: "note" }, `${service === "highways" ? "FHRG's standard list is the Climate Toolkit's 13 highways functions." : std.length ? "FHRG sets a starting list." : "FHRG has no list for this service yet, so add your own."} Each authority's lead can rename, take out or add to it. A renamed function keeps its link to the Climate Toolkit.`), fns,
+    h("section", { class: "card" }, h("h2", {}, `Functions for ${label}`), h("p", { class: "note" }, `${service === "highways" ? "FHRG's standard list is the Climate Toolkit's 13 highways functions." : std.length ? "FHRG sets a starting list." : "FHRG has no list for this service yet, so add your own."} Anyone from the authority can rename, take out or add to it. A renamed function keeps its link to the Climate Toolkit.`), fns,
       d.canEdit && std.length ? h("button", { class: "btn small ghost", type: "button", onclick: once(async () => { await API.call("/api/setup/save", { code: a.code, part: "functions", service, list: std }); route(); }, (e) => toast(e.message)) }, "Go back to the standard list") : null),
     h("div", { class: "stack gap" },
       h("section", { class: "card" }, h("h2", {}, "How mood is worked out"), h("p", { class: "note" }, "Every part of the map has its own method, and each gives one figure from −100 to +100. These weights blend them into the mood in the middle. A change is only reported when two kinds of signal agree."),
@@ -1244,7 +1244,7 @@ async function setupView(page, a) {
 const wordList = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list.join(""));
 function roleCard() {
   return h("section", { class: "card" }, h("h3", {}, "What each role can do"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}), h("th", {}, "Lead"), h("th", {}, "Member"))),
-    h("tbody", {}, [["See your authority's evidence and results", "Yes", "Yes"], ["Read comments, with names removed", "Yes", "Yes"], ["Write readings and notes", "Yes", "Yes"], ["Run surveys and enter forms", "Yes", "No"], ["Add officer notes and results", "Yes", "No"]].map((r) => h("tr", {}, r.map((x) => h("td", {}, x))))))));
+    h("tbody", {}, [["See and change your authority's data", "Yes", "Yes"], ["Read comments, with names removed", "Yes", "Yes"], ["Run surveys, plan campaigns and write notes", "Yes", "Yes"], ["Release a councillor briefing", "Yes", "No"], ["Use the election setting", "Yes", "No"], ["Turn Works and weather on or off", "Yes", "No"]].map((r) => h("tr", {}, r.map((x) => h("td", {}, x))))))));
 }
 function compareCard(a, d, street) {
   const m = d.benchmark;
@@ -1346,7 +1346,7 @@ async function worksPanel(body, a) {
   const m = saveNote();
   const change = async (path) => { try { await API.call(path, { code: a.code }); route(); } catch (e) { said(m, e.message, "err"); } };
   const dates = [w.uploaded ? `Records uploaded to the Climate Toolkit on ${fmtDate(w.uploaded)}${w.to ? `, running to ${fmtDate(w.to)}` : ""}.` : "", w.weatherTo ? `Weather to ${fmtDate(w.weatherTo)}.` : ""].filter(Boolean).join(" ");
-  add(clear(body), h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Use our Climate Toolkit records"), h("p", {}, "Only your authority's lead can turn this on, and it can be turned off at any time.")), h("span", { class: `pill ${w.on ? "good" : ""}` }, w.on ? "On" : "Off")),
+  add(clear(body), h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Use our Climate Toolkit records"), h("p", {}, "Only your authority's lead can turn this on, and the lead or a site administrator can turn it off at any time, which removes what's held.")), h("span", { class: `pill ${w.on ? "good" : ""}` }, w.on ? "On" : "Off")),
     !w.ready ? h("p", {}, "Clarion isn't connected to the Climate Toolkit yet.") : h("p", {}, "Clarion reads weekly job totals by function and ward, and weather events, for your authority only. It keeps no street names or job details, and no other authority sees them."),
     w.problem ? h("div", { class: "callout crit", role: "alert" }, w.problem) : null, dates ? h("p", { class: "note" }, `${dates} Clarion checks for new records each day.`) : null, w.on && !w.problem && !w.figures ? h("p", { class: "note" }, w.uploaded ? "None of your records are from the last 16 months." : "Your records are being read. Come back in a few minutes.") : null, m,
     w.ready && !w.on && w.canTurnOn ? h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => change("/api/works/on") }, "Turn this on")) : null,

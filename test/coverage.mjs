@@ -115,10 +115,10 @@ r = await api("/api/coverage/get", { code: WSX });
 ok(r.status === 401, "this needs a sign-in");
 ok((await api("/api/coverage/get", { code: WSX }, kirk)).status === 403, "and it's only for your own authority");
 r = await api("/api/coverage/get", { code: WSX }, member);
-ok(r.ready && !r.canEdit && !r.searchReady && r.sources.length === 0 && r.automatic.length === 5, "a member can read it, and the automatic sources are listed");
+ok(r.ready && r.canEdit && !r.searchReady && r.sources.length === 0 && r.automatic.length === 5, "a member of the authority can read and change it, and the automatic sources are listed");
 ok(r.audiences["Local Newspaper"].known && r.audiences["Local Newspaper"].likelihoods.length === 5 && r.audiences["Local Newspaper"].likelihoods.every((x) => x.label !== "Likely to vote"), "with the audience worked out from the library");
 ok(r.audiences["Social Media"].known && r.audiences["Local Television"].known && r.audiences["Local Television"].note === "", "including Ofcom's local news figures");
-ok((await api("/api/coverage/source", { code: WSX, name: "X", type: "Local Newspaper" }, member)).status === 403, "a member can't change the sources");
+ok((await api("/api/coverage/source", { code: WSX, name: "X", type: "Local Newspaper" }, kirk)).status === 403 && (await api("/api/coverage/source", { code: WSX, name: "", type: "Local Newspaper" }, member)).status === 400, "another authority can't change the sources, while a member of this one gets as far as the checks");
 ok((await api("/api/coverage/source", { code: WSX, name: "", type: "Local Newspaper" }, lead)).status === 400 && (await api("/api/coverage/source", { code: WSX, name: "X", type: "Carrier pigeon" }, lead)).status === 400, "a source needs a name and a kind");
 
 r = await api("/api/coverage/source", { code: WSX, name: "The Testhaven Courier", type: "Local Newspaper", domain: "https://www.testhavencourier.example/news", reach: "18,400", reachUnit: "copies", reachFrom: "ABC certificate", leaning: "Centre right", stance: "Usually critical", campaign: ["Potholes", "Made up"] }, lead);
@@ -131,7 +131,7 @@ ok(changed.id === radio.id && changed.name === "Regional TV news" && changed.rea
 
 r = await api("/api/coverage/assess", { code: WSX, source: courier.id, date: "2026-10-30", summary: "Front-page item on repairs", topic: "Potholes", relevance: "High", tone: "Critical", prominence: "Front page or lead", functions: ["cw", "cl"] }, lead);
 ok(r.assessment.reach === 18400, "an assessment is saved");
-ok((await api("/api/coverage/assess", { code: WSX, source: courier.id, date: "2026-10-30", summary: "x", topic: "Potholes", relevance: "High", tone: "Critical", prominence: "Inside page" }, member)).status === 403, "a member can't add one");
+ok((await api("/api/coverage/assess", { code: WSX, source: courier.id, date: "2026-10-30", summary: "x", topic: "Potholes", relevance: "High", tone: "Critical", prominence: "Inside page" }, kirk)).status === 403, "another authority can't add one");
 r = await api("/api/coverage/get", { code: WSX }, member);
 ok(r.rows.length === 1 && r.rows[0].factor === 0.5 && r.rows[0].adjusted === 9200 && r.rows[0].reach === 18400 && r.rows[0].sourceName === "The Testhaven Courier", "raw and adjusted reach are both shown");
 const assessed = r.rows[0].id;
@@ -175,7 +175,7 @@ ok(r.checks[0].result === "No match", "nothing found says no match");
 const before = search.calls.length;
 await api("/api/coverage/check", { code: WSX, keywords: ["flooding"] }, lead);
 ok(search.calls.length === before, "the same check isn't asked twice in a morning");
-ok((await api("/api/coverage/check", { code: WSX, keywords: ["flooding"] }, member)).status === 403, "members can't run checks");
+ok((await api("/api/coverage/check", { code: WSX, keywords: ["flooding"] }, kirk)).status === 403 && (await api("/api/coverage/check", { code: WSX, keywords: ["flooding"] }, member)).status === 200, "another authority can't run checks, while any member of this one can");
 ok((await api("/api/coverage/check", { code: KIRK, keywords: ["flooding"] }, kirk)).status === 400, "a source needs a web address before it can be checked");
 r = await api("/api/coverage/check", { code: WSX, keywords: ["flooding"], sources: [] }, lead);
 ok(r.status === 400 && /Tick at least one/.test(r.error) && search.calls.length === before, "with nothing ticked, nothing is searched");
@@ -231,7 +231,7 @@ const already = search.calls.length;
 let bought = true;
 for (let i = 0; i < 210; i++) bought = bought && (await api("/api/coverage/check", { code: WSX, keywords: ["cycling"] }, lead)).status === 200;
 ok(bought && search.calls.length === already, "an answer already held doesn't use up the day's allowance");
-ok((await api("/api/coverage/unassess", { code: WSX, id: assessed }, member)).status === 403 && (await api("/api/coverage/unassess", { code: WSX, id: assessed }, lead)).status === 200, "only a lead can remove an assessment");
+ok((await api("/api/coverage/unassess", { code: WSX, id: assessed }, kirk)).status === 403 && (await api("/api/coverage/unassess", { code: WSX, id: assessed }, member)).status === 200, "only the authority's own people can remove an assessment");
 
 // ---- the screens
 await api("/api/coverage/assess", { code: WSX, source: courier.id, date: "2026-10-30", summary: "Front-page item on repairs", topic: "Potholes", relevance: "High", tone: "Critical", prominence: "Front page or lead", functions: ["cw"] }, lead);
@@ -336,7 +336,7 @@ await see(d, /On to the next one/);
 ok((await api("/api/coverage/get", { code: WSX }, lead)).rows.length === waiting + 1 && reachBox().value === "18400", "a double click saves once, and a reach typed for one piece doesn't carry over");
 dom = await open(member, `#said/${WSX}/latest`); d = dom.window.document;
 await see(d, /Latest assessments/);
-ok(!button(d, "Search and assess") && !button(d, "Remove") && button(d, "Sources"), "a member can read but not assess");
+ok(button(d, "Search and assess") && button(d, "Remove") && button(d, "Sources"), "a member of the authority can assess and remove, like its lead");
 dom = await open(member, `#dash/${WSX}`, "/api/coverage/summary"); d = dom.window.document;
 await see(d, /Mood reading/);
 ok(!/Out of order/.test(text(d.querySelector(".main"))), "the Dashboard still opens if the assessments can't be read");

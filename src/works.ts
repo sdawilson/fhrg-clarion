@@ -13,7 +13,7 @@ import type { Member } from "./accounts";
 import type { Config } from "./config";
 import { FUNCTIONS, loadAssessments, roadsOnly } from "./coverage";
 import { looksPersonal } from "./enquiries";
-import { canEdit, isOwnLead, sameAuthority, type Pilot } from "./pilots";
+import { canManage, isOwnLead, sameAuthority, type Pilot } from "./pilots";
 import { latestReadings } from "./reading";
 import { savePretty, storageJson } from "./storage";
 import { interviewedOnly, streetSummaries } from "./surveys";
@@ -279,7 +279,7 @@ export async function worksPage(c: Config, me: Member, p: Pilot, held: Held, nam
   for (const a of assessments) if (a.relevance !== "None") press[mondayOf(a.date)] = (press[mondayOf(a.date)] ?? 0) + 1;
   return {
     ready: toolkitReady(c), on: held.on, by: held.by, at: held.at, checked: held.checked, uploaded: held.uploaded, from: held.from, to: held.to, weatherTo: held.weatherTo, problem: held.problem,
-    canTurnOn: canTurnOn(me, p), canTurnOff: canEdit(me, p),
+    canTurnOn: canTurnOn(me, p), canTurnOff: canManage(me, p),
     figures: held.on && held.weeks.length ? worksFigures(held, press, readings.filter((r) => r.status === "ready"), streets, londonToday(), names) : null,
   };
 }

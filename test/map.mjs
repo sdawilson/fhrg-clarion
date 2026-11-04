@@ -81,8 +81,8 @@ ok((await api("/api/map", { code: WSX }, kit)).status === 403, "and it's only fo
 let r = await api("/api/map", { code: WSX }, lead);
 ok(r.canEdit === true && r.tree.id === "root" && r.months.length > 3 && r.functions.length === 13, "a lead gets the map");
 ok((await api("/api/map", { code: WSX }, boss)).canEdit === true, "and so does a site administrator");
-ok((await api("/api/map", { code: WSX }, member)).canEdit === false, "a member can read it");
-ok((await api("/api/setup/save", { code: WSX, part: "partners", list: [{ name: "Acme" }] }, member)).status === 403, "a member can't change Set-up");
+ok((await api("/api/map", { code: WSX }, member)).canEdit === true && (await api("/api/map", { code: WSX }, member)).isLead === false, "a member of the authority can read and change it, though they aren't its lead");
+ok((await api("/api/setup/save", { code: WSX, part: "partners", list: [{ name: "Acme" }] }, kit)).status === 403, "another authority can't change its Set-up");
 r = await api("/api/setup/get", { code: WSX }, lead);
 const std = r.setup.functions.highways.map((x) => ({ ...x }));
 std[0].name = "Roads"; std.pop(); std.push({ name: "Our own" });
@@ -115,7 +115,7 @@ r = await api("/api/map", { code: WSX, month }, lead);
 ok(r.pieces.length === 1, "taking the partner out doesn't lose the piece");
 
 // ---- issues and the calendar
-ok((await api("/api/issue/set", { code: WSX, topic: "Potholes" }, member)).status === 403, "a member can't confirm an issue");
+ok((await api("/api/issue/set", { code: WSX, topic: "Potholes" }, kit)).status === 403, "another authority can't confirm an issue here");
 r = await api("/api/issue/set", { code: WSX, topic: "Potholes", status: "confirmed", key: "We are fixing more." }, lead);
 ok(r.issue.status === "confirmed" && r.issue.key === "We are fixing more.", "a lead confirms an issue, with a key message");
 r = await api("/api/issue/set", { code: WSX, topic: "Our own worry", status: "confirmed", own: true }, lead);
@@ -137,7 +137,7 @@ ok((await api("/api/campaign/get", { code: WSX, service: "waste" }, lead)).actio
 
 // ---- campaigns
 const plan = (extra) => ({ code: WSX, name: "Pothole promise", topic: "Potholes", messages: ["We are fixing more."], start: "2027-01-01", end: "2027-02-28", budget: "12,500", ...extra });
-ok((await api("/api/campaign/save", plan(), member)).status === 403, "a member can't start a campaign");
+ok((await api("/api/campaign/save", plan(), kit)).status === 403 && (await api("/api/campaign/save", plan({ name: "" }), member)).status === 400, "another authority can't start a campaign here, while a member of this one gets as far as the checks");
 ok((await api("/api/campaign/save", plan({ name: "" }), lead)).status === 400 && (await api("/api/campaign/save", plan({ topic: "" }), lead)).status === 400, "a campaign needs a name and a topic");
 ok((await api("/api/campaign/save", plan({ end: "" }), lead)).status === 400, "and an end date");
 ok((await api("/api/campaign/save", plan({ end: "2026-12-01" }), lead)).status === 400, "that isn't before it starts");
@@ -202,10 +202,10 @@ ok((await api("/api/map", { code: WSX }, lead)).planned.length === 0, "on the ma
 ok((await api("/api/action/save", { code: WSX, title: "x", date: "2027-01-12" }, lead)).status === 409 && (await api("/api/issue/set", { code: WSX, topic: "Potholes" }, lead)).status === 409 && (await api("/api/action/remove", { code: WSX, id: item }, lead)).status === 409, "and nothing can be changed");
 ok((await api("/api/campaign/save", plan(), lead)).status === 409 && (await api("/api/campaign/remove", { code: WSX, id: promise.id }, lead)).status === 409, "campaigns included");
 ok(r.held.length === 1 && r.held[0].title === "Already held" && Object.keys(r.held[0]).sort().join() === "actual,date,id,planned,title", "but actions already held are listed, for their costs");
-ok((await api("/api/campaign/get", { code: WSX }, boss)).held.length === 0 && (await api("/api/campaign/get", { code: WSX }, member)).held.length === 0, "for the authority's own leads only");
+ok((await api("/api/campaign/get", { code: WSX }, boss)).held.length === 0 && (await api("/api/campaign/get", { code: WSX }, member)).held.length === 1, "for the authority's own people only");
 ok((await api("/api/action/actual", { code: WSX, id: heldOne.id, actual: "480" }, lead)).action.actual === 480, "so what one really cost can still be added");
 ok((await api("/api/action/actual", { code: WSX, id: comingOne.id, actual: "1" }, lead)).status === 409, "but not for one that hasn't happened");
-ok((await api("/api/action/actual", { code: WSX, id: heldOne.id, actual: "1" }, boss)).status === 403 && (await api("/api/action/actual", { code: WSX, id: heldOne.id, actual: "1" }, member)).status === 403, "or by anyone but the authority's own leads");
+ok((await api("/api/action/actual", { code: WSX, id: heldOne.id, actual: "1" }, boss)).status === 403 && (await api("/api/action/actual", { code: WSX, id: heldOne.id, actual: "480" }, member)).action.actual === 480, "by anyone from the authority, but not a site administrator from outside");
 ok(!(await api("/api/campaign/get", { code: WSX }, lead)).actions.length, "and the campaign stays held back");
 await api("/api/briefing/election", { code: WSX, on: false }, lead);
 r = await api("/api/campaign/get", { code: WSX }, lead);
@@ -213,7 +213,7 @@ ok(r.actions.length > 1 && r.campaigns.some((x) => x.id === promise.id) && r.act
 
 // ---- petitions and questions
 const Q = await api("/api/map", { code: WSX, month }, lead);
-ok((await api("/api/rate", { code: WSX, key: "petition|A", tone: "Critical" }, member)).status === 403, "a member can't rate a petition");
+ok((await api("/api/rate", { code: WSX, key: "petition|A", tone: "Critical" }, kit)).status === 403, "another authority can't rate a petition here");
 ok((await api("/api/rate", { code: WSX, key: "something|else", tone: "Critical" }, lead)).status === 400, "and only petitions and questions can be rated");
 ok((await api("/api/rate", { code: WSX, key: "petition|A", tone: "Critical" }, lead)).ok === true && JSON.parse(getText(`clarion/authorities/${WSX}/ratings.json`))["petition|A"] === "Critical", "an officer's rating is kept");
 const mapWith = (rated, monthly, questions = []) => t.buildMap({ ...t.demoMap && baseData(), rated, monthly, questions }, t.readFilters({}, "2026-11-02", []));
@@ -318,7 +318,7 @@ r = await api("/api/survey/save", { code: WSX, id: made.id, locals: [{ text: "Ho
   { text: "Diversions are on one page.", topic: "", how: ["On the page after replying by link", "Printed on the form"], aware: false },
 ] }, lead);
 ok(r.survey.tell.length === 2 && r.survey.locals[0].fn === "cw" && r.survey.locals[0].topic === "Potholes", "a local question has a function and a topic, and a survey has messages");
-ok((await api("/api/survey/save", { code: WSX, id: made.id, tell: [] }, member)).status === 403, "a member can't change them");
+ok((await api("/api/survey/save", { code: WSX, id: made.id, tell: [] }, kit)).status === 403, "another authority can't change them");
 let qs = t.allQuestions(r.survey);
 ok(qs.some((q) => q.id === "k1" && /^Did you know\? You can report/.test(q.text) && q.options.join() === "Yes,No"), "\"Did you know?\" becomes a question, asked before the message is given");
 ok(qs.findIndex((q) => q.id === "k1") < qs.findIndex((q) => q.part === "about"), "before the questions about the person");
@@ -404,7 +404,7 @@ ok(r.authorities.every((x) => "mood" in x && "pieces" in x && "enquiries" in x) 
 // ---- a note's expected effect
 const noteFile = `clarion/authorities/${WSX}/notes/20261001000000000-aaaaaaaa.json`;
 putText(noteFile, JSON.stringify({ id: "20261001000000000-aaaaaaaa", code: WSX, status: "ready", stage: "Ready", created: "2026-10-01T00:00:00.000Z", updated: "2026-10-01T00:00:00.000Z", by: "x", input: { title: "T", url: "", text: "" }, impacts: [], dataUsed: [], change: { title: "T" } }));
-ok((await api("/api/note/effect", { code: WSX, id: "20261001000000000-aaaaaaaa", effect: 20, topic: "Potholes" }, member)).status === 403, "a member can't set a note's expected effect");
+ok((await api("/api/note/effect", { code: WSX, id: "20261001000000000-aaaaaaaa", effect: 20, topic: "Potholes" }, kit)).status === 403 && (await api("/api/note/effect", { code: WSX, id: "20261001000000000-aaaaaaaa", effect: 10, topic: "Potholes" }, member)).note?.effect === 10, "another authority can't set a note's expected effect, while a member of this one can");
 r = await api("/api/note/effect", { code: WSX, id: "20261001000000000-aaaaaaaa", effect: 20, topic: "Potholes" }, lead);
 ok(r.note.effect === 20 && r.note.topic === "Potholes", "an officer can");
 ok((await api("/api/note/effect", { code: WSX, id: "20261001000000000-aaaaaaaa", effect: 500 }, lead)).status === 400, "within limits");
@@ -782,19 +782,19 @@ ok(/No campaign/.test(text(d.querySelector(".main table"))) && /£500/.test(text
 d = browser(`/#a/${WSX}`, member);
 await until(() => d.querySelector(".stage"), "the member's map");
 await until(() => node(d, "Press and magazines"), "the circles");
-ok(!button(d, "Add a mention") && clean(d), "a member gets no way to add a mention");
+ok(button(d, "Add a mention") && clean(d), "a member of the authority can add a mention, like its lead");
 go(d, `#campaign/${WSX}`);
 await until(() => d.querySelector(".ev") || d.querySelector(".cal"), "the member's calendar");
 await until(() => d.querySelector(".ev"), "an action");
 d.querySelector(".ev").click();
 await until(() => /Came from|What it is/.test(text(d.querySelector(".panel"))), "the action");
-ok(!button(d, "New campaign") && !d.querySelector(".ev-add") && [...d.querySelectorAll(".panel input, .panel select")].every((x) => x.disabled), "or change an action");
+ok(d.querySelector(".ev-add") && d.querySelectorAll(".panel input, .panel select").length && [...d.querySelectorAll(".panel input, .panel select")].every((x) => !x.disabled), "and add to the calendar or change an action");
 go(d, `#issues/${WSX}`);
 await shows(d, /Proposed by Clarion/);
-ok(!button(d, "Confirm"), "or confirm an issue");
+ok(d.querySelectorAll(".issue-row button, button").length && !/can't change/.test(text(d.querySelector(".main"))), "and act on issues");
 d = browser(`/#setup/${WSX}`, member);
 await shows(d, /Functions for Highways/);
-ok(!button(d, "Add") && !button(d, "Turn this on") && [...d.querySelectorAll(".er input")].every((x) => x.disabled), "or change Set-up");
+ok(button(d, "Add") && !button(d, "Turn this on") && [...d.querySelectorAll(".er input")].every((x) => !x.disabled), "and change Set-up, though turning Works and weather on stays with the lead");
 d = browser(`/#briefings/${WSX}`, boss);
 await shows(d, /Where we are/);
 ok(true, "a site administrator can read the officers' briefing");

@@ -120,7 +120,7 @@ r = await api("/api/works/get", { code: WSX }, member);
 ok(asked.every((x) => x.url.startsWith(`${FOLDER}30/`) && x.key === "toolkit-read-only" && x.method === "GET"), "only that authority's folder is read, with the read-only password, and nothing is changed");
 ok(asked.every((x) => x.redirect === "error"), "a redirect is refused, so the password can't be handed on");
 ok(r.on && r.by === "Lee Lead" && r.figures.weeks.some((w) => w.public > 0) && r.figures.events.some((e) => e.label === "Heavy rain") && r.weatherTo === series.start.slice(0, 0) + r.weatherTo, "the figures and weather events come through");
-ok(!r.canTurnOff, "a member can't turn it off");
+ok(!r.canTurnOff && (await api("/api/works/off", { code: WSX }, member)).status === 403 && (await api("/api/works/get", { code: WSX }, member)).on, "a member can't turn it off, even by asking directly, because that removes what's held");
 const stored = getText(files("").find((k) => k.endsWith(`${WSX}/works.json`)));
 ok(!/SECRET|Secret|123\.45|Tiny Ward/.test(stored) && stored.includes("Moorside"), "nothing is saved but totals: no streets, references or costs");
 const reads = asked.length;
