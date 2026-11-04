@@ -69,8 +69,8 @@ const q = e.signals.questions.data;
 ok(q.length === 1 && /MP for Horsham \(Horsham\)/.test(q[0].member) && q[0].url.endsWith("/2026-10-01/12345"), "only this authority's MPs' questions on roads are kept");
 ok(outside.hits.some((u) => /askingMemberId=501\b.*skip=100\b/.test(u)), "each local MP's questions are read page by page, so a busy MP's older ones are found");
 ok(e.gaps.some((g) => /Fault report/.test(g)) && e.gaps.some((g) => /street survey/.test(g)), "gaps are listed");
-ok(r.canEdit === false, "a member can't edit");
-ok((await api("/api/authority", { code: WSX }, lead)).canEdit === true, "a lead can");
+ok(r.canEdit === true, "a member of the authority can edit its data");
+ok((await api("/api/authority", { code: WSX }, lead)).canEdit === true && (await api("/api/authority", { code: WSX }, kirk)).status === 403, "as can a lead, while someone from another authority can't even read it");
 outside.down.add("www.fixmystreet.com");
 r = await api("/api/authority", { code: LINCS }, boss);
 ok(r.evidence.signals.fixMyStreet.ok === false && r.evidence.signals.fixMyStreet.note && r.evidence.signals.petitions.ok === true && r.evidence.figures.condition.length === 3, "a source that's down says so, and leaves the others standing");
@@ -83,7 +83,7 @@ ok(r.evidence.figures.condition.find((x) => x.roadClass === "A").region === 8.5,
 
 
 // ---- officers' additions
-ok((await api("/api/facts/survey", { code: WSX, year: 2026, measure: "x", score: 5, source: "y" }, member)).status === 403, "a member can't add a survey result");
+ok((await api("/api/facts/survey", { code: WSX, year: 2026, measure: "x", score: 5, source: "y" }, kirk)).status === 403, "someone from another authority can't add a survey result");
 ok((await api("/api/facts/survey", { code: WSX, year: 2026, measure: "Roads", score: 500, source: "y" }, lead)).status === 400, "a score above the maximum is refused");
 ok((await api("/api/facts/survey", { code: WSX, year: 2026, measure: "Roads", score: 50, source: "y", url: "javascript:alert(1)" }, lead)).status === 400, "a link that isn't https is refused");
 r = await api("/api/facts/survey", { code: WSX, year: 2026, measure: "Residents' survey: roads", score: 44, outOf: 100, responses: 800, source: "Council survey" }, lead);
@@ -92,7 +92,7 @@ r = await api("/api/authority", { code: WSX }, member);
 ok(r.evidence.surveys[0].year === 2026 && r.evidence.surveys[0].score === 44, "and it appears straight away, newest first");
 await api("/api/facts/notes", { code: WSX, notes: "SECRET-CONTRACT ends March 2027" }, lead);
 ok((await api("/api/authority", { code: WSX }, boss)).facts.notes.includes("SECRET-CONTRACT"), "notes are saved");
-ok(!JSON.stringify(await api("/api/authority", { code: WSX }, member)).includes("SECRET-CONTRACT"), "and only editors are sent them");
+ok(JSON.stringify(await api("/api/authority", { code: WSX }, member)).includes("SECRET-CONTRACT") && !JSON.stringify(await api("/api/authority", { code: KIRK }, boss)).includes("SECRET-CONTRACT"), "and sent to the authority's own people, not with another authority's data");
 
 // ---- a mood reading
 const waitFor = (path, code, id) => until(async () => { const j = (await api(path, { code, id }, boss)); const o = j.reading || j.note; return o && o.status !== "working" ? o : null; }, path);

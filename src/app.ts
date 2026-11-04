@@ -119,7 +119,7 @@ import { buildMap, readFilters } from "./mood";
 import { officersBriefing, officersWord } from "./officers";
 import { DEFAULT_SERVICE, SERVICES, loadSetup, loadWeights, saveSetup, saveWeights, serviceId, standardFunctions } from "./setup";
 import { dropIssue, held as heldPlans, loadPlans, removeAction, removeCampaign, saveAction, saveCampaign, setActual, setIssue, syncTell, type Action, type Campaign } from "./campaign";
-import { canEdit, canSee, isMember, isOwnLead, pilotByCode, pilotsFor, type Pilot } from "./pilots";
+import { canEdit, canManage, canSee, isMember, isOwnLead, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
 import { areaOf, outcodeOf, whereIs } from "./postcodes";
 import { qrCode } from "./qr";
@@ -392,7 +392,7 @@ async function editor(c: Config, request: Request, limit: number): Promise<{ me:
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, limit);
   const p = pilotFor(me, b.code);
-  if (!canEdit(me, p)) throw new FriendlyError("Only your authority's FHRG lead or a site administrator can change this.", 403);
+  if (!canEdit(me, p)) throw new FriendlyError("Only someone from this authority or a site administrator can change this.", 403);
   return { me, p, b };
 }
 
@@ -731,7 +731,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/enquiries/page": { const { p, b } = await editor(c, request, 1000); await savePage(c, p, b.url); return json({ ok: true }); }
         case "/api/works/get": return await handleWorks(c, request);
         case "/api/works/on": { const me = await signedIn(c, request); const b = await readJsonBody(request, 1000); const p = pilotFor(me, b.code); await turnOn(c, me, p); tryAgainNow(`works|${p.code}`); await briefly(`works|${p.code}`, null, () => refreshWorks(c, p), (x) => !!x.problem); return json({ ok: true }); }
-        case "/api/works/off": { const { p } = await editor(c, request, 1000); await turnOff(c, p); return json({ ok: true }); }
+        case "/api/works/off": { const { me, p } = await editor(c, request, 1000); if (!canManage(me, p)) throw new FriendlyError("Turning this off removes what's held, so only your authority's FHRG lead or a site administrator can do it.", 403); await turnOff(c, p); return json({ ok: true }); }
         case "/api/abc/find": return await handleAbc(c, request, "find");
         case "/api/abc/status": return await handleAbc(c, request, "status");
         case "/api/abc/save": return await handleAbc(c, request, "save");
