@@ -4,7 +4,7 @@
 // demonstration can't drift from how Clarion works. Links are left blank, so nothing points at a made-up site.
 
 import {
-  FUNCTIONS, LEANINGS, PROMINENCE, RATE_MEASURES, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, summarise as summariseCoverage, withWeights,
+  CHANNELS, FUNCTIONS, LEANINGS, PROMINENCE, RATE_MEASURES, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, adultsByAge, audienceFor, channelsFrom, summarise as summariseCoverage, withWeights,
   type Assessment, type Rate, type Source,
 } from "./coverage";
 import { ELECTION_NOTE, longDate, wordCopy, type Briefing } from "./briefings";
@@ -171,6 +171,12 @@ const PIECES: Assessment[] = [
 ];
 // Published national rates, the same ones the data library holds, with no links
 const DEMO_RATES: Rate[] = ([[0,16,19,7.6],[0,20,24,9],[0,25,29,9.9],[0,30,34,12.3],[0,35,39,14.4],[0,40,44,18.4],[0,45,49,19.7],[0,50,54,21.7],[0,55,59,23.8],[0,60,64,27.4],[0,65,69,31.3],[0,70,74,35.6],[0,75,79,39.3],[0,80,84,41.4],[0,85,null,39.7],[1,16,19,20.8],[1,20,24,31.7],[1,25,29,34.9],[1,30,34,41.8],[1,35,39,41],[1,40,44,40.6],[1,45,49,46],[1,50,54,48],[1,55,59,45.8],[1,60,64,46.6],[1,65,69,44.4],[1,70,74,39.6],[1,75,79,32.6],[1,80,84,30.8],[1,85,null,16],[2,16,19,9.8],[2,20,24,11.7],[2,25,29,14],[2,30,34,15.4],[2,35,39,18.7],[2,40,44,22.3],[2,45,49,26],[2,50,54,27.5],[2,55,59,30.8],[2,60,64,36],[2,65,69,41.4],[2,70,74,47.9],[2,75,79,54.2],[2,80,84,56.2],[2,85,null,53.7],[9,17,20,32.5],[9,21,29,60.7],[9,30,39,72.1],[9,40,49,80.6],[9,50,59,83.7],[9,60,69,83.8],[9,70,null,74.3],[10,16,24,70.8],[10,25,34,71.1],[10,35,44,68.5],[10,45,54,71.4],[10,55,64,71],[10,65,74,71.9],[10,75,84,61.2],[10,85,null,35.7],[11,16,24,11.5],[11,25,34,11],[11,35,44,11.2],[11,45,54,12.3],[11,55,64,11.2],[11,65,74,7.8],[11,75,84,4.2],[11,85,null,1.7],[12,16,24,28.3],[12,25,34,37.5],[12,35,49,40.9],[12,50,64,41.5],[12,65,74,43],[12,75,null,34.3],[13,16,24,9],[13,25,34,22],[13,35,44,38],[13,45,54,33],[13,55,64,24],[13,65,null,31],[3,16,24,5],[3,25,34,9],[3,35,44,9],[3,45,54,13],[3,55,64,15],[3,65,74,14],[3,75,null,23],[4,16,24,59],[4,25,34,59],[4,35,44,52],[4,45,54,52],[4,55,64,40],[4,65,74,38],[4,75,null,26],[5,16,24,25],[5,25,34,29],[5,35,44,38],[5,45,54,39],[5,55,64,51],[5,65,74,59],[5,75,null,64],[7,16,24,18],[7,25,34,17],[7,35,44,27],[7,45,54,26],[7,55,64,28],[7,65,74,31],[7,75,null,33]] as [number, number, number | null, number][]).map(([m, age_from, age_to, value]) => ({ measure: RATE_MEASURES[m], age_from, age_to, value, publisher: "", year: "2025" }));
+// More of the same published Ofcom figures, for the picture of one resident
+const HEARD_BY_AGE: Record<string, number[]> = {
+  word: [42, 49, 49, 61, 55, 60, 63], sites: [20, 27, 29, 33, 30, 30, 23], bbc: [18, 27, 26, 27, 24, 25, 24], print: [10, 10, 16, 14, 17, 23, 30], messaging: [15, 16, 22, 18, 19, 21, 19], search: [29, 29, 22, 25, 21, 19, 16], video: [25, 16, 11, 8, 4, 4, 1],
+};
+const AGE_BANDS: [number, number | null][] = [[16, 24], [25, 34], [35, 44], [45, 54], [55, 64], [65, 74], [75, null]];
+const demoChannels = (): Rate[] => CHANNELS.flatMap(({ key, measure }) => (HEARD_BY_AGE[key] ?? []).map((value, i) => ({ measure, age_from: AGE_BANDS[i][0], age_to: AGE_BANDS[i][1], value, publisher: "", year: "2025" })));
 const DEMO_CHECK = { ready: true, why: "", from: COUNTY_DAY(14), to: COUNTY_DAY(0), left: 46, checks: [
   { source: "s1", name: "The Northbridge Courier", keyword: "potholes", result: "Found", date: COUNTY_DAY(3) },
   { source: "s1", name: "The Northbridge Courier", keyword: "Moor Lane", result: "Found, no date", date: "" },
@@ -304,7 +310,7 @@ export function buildPack() {
           questions: { ok: true, source: "MPs' written questions", url: "", note: "", data: [{ date: "2026-10-09", heading: "Roads: Northbridge", member: "The MP for Dale Valley", text: "", url: "" }] },
         },
         surveys: [{ year: 2025, measure: "Condition of highways", score: 29, outOf: 100, responses: 612, source: "Residents' survey 2025" }, { year: 2025, measure: "Overall satisfaction (local)", score: 46, outOf: 100, responses: 612, source: "Residents' survey 2025" }],
-        streets: street ? [street] : [], gaps: ["Fault report counts by category and month"], gathered: WHEN,
+        streets: street ? [street] : [], contacts: enquiries.view.ready ? enquiries.view.rows : [], gaps: ["Fault report counts by category and month"], gathered: WHEN,
       },
       facts: { notes: "", updated: "", updatedBy: "" }, canEdit: true, reading, working: null, adults: ADULTS, benchmark: { authorities: 18, satisfied: 34, worse: 41 },
     },
@@ -320,6 +326,7 @@ export function buildPack() {
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
     coverage: demoCoverage(census), enquiries, works: demoWorks(street?.satisfied ?? null), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
+    picture: { ages: AGE_BANDS.map(([from, to]) => (to ? `${from} to ${to}` : `${from} or over`)), adults: census ? adultsByAge(census) : null, channels: channelsFrom([...DEMO_RATES, ...demoChannels()]), announcements: 3, posts: 5, weather: { events: 2, latest: "Heavy rain" } },
     attention: comparison, qr: { url: "", rows: qrCode("Northbridge is a demonstration, so this code leads nowhere.") },
     ...demoBriefing(street?.satisfied ?? null, street?.responses ?? 0, today),
   };

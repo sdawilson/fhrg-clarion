@@ -32,6 +32,7 @@
 //   POST /api/briefing/election    {code, on}: the pre-election setting
 //   POST /api/coverage/get         {code}: sources, assessments, and what's been read automatically
 //   POST /api/coverage/summary     {code}: the last four weeks' assessments, for the Summary page
+//   POST /api/picture              {code}: what the Summary page's two pictures need beyond those
 //   POST /api/coverage/source      {code, ...source}: add or change a source
 //   POST /api/coverage/unsource    {code, id}: take a source off
 //   POST /api/coverage/assess      {code, ...assessment}: record an assessment
@@ -88,7 +89,7 @@ import { adminOverview, benchmark } from "./admin";
 import { MAX_LISTED, PAUSED, approveBriefing, canApprove, copyBriefing, forReader, getBriefing, listBriefings, loadElection, removeBriefing, saveBriefing, setElection, startBriefing, wordCopy, type Briefing, type Election } from "./briefings";
 import { loadComparison } from "./comparison";
 import {
-  FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
+  FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, adultsByAge, audienceFor, channelsFrom, checkCoverage, loadAssessments, loadRates, loadSources,
   removeAssessment, removeSource, saveAssessment, saveSource, summarise, withWeights, type Rate,
 } from "./coverage";
 import { monthSpend } from "./claude";
@@ -105,7 +106,7 @@ import { announcements, fixMyStreetUrl, loadSignals } from "./signals";
 import { loadSites } from "./sites";
 import { MAX_SCAN_CHARS, getHelp, sharedTopics, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
-  addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, changeDay, closeSurvey, countArea, createSurvey, formNumber, listSurveys, loadAnswers, loadAreas,
+  AGES, addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, changeDay, closeSurvey, countArea, createSurvey, formNumber, listSurveys, loadAnswers, loadAreas,
   loadCensus, loadSurvey, openSurvey, publicSelf, publicSurvey, readAnswers, readCsv, saveSurvey, setSelf, surveyByAccess, surveyBySelf, surveyPage, textQuestionIds, validAccess, validSelf, type Survey,
 } from "./surveys";
 import { FriendlyError, briefly, tryAgainNow, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
@@ -219,6 +220,23 @@ async function handleCoverageSummary(c: Config, request: Request): Promise<Respo
   const p = pilotFor(me, b.code);
   const [sources, assessments] = await Promise.all([loadSources(c, p.code), loadAssessments(c, p.code)]);
   return json({ summary: summarise(withWeights(assessments, sources), londonToday()) });
+}
+
+// Extras for the pictures. Like the coverage page, none of them may hold up the Summary
+async function handlePicture(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const [census, rates, gov, topics, enquiries, works] = await Promise.all([
+    briefly(`census|${p.code}`, null, () => loadCensus(c, p.code), (x) => x === null), briefly("audience-rates", [] as Rate[], () => loadRates(c), (x) => !x.length),
+    briefly("announcements", null, () => announcements()), sharedTopics(c), loadEnquiries(c, p.code), loadWorks(c, p.code),
+  ]);
+  const posts = await councilNews(p, enquiries.page || p.newsPage, topics);
+  const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), recent = (list: { date: string }[] | null) => (list ? list.filter((x) => x.date >= since).length : null);
+  return json({
+    ages: AGES.map(([age]) => age), adults: census ? adultsByAge(census) : null, channels: channelsFrom(rates), announcements: recent(gov), posts: recent(posts),
+    weather: works.on ? { events: works.events.filter((e) => e.end >= since).length, latest: works.events.at(-1)?.label ?? "" } : null,
+  });
 }
 
 async function handleAdminOverview(c: Config, request: Request): Promise<Response> {
@@ -629,6 +647,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/abc/save": return await handleAbc(c, request, "save");
         case "/api/coverage/get": return await handleCoverage(c, request);
         case "/api/coverage/summary": return await handleCoverageSummary(c, request);
+        case "/api/picture": return await handlePicture(c, request);
         case "/api/coverage/source": { const { me, p, b } = await editor(c, request, 3000); return json({ source: await saveSource(c, me, p, b, await sharedTopics(c)) }); }
         case "/api/coverage/unsource": { const { p, b } = await editor(c, request, 1000); await removeSource(c, p, b.id); return json({ ok: true }); }
         case "/api/coverage/assess": { const { me, p, b } = await editor(c, request, 3000); return json({ assessment: await saveAssessment(c, me, p, b, await sharedTopics(c)) }); }

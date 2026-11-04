@@ -215,7 +215,11 @@ export function summarise(rows: Row[], today: string) {
     const list = now.filter((r) => r.topic === topic);
     return { topic, pieces: list.length, reach: total(list, "reach"), adjusted: total(list, "adjusted"), critical: list.filter((r) => r.tone === "Critical").length, supportive: list.filter((r) => r.tone === "Supportive").length };
   }).sort((a, b) => b.pieces - a.pieces || b.adjusted - a.adjusted || a.topic.localeCompare(b.topic));
-  return { pieces: now.length, previous: earlier.length, reach: total(now, "reach"), adjusted: total(now, "adjusted"), topics };
+  const byType = SOURCE_TYPES.map((type) => {
+    const list = now.filter((r) => r.sourceType === type);
+    return { type, pieces: list.length, critical: list.filter((r) => r.tone === "Critical").length, supportive: list.filter((r) => r.tone === "Supportive").length };
+  }).filter((x) => x.pieces);
+  return { pieces: now.length, previous: earlier.length, reach: total(now, "reach"), adjusted: total(now, "adjusted"), topics, byType };
 }
 
 // ----- who a source reaches
@@ -242,7 +246,22 @@ const LIKELIHOODS = [
 const SAME_WITHIN = 0.1; // closer than this to all adults, and the two can't be told apart
 const OLDEST_AGE = 90;
 
-export const RATE_MEASURES = [...Object.values(AUDIENCES).flatMap((a) => a!.map((x) => x.measure)), ...LIKELIHOODS.map((l) => l.measure)];
+// The ways people say they get local news. All from one Ofcom question and the same age groups, so they can be set side by side
+export const CHANNELS = [
+  { key: "word", label: "Word of mouth", measure: `${LOCAL_NEWS}: Word of mouth (family/ friends/ colleagues/ neighbours)` },
+  { key: "social", label: "Social media", measure: `${LOCAL_NEWS}: Social media such as Facebook, X (formerly Twitter) or Instagram, etc.` },
+  { key: "tv", label: "Television", measure: `${LOCAL_NEWS}: Television` },
+  { key: "sites", label: "Local paper websites", measure: `${LOCAL_NEWS}: Websites/ apps of local newspapers` },
+  { key: "bbc", label: "BBC and ITV websites", measure: `${LOCAL_NEWS}: Websites/ apps of TV and radio companies such as BBC or ITV/ STV/ UTV/ ITV Wales` },
+  { key: "radio", label: "Radio", measure: `${LOCAL_NEWS}: Radio` },
+  { key: "print", label: "Printed local papers", measure: `${LOCAL_NEWS}: Printed local newspapers` },
+  { key: "magazines", label: "Local magazines", measure: `${LOCAL_NEWS}: Printed local magazines` },
+  { key: "messaging", label: "WhatsApp and Nextdoor", measure: `${LOCAL_NEWS}: Messaging or neighbourhood apps like WhatsApp or Nextdoor` },
+  { key: "search", label: "Search engines", measure: `${LOCAL_NEWS}: Search engines such as Google, Bing, etc.` },
+  { key: "video", label: "YouTube and video sites", measure: `${LOCAL_NEWS}: Video-sharing platforms such as YouTube, Vimeo, etc.` },
+];
+
+export const RATE_MEASURES = [...new Set([...Object.values(AUDIENCES).flatMap((a) => a!.map((x) => x.measure)), ...LIKELIHOODS.map((l) => l.measure), ...CHANNELS.map((x) => x.measure)])];
 
 export async function loadRates(c: Config): Promise<Rate[]> {
   try {
@@ -271,6 +290,9 @@ export function bandRates(rates: Rate[], measure: string): number[] | null {
     return sum / (last - from + 1);
   });
 }
+
+/** How likely each age group is to get local news each way. A national pattern, for comparing, not a measure of any authority. */
+export const channelsFrom = (rates: Rate[]) => CHANNELS.flatMap(({ key, label, measure }) => { const by = bandRates(rates, measure); return by ? [{ key, label, rates: by.map((n) => Math.round(n)) }] : []; });
 
 export function adultsByAge(census: Census): number[] {
   return AGES.map(([age]) => (census.cells[cellKey(age, "Female")] || 0) + (census.cells[cellKey(age, "Male")] || 0));

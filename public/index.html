@@ -251,6 +251,51 @@ tr.selected td { background: var(--surface-2); }
 .map-zoom button { width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; }
 .map-credit { position: absolute; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.85); padding: 1px 6px; font-size: 0.72rem; }
 .qr { width: 220px; height: 220px; display: block; }
+/* The two pictures at the top of the Summary. A highways officer's own diagram: a roundabout with the authority or one
+   resident in the middle, and every source of opinion on a road leading in. Wider roads carry more. */
+:root { --lean-down: #d9731f; --lean-down-ink: #17212c; --lean-up: #264a6f; --lean-up-ink: #ffffff; --lean-mixed: #7f8ea3; --lean-mixed-ink: #17212c;
+  --band-1-ink: #17212c; --band-2-ink: #17212c; --band-3-ink: #17212c; --band-4-ink: #ffffff; --band-5-ink: #ffffff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --lean-down: #e38a3e; --lean-up: #6ea3e0; --lean-up-ink: #0b1420; --lean-mixed: #5c6b7d; --lean-mixed-ink: #ffffff;
+  --band-1-ink: #ffffff; --band-2-ink: #ffffff; --band-3-ink: #ffffff; --band-4-ink: #0b1420; --band-5-ink: #0b1420; } }
+.pic-card { display: grid; gap: 12px; container-type: inline-size; }
+.pic { position: relative; aspect-ratio: 1000 / 680; }
+.pic-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.pic-lines path, .pic-lines line { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.road { stroke: var(--line-2); stroke-width: 15px; } .road-mark { stroke: var(--surface); stroke-width: 1.5px; stroke-dasharray: 7 9; } .lane { stroke: var(--line-2); stroke-width: 2.5px; }
+.spoke { stroke: var(--line-2); transition: stroke-width 0.3s ease; }
+.pic-middle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 168px; height: 168px; border-radius: 50%; display: grid; place-content: center; justify-items: center; gap: 4px; padding: 14px; text-align: center;
+  background: var(--navy-deep); color: #fff; box-shadow: 0 0 0 7px var(--surface), 0 0 0 22px var(--line-2), 0 0 0 24px var(--surface); }
+.pic-middle strong { font-size: 1.12rem; line-height: 1.15; } .pic-middle span { font-size: 0.84rem; line-height: 1.2; } .pic-middle svg { margin-bottom: 2px; }
+.pic-hub { position: absolute; transform: translate(-50%, -50%); padding: 2px 10px; border-radius: 999px; background: var(--surface); border: 1.5px solid var(--line-2); color: var(--ink-2); font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+.pic-group, .spots { display: contents; }
+.spot { --d: 50px; position: absolute; display: flex; align-items: center; gap: 8px; width: 178px; color: var(--ink); text-decoration: none; }
+.spot.right { transform: translate(calc(var(--d) / -2), -50%); } .spot.left { transform: translate(calc(var(--d) / 2 - 100%), -50%); flex-direction: row-reverse; text-align: right; }
+.spot.above, .spot.below { width: 132px; gap: 4px; justify-items: center; text-align: center; } .spot.above { flex-direction: column-reverse; transform: translate(-50%, calc(var(--d) / 2 - 100%)); } .spot.below { flex-direction: column; transform: translate(-50%, calc(var(--d) / -2)); }
+.spot.above .spot-tip, .spot.below .spot-tip { left: -40px; }
+a.spot:hover .spot-label { text-decoration: underline; }
+.plate { flex: none; width: var(--d); height: var(--d); border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.02rem; border: 2px solid var(--surface); box-shadow: 0 0 0 1.5px var(--line-2); transition: width 0.3s ease, height 0.3s ease, background-color 0.3s ease, color 0.3s ease; }
+.spot-text { display: grid; gap: 1px; min-width: 0; } .spot-label { font-weight: 700; font-size: 0.9rem; line-height: 1.2; }
+.spot-tip:empty { display: none !important; }
+.spot-tip { display: none; position: absolute; z-index: 5; bottom: calc(100% + 6px); left: 0; width: 230px; padding: 7px 10px; border-radius: var(--radius-sm); background: var(--navy-deep); color: #fff; font-size: 0.82rem; font-weight: 400; line-height: 1.3; text-align: left; box-shadow: var(--shadow); }
+.spot.left .spot-tip { left: auto; right: 0; } .spot:hover .spot-tip, .spot:focus-visible .spot-tip { display: block; }
+.lean-down .plate { background: var(--lean-down); color: var(--lean-down-ink); } .lean-up .plate { background: var(--lean-up); color: var(--lean-up-ink); } .lean-mixed .plate { background: var(--lean-mixed); color: var(--lean-mixed-ink); }
+.lean-none .plate { background: var(--surface); color: var(--ink-3); box-shadow: none; border: 1.5px dashed var(--line-2); }
+.band-1 .plate { background: var(--h-s1); color: var(--band-1-ink); } .band-2 .plate { background: var(--h-s2); color: var(--band-2-ink); } .band-3 .plate { background: var(--h-s3); color: var(--band-3-ink); } .band-4 .plate { background: var(--h-s4); color: var(--band-4-ink); } .band-5 .plate { background: var(--h-s5); color: var(--band-5-ink); }
+.pic-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.84rem; color: var(--ink-2); } .pic-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.pic-legend i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid var(--line-2); }
+.age-pick { display: flex; flex-wrap: wrap; gap: 6px; } .age-pick button { padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--line-2); background: var(--surface); color: var(--ink); font-weight: 700; font-size: 0.88rem; cursor: pointer; }
+.age-pick button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.pic-line { font-weight: 700; color: var(--heading); }
+@container (max-width: 800px) {
+  .pic { aspect-ratio: auto; display: grid; gap: 14px; } .pic-lines { display: none; }
+  .pic-middle { position: static; transform: none; width: auto; height: auto; border-radius: var(--radius); box-shadow: none; padding: 12px; }
+  .pic-group { display: grid; gap: 8px; } .pic-hub { position: static; transform: none; justify-self: start; }
+  .spots { display: grid; gap: 8px; } .spot, .spot.left, .spot.right, .spot.above, .spot.below { position: static; transform: none; width: auto; gap: 10px; flex-direction: row; text-align: left; }
+  .plate { width: 54px; height: 54px; font-size: 0.95rem; }
+  .spot-tip, .spot.left .spot-tip { display: block; position: static; width: auto; padding: 0; background: none; color: var(--ink-3); box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) { .spoke, .plate { transition: none; } }
+@media print { .pic-card { break-inside: avoid; } .age-pick { display: none; } }
 .link-box { padding: 10px 12px; border: 1.5px solid var(--line-2); border-radius: var(--radius-sm); background: var(--bg); overflow-wrap: anywhere; font-weight: 700; }
 .entry-row { display: grid; gap: 4px 12px; grid-template-columns: minmax(0, 3fr) 5rem minmax(0, 2fr); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .entry-row.wide { grid-template-columns: minmax(0, 1fr); }
@@ -384,6 +429,7 @@ const Demo = {
       case "/api/authority": return P.authority;
       case "/api/coverage/get": return P.coverage;
       case "/api/coverage/summary": return { summary: P.coverage.summary };
+      case "/api/picture": return P.picture;
       case "/api/enquiries/get": return P.enquiries;
       case "/api/works/get": return P.works;
       case "/api/abc/find": return { titles: P.abcTitles.filter((x) => (b.q || "").length > 2 && x.name.toLowerCase().includes(b.q.toLowerCase())) };
@@ -589,11 +635,145 @@ async function summaryView(page, a) {
     ? [stat("Direction of mood", d.reading?.direction || "Not yet known", d.reading?.direction ? `Reading of ${fmtDate(d.reading.created)}` : "No reading yet"), stat("Satisfied with roads and pavements", `${fmt(street.satisfied)}%`, `Street survey, ${fmt(street.responses)} replies. Indicative`),
       assessed.pieces ? stat("Pieces assessed", fmt(assessed.pieces), `${fmt(assessed.previous)} in the previous 4 weeks`) : stat("Say roads have got worse", street.worse === null ? "–" : `${fmt(street.worse)}%`, "Street survey. Indicative"), att.ready ? stat("Early signs", fmt(att.earlySigns.length), "Felt by many, reported by few") : adults]
     : [...(latest.length ? latest.slice(0, 2).map(survey) : [stat("Residents' survey", "None held", "Add one on the Evidence page")]), stat("DfT road maintenance rating", d.authority.rating.overall, `Overall, ${d.authority.rating.published}`), adults];
-  clear(body).append(pageHead(`${a.name}: how people feel about their roads`, `From ${from.join(", ")} and public reports.`), h("div", { class: "grid g4" }, tiles), readingCard(a, d));
+  const picture = h("section", { class: "card pic-card" }, loading("Drawing the picture…"));
+  clear(body).append(pageHead(`${a.name}: how people feel about their roads`, `From ${from.join(", ")} and public reports.`), picture, h("div", { class: "grid g4" }, tiles), readingCard(a, d));
+  drawPicture(picture, a, d, assessed);
   if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
   else add(body, h("div", { class: "grid g-wide" }, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Shows what's loud, what's felt, and what nobody is reporting yet."))),
     h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, att.needs ? `This needs ${att.needs}.` : "This can't be worked out just now."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))), roleCard()));
   add(body, compareCard(a, d, street));
+}
+// ----- the two pictures
+const SHORT_TYPES = { "Local Newspaper": "Local papers", "Local News Website": "Local news sites", "National Newspaper": "National papers", "Local Newsletter": "Newsletters", "Social Media": "Social media", "Local Television": "Local TV", "Local Radio": "Local radio", "Community Event": "Community events", "Trade Press": "Trade press", Other: "Other sources" };
+const LEAN_WORDS = { down: "Mostly critical", up: "Mostly positive", mixed: "Neutral or mixed", none: "Nothing held yet" };
+const count = (n, one, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
+const shortNumber = (n) => (n >= 1000 ? `${fmt(n / 1000, 1)}k` : fmt(n)); // a circle holds about four characters
+const noData = (label, note, href) => ({ label, value: "–", lean: "none", note, href });
+// What feeds opinion here, from what Clarion already holds. A colour only where there's a real direction: the tone officers
+// gave a piece, a rise or fall in enquiries, or more people dissatisfied than satisfied
+function opinionGroups(a, d, assessed, p) {
+  const e = d.evidence, s = e.signals, code = a.code, said = `#said/${code}`, evidence = `#evidence/${code}`, own = `${said}/enquiries`;
+  const press = (assessed.byType || []).map((x) => ({ label: SHORT_TYPES[x.type] || x.type, value: fmt(x.pieces), lean: x.critical > x.supportive ? "down" : x.supportive > x.critical ? "up" : "mixed", note: `${count(x.pieces, "piece")} assessed in the last 4 weeks: ${fmt(x.critical)} critical, ${fmt(x.supportive)} supportive.`, href: said }));
+  const known = (n) => (n === null || n === undefined ? "–" : fmt(n));
+  const faults = s.fixMyStreet.data, petitions = s.petitions.data, questions = s.questions.data;
+  const contacts = e.contacts || [], total = contacts.reduce((n, x) => n + x.enquiries + x.complaints, 0);
+  const rising = contacts.filter((x) => x.trend === "Rising").length, falling = contacts.filter((x) => x.trend === "Falling").length;
+  const survey = e.surveys[0], street = e.streets.find((x) => !x.selfOnly);
+  return [
+    { label: "Press and media", spots: press.length ? press : [noData("Press and media", "Nothing assessed yet. Add your sources, then search and assess.", said)] },
+    { label: "Government and MPs", spots: [
+      { label: "Government news", value: known(p?.announcements), lean: p?.announcements ? "mixed" : "none", note: "Announcements on roads on GOV.UK in the last 4 weeks.", href: `#notes/${code}` },
+      { label: "MPs' questions", value: known(questions?.length), lean: questions?.length ? "mixed" : "none", note: "Written questions on roads from local MPs in the last six months.", href: evidence },
+      { label: "Petitions", value: known(petitions?.length), lean: petitions?.length ? "mixed" : "none", note: "Parliament petitions on roads with signatures from here.", href: evidence },
+    ] },
+    { label: "The council", spots: [
+      { label: "Council news", value: known(p?.posts), lean: p?.posts ? "mixed" : "none", note: "Stories on roads on your own news page in the last 4 weeks.", href: own },
+      p?.weather ? { label: "Weather events", value: fmt(p.weather.events), lean: p.weather.events ? "mixed" : "none", note: `In the last 4 weeks.${p.weather.latest ? ` The latest was ${p.weather.latest.toLowerCase()}.` : ""}`, href: `#attention/${code}/works` } : noData("Weather events", "Turn on Works and weather to see these.", `#attention/${code}/works`),
+    ] },
+    { label: "What people do", spots: [
+      { label: "Fault reports", value: faults ? shortNumber(faults.reports) : "–", lean: faults?.reports ? "mixed" : "none", note: "Recent public reports on FixMyStreet.", href: evidence },
+      total ? { label: "Enquiries", value: shortNumber(total), lean: rising > falling ? "down" : falling > rising ? "up" : "mixed", note: `${fmt(total)} enquiries and complaints in the latest month. ${fmt(rising)} topics rising, ${fmt(falling)} falling.`, href: own } : noData("Enquiries", "Bring in a file of enquiries to see these.", own),
+    ] },
+    { label: "What people say", spots: [
+      survey ? { label: "Residents' survey", value: `${fmt(survey.score)}`, lean: "mixed", note: `${survey.measure}: ${fmt(survey.score)} out of ${fmt(survey.outOf)}. ${survey.source}.`, href: evidence } : noData("Residents' survey", "Add a result on the Evidence page.", evidence),
+      street ? { label: "Street survey", value: street.satisfied === null ? "–" : `${fmt(street.satisfied)}%`, lean: street.dissatisfied > street.satisfied ? "down" : street.satisfied > street.dissatisfied ? "up" : "mixed", note: `Satisfied with roads and pavements. ${fmt(street.responses)} replies. Indicative.`, href: `#survey/${code}/${street.id}/results` } : noData("Street survey", "Plan a street survey to hear from people directly.", `#surveys/${code}`),
+    ] },
+  ];
+}
+// Spaces everything evenly around the roundabout, with a gap between groups
+function placeAround(groups, rx = 29, ry = 40) {
+  const total = groups.reduce((n, g) => n + g.spots.length, 0), gap = groups.length > 1 ? 0.2 : 0, step = (Math.PI * 2 - gap * groups.length) / total;
+  let at = -Math.PI / 2 + gap / 2;
+  for (const g of groups) {
+    const from = at;
+    for (const x of g.spots) {
+      const t = at + step / 2, across = Math.cos(t);
+      x.x = 50 + rx * across; x.y = 50 + ry * Math.sin(t);
+      x.side = Math.abs(across) < 0.2 ? (Math.sin(t) < 0 ? "above" : "below") : across < 0 ? "left" : "right"; // labels point outwards, clear of the next circle
+      at += step;
+    }
+    const mid = (from + at) / 2;
+    g.x = 50 + rx * 0.62 * Math.cos(mid); g.y = 50 + ry * 0.62 * Math.sin(mid);
+    at += gap;
+  }
+}
+function spotEl(x) {
+  return h("a", { class: `spot ${x.side} lean-${x.lean}`, href: x.href, style: { left: `${x.x}%`, top: `${x.y}%` }, "aria-label": `${x.label}: ${x.value}. ${LEAN_WORDS[x.lean]}. ${x.note}` },
+    h("span", { class: "plate" }, x.value), h("span", { class: "spot-text" }, h("span", { class: "spot-label" }, `${x.label}${x.lean === "down" ? " ▼" : x.lean === "up" ? " ▲" : ""}`), h("span", { class: "spot-tip" }, x.note)));
+}
+function opinionMap(a, d, assessed, p) {
+  const groups = opinionGroups(a, d, assessed, p);
+  placeAround(groups);
+  const lines = svg("svg", { class: "pic-lines", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" });
+  for (const g of groups) {
+    for (const x of g.spots) lines.append(svg("path", { class: "lane", d: `M${g.x} ${g.y}Q${(g.x + x.x) / 2} ${(g.y + x.y) / 2 - 2} ${x.x} ${x.y}` }));
+    lines.append(svg("line", { class: "road", x1: 50, y1: 50, x2: g.x, y2: g.y }), svg("line", { class: "road-mark", x1: 50, y1: 50, x2: g.x, y2: g.y }));
+  }
+  const street = d.evidence.streets.find((x) => !x.selfOnly);
+  return h("div", { class: "stack" },
+    h("div", { class: "pic" }, lines, h("div", { class: "pic-middle" }, h("strong", {}, a.name), h("span", {}, d.reading?.direction ? `Mood: ${d.reading.direction.toLowerCase()}` : "Mood not read yet"), street?.satisfied != null ? h("span", {}, `${fmt(street.satisfied)}% satisfied`) : null),
+      groups.map((g) => h("div", { class: "pic-group" }, h("div", { class: "pic-hub", style: { left: `${g.x}%`, top: `${g.y}%` } }, g.label), h("div", { class: "spots" }, g.spots.map(spotEl))))),
+    h("div", { class: "pic-legend" }, [["down", "Mostly critical ▼"], ["up", "Mostly positive ▲"], ["mixed", "Neutral or no direction"], ["none", "Nothing held yet"]].map(([k, words]) => h("span", { class: `lean-${k}` }, h("i", { style: { background: `var(--lean-${k})` } }), words)), h("span", { class: "note" }, "Click any circle to see what's behind it.")));
+}
+const BANDS = [15, 30, 45, 60]; // the five shades run from under 15% to 60% or more
+const bandOf = (n) => BANDS.filter((x) => n >= x).length + 1;
+function oneResident(a, p) {
+  const held = p.channels.length ? p : null;
+  if (!held) return h("p", { class: "muted" }, "The figures for this aren't available just now.");
+  const all = p.adults ? p.adults.reduce((n, x) => n + x, 0) : 0;
+  const everyone = (rates) => Math.round(p.adults.reduce((n, x, i) => n + x * rates[i], 0) / all);
+  const choices = [...(all ? [["all", "Everyone here"]] : []), ...p.ages.map((x, i) => [i, x])];
+  let picked = choices[0][0];
+  const spots = p.channels.map((c) => ({ ...c, label: c.label }));
+  placeAround([{ spots }], 30, 40);
+  const centre = h("strong", {}), share = h("span", {}), line = h("p", { class: "pic-line", role: "status" });
+  const lines = svg("svg", { class: "pic-lines", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" });
+  const rows = spots.map((c) => {
+    const spoke = svg("line", { class: "spoke", x1: 50, y1: 50, x2: c.x, y2: c.y }), plate = h("span", { class: "plate" }), tip = h("span", { class: "spot-tip" });
+    lines.append(spoke);
+    const el = h("div", { class: `spot ${c.side}`, style: { left: `${c.x}%`, top: `${c.y}%` }, tabindex: "0" }, plate, h("span", { class: "spot-text" }, h("span", { class: "spot-label" }, c.label), tip));
+    return { c, spoke, plate, tip, el };
+  });
+  const person = svg("svg", { width: 42, height: 42, viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true" }, svg("circle", { cx: 12, cy: 7, r: 4.2 }), svg("path", { d: "M3.5 21.5c0-5.2 3.8-8.2 8.5-8.2s8.5 3 8.5 8.2z" }));
+  const buttons = choices.map(([key, words]) => h("button", { type: "button", onclick: () => { picked = key; draw(); } }, words));
+  const draw = () => {
+    const name = picked === "all" ? "Everyone here" : `Aged ${p.ages[picked]}`, valueOf = (c) => (picked === "all" ? everyone(c.rates) : c.rates[picked]);
+    buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(choices[i][0] === picked)));
+    centre.textContent = name;
+    for (const { c, spoke, plate, tip, el } of rows) {
+      const n = valueOf(c), diff = all && picked !== "all" ? n - everyone(c.rates) : null;
+      plate.textContent = `${n}%`;
+      el.className = `spot ${c.side} band-${bandOf(n)}`;
+      el.style.setProperty("--d", `${Math.round(46 + n * 0.62)}px`);
+      el.setAttribute("aria-label", `${c.label}: ${n}%`);
+      spoke.style.strokeWidth = `${Math.max(2, n / 3.5)}px`;
+      tip.textContent = diff === null ? "" : diff ? `${fmt(Math.abs(diff))} ${diff > 0 ? "more" : "fewer"} in every 100 than everyone here` : "The same as everyone here";
+    }
+    const top = [...spots].sort((x, y) => valueOf(y) - valueOf(x)).slice(0, 3).map((c) => c.label.toLowerCase());
+    line.textContent = `Most likely to reach them: ${top[0]}, ${top[1]} and ${top[2]}.`;
+    share.textContent = all && picked !== "all" ? `${fmt(Math.round((p.adults[picked] / all) * 100))}% of adults here` : "";
+  };
+  draw();
+  return h("div", { class: "stack" }, h("div", { class: "age-pick", role: "group", "aria-label": "Age group" }, buttons), line,
+    h("div", { class: "pic" }, lines, h("div", { class: "pic-middle" }, person, centre, share), h("div", { class: "pic-group" }, h("div", { class: "spots" }, rows.map((x) => x.el)))),
+    h("div", { class: "pic-legend" }, [["1", "Under 15%"], ["2", "15 to 29%"], ["3", "30 to 44%"], ["4", "45 to 59%"], ["5", "60% or more"]].map(([k, words]) => h("span", {}, h("i", { style: { background: `var(--h-s${k})` } }), words))),
+    h("p", { class: "note" }, `The share who got local news this way in the last month or so. A national pattern by age from Ofcom, so it's for comparing and doesn't measure ${a.name}.`),
+    h("details", {}, h("summary", {}, "See every age as a table"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "How they got local news"), p.ages.map((x) => h("th", { class: "r" }, x)))), h("tbody", {}, p.channels.map((c) => h("tr", {}, h("td", {}, c.label), c.rates.map((n) => h("td", { class: "r" }, `${n}%`)))))))));
+}
+async function drawPicture(box, a, d, assessed) {
+  const view = App.viewId;
+  let p = null;
+  try { p = await API.call("/api/picture", { code: a.code }); } catch (e) { console.warn(e); }
+  if (view !== App.viewId) return;
+  const parts = [["map", "What shapes opinion"], ["person", "One resident"]], body = h("div", {});
+  const tabs = h("div", { class: "tab-row no-print", role: "tablist" });
+  const show = (key) => {
+    App.picture = key;
+    clear(tabs).append(...parts.map(([k, words]) => h("button", { type: "button", role: "tab", "aria-selected": k === key ? "true" : "false", onclick: () => show(k) }, words)));
+    clear(body).append(key === "person" ? (p ? oneResident(a, p) : failure({ message: "The figures for this aren't available just now." })) : opinionMap(a, d, assessed, p));
+  };
+  show(App.picture || "map");
+  clear(box).append(tabs, body);
 }
 function roleCard() {
   return h("section", { class: "card" }, h("h3", {}, "What each role can do"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}), h("th", {}, "Lead"), h("th", {}, "Member"))),
@@ -1076,6 +1256,7 @@ function aboutView(page, a) {
   page.append(pageHead("Sources & method", "Where the evidence comes from, how it's read, and what to be careful about."));
   if (App.demo) page.append(sec("About this demonstration", h("p", {}, "Northbridge is fictional, and so is everything about it: its people, places, press coverage, ratings and figures. The survey replies come from a simulation, then go through the same calculations as a real survey."), h("p", {}, "Claude isn't used in the demonstration, and nothing is saved.")));
   page.append(sec("How mood is read", h("ul", {}, ["Mood is read from six kinds of signal: surveys, street surveys, short repeated questions, public actions such as fault reports and enquiries, representatives, and open talk in the press and on social media.", "Survey results set the level. The other signals can only suggest direction.", "A change is reported only when two different kinds of signal agree.", "What's loud isn't the same as what's widely felt, and perception isn't the same as condition."].map((x) => h("li", {}, x)))),
+    sec("The two pictures on the Summary", h("ul", {}, ["What shapes opinion gathers what Clarion holds. A circle is coloured only where there's a real direction: the tone officers gave a piece, a rise or fall in enquiries, or more people dissatisfied than satisfied. It shows what's there, not how much each one moves opinion.", "One resident uses one question from Ofcom's Local News and Media Survey: how people got local news in the last month or so. These are national patterns by age, so they're for comparing, and don't measure any authority. Everyone here weights them by local ages from Census 2021."].map((x) => h("li", {}, x)))),
     sec("What's being said", h("ul", {}, ["Clarion reads sources with no licensing issue by itself: GOV.UK, Parliament and FixMyStreet.", "It never reads press, broadcast or social sources. A coverage check is a simple web search that keeps only yes or no and the date, and no match doesn't mean no coverage.", "Officers find each piece for themselves and record their own assessment. Leaning and stance are their judgement.", "Audience figures are national patterns by age, overlaid on Census figures for the authority. They describe a kind of source, not one publication's readers, and hold no party data.", "Enquiries and complaints are counts only. An officer's browser reads the file, and the officer sees what will be sent. Columns that look personal can't be used, small groups are pooled, and areas with fewer than 10 contacts in a month aren't kept by name.", "Allowing for a source's stance halves or adds half to a piece's reach. These weights are a starting judgement to be tested in the pilot, and raw figures are always kept."].map((x) => h("li", {}, x)))),
     sec("Attention and concern", h("ul", {}, ["Attention is a topic's assessed pieces in the last four weeks, then their reach after allowing for the source.", "Concern is a topic's share of street survey comments and of enquiries, averaged over whichever are held. Street surveys count for a year, and enquiries for three months.", "Ranks are compared, because a press count and a survey share aren't on one scale.", "An early sign is in the upper half for concern and the lower half for attention. It's a pointer for officers to check, not a finding."].map((x) => h("li", {}, x)))),
     sec("Works and weather", h("ul", {}, ["An authority's lead can turn on the link to its Climate Toolkit records, and can turn it off again at any time, which removes what's held.", "Clarion keeps only weekly job totals by function and source, ward totals and weather events, with no street names or job details.", "Weather events use the Climate Toolkit's own rules for gales, heavy rain, cold, freeze and thaw, and heatwaves.", "These help explain a change in mood. Only jobs reported by the public can count as a kind of signal."].map((x) => h("li", {}, x)))),

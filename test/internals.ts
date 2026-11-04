@@ -25,3 +25,4 @@ export { outcodeOf, whereIs } from "../src/postcodes";
 export { qrCode } from "../src/qr";
 export { networkOf } from "../src/accounts";
 export { areaRows, interviewedOnly, summarise as summariseStreet } from "../src/surveys";
+export { channelsFrom } from "../src/coverage";
