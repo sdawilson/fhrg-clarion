@@ -55,7 +55,7 @@
 //   POST /api/map                  {code, service, month, topic, bias, view, partner, include}: the map, and what the Dashboard needs
 //   POST /api/rate                 {code, key, tone}: an officer's rating of a petition or an MP's question
 //   POST /api/setup/get            {code}: functions, partners and channels, and the mood weights
-//   POST /api/setup/save           {code, part, service, list}: leads and admins
+//   POST /api/setup/save           {code, part, service, list}: anyone from the authority, and admins
 //   POST /api/setup/weights        {...weights}: site administrators
 //   POST /api/briefing/officers    {code, service, month, word}: the officers' briefing, or as a Word file
 //   POST /api/campaign/get         {code, service}: issues, campaigns and actions, held back by the election setting. Money is for the authority's own members
@@ -67,10 +67,10 @@
 //   POST /api/action/remove        {code, id}
 //   POST /api/action/actual        {code, id, actual}: what an action already held cost, allowed under the election setting
 //   POST /api/note/effect          {code, id, effect, topic}: what an officer expects a note to do to mood
-//   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: leads and admins
-//   POST /api/facts/notes          {code, notes}: leads and admins
+//   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: anyone from the authority, and admins
+//   POST /api/facts/notes          {code, notes}: anyone from the authority, and admins
 //
-// Street Surveys. Any member of the authority can read; leads and admins do everything else.
+// Street Surveys. Anyone from the authority, or a site administrator, can read and change them.
 //   POST /api/survey/list          {code}
 //   POST /api/survey/get           {code, id}: the survey, results, checks and comments with names removed
 //   POST /api/survey/new           {code, title, purpose}

@@ -1,5 +1,5 @@
 // What each authority sets up for itself: the functions of each service, its key partners and its campaign channels.
-// FHRG sets a standard list of functions, and each authority's lead can rename, take out or add to it. A renamed
+// FHRG sets a standard list of functions, and anyone from the authority can rename, take out or add to it. A renamed
 // function keeps its id, so it stays linked to the Climate Toolkit. FHRG also sets the weights that blend the parts of
 // the map into one mood, so that mood means the same everywhere.
 //
