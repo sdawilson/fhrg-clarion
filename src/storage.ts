@@ -8,7 +8,11 @@
 //   authorities/<code>/surveys/ and survey-*/  street surveys and their answers (see surveys.ts)
 //   authorities/<code>/sources.json            the sources an authority follows (see coverage.ts)
 //   authorities/<code>/assessments.json        its officers' assessments of what they've found
+//   authorities/<code>/setup.json              functions, key partners and campaign channels (see setup.ts)
+//   authorities/<code>/campaign.json           high-impact issues and the campaign calendar (see campaign.ts)
+//   authorities/<code>/monthly.json            fault reports and petitions, kept by month for the map
 //   system/survey-codes/<code>.json            which survey an access code opens
+//   system/mood-weights.json                   what each branch of the map counts for in the mood
 
 import type { Config } from "./config";
 import { fetchWithTimeout } from "./util";

@@ -24,6 +24,7 @@ import { newJobId } from "./jobs";
 import { refQuery } from "./library";
 import type { Pilot } from "./pilots";
 import type { Where } from "./postcodes";
+import { DEFAULT_SERVICE } from "./setup";
 import { storageDelete, storageJson, storageList, storagePut, savePretty } from "./storage";
 import { FriendlyError, cached, cleanLong, cleanText, londonToday, pickEnum, round, withLock } from "./util";
 
@@ -42,7 +43,7 @@ const QUICK_SECS = 30;
 const CURRENT_DAYS = 365; // an older survey is still evidence, but it no longer counts towards a change in mood
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type Question = { id: string; text: string; kind: "choice" | "text"; options: string[]; part: "core" | "local" | "about" };
+export type Question = { id: string; text: string; kind: "choice" | "text"; options: string[]; part: "core" | "local" | "about"; fn?: string; topic?: string }; // fn and topic: what a local question covers, or the whole service
 
 // The fixed core, so that results compare across time and authorities
 export const CORE: Question[] = [
@@ -77,7 +78,7 @@ export type Plan = {
 };
 export type Survey = {
   id: string; code: string; title: string; purpose: string; status: "draft" | "open" | "closed"; access: string; collector: string;
-  locals: Question[]; plan: Plan;
+  locals: Question[]; plan: Plan; service?: string;
   created: string; by: string; updated: string; openedBy: string; openedOn: string; closedOn: string; printedTo: number;
   self?: string; selfOn?: boolean; // the link for people to fill it in themselves, which is a different code from interviewers'
 };
@@ -659,6 +660,37 @@ export function summarise(s: Survey, all: Answer[], census: Census | null): Stre
     note: selfOnly ? "People who chose to reply, not a random sample, so this is indicative only, and weaker than a street sample." : "A street sample, not a random one, so this is indicative only.",
     selfOnly,
   };
+}
+
+// The same, with the figures the map needs. Figures only: questions by what they cover, groups of 30 or more, and how
+// many chose to reply by link, which is shown beside the survey and never added to it.
+export type StreetPoint = StreetSummary & {
+  service: string; questions: { id: string; text: string; fn: string; topic: string; sat: number; dis: number }[];
+  groups: { group: string; label: string; n: number; sat: number | null; dis: number | null }[]; byLink: { n: number; sat: number | null };
+};
+export function pointOf(s: Survey, all: Answer[], census: Census | null): StreetPoint | null {
+  const summary = summarise(s, all, census);
+  if (!summary) return null;
+  const kept = all.filter((r) => !r.excluded), replied = kept.filter(fromSelf), results = surveyResults(summary.selfOnly ? noSites(s) : s, summary.selfOnly ? kept.filter(counted) : kept.filter((r) => !fromSelf(r)), census);
+  const questions = [...CORE.slice(0, 1), ...s.locals].flatMap((q) => {
+    const r = results.questions.find((x) => x.id === q.id);
+    if (!r || r.held) return [];
+    const sat = r.options.filter((o) => /satisfied/i.test(o.label) && !/dissatisfied|neither/i.test(o.label)), dis = r.options.filter((o) => /dissatisfied/i.test(o.label) && !/neither/i.test(o.label));
+    if (!sat.length || !dis.length) return [];
+    return [{ id: q.id, text: q.text, fn: q.fn ?? "", topic: q.topic ?? "", sat: Math.round(sat.reduce((a, o) => a + o.pct, 0)), dis: Math.round(dis.reduce((a, o) => a + o.pct, 0)) }];
+  });
+  const linkAll = replied.filter((r) => r.answers.c1), linkSat = linkAll.filter((r) => SATISFIED.has(r.answers.c1)).length;
+  return {
+    ...summary, service: s.service ?? DEFAULT_SERVICE, questions, groups: results.groups.filter((g) => g.group !== "Site").map((g) => ({ group: g.group, label: g.label, n: g.answered, sat: g.satisfied, dis: g.dissatisfied })),
+    byLink: { n: summary.selfOnly ? 0 : replied.length, sat: linkAll.length >= MIN_GROUP ? round((linkSat / linkAll.length) * 100) : null },
+  };
+}
+export async function streetPoints(c: Config, code: string): Promise<StreetPoint[]> {
+  const surveys = (await listSurveys(c, code)).filter((s) => s.status !== "draft");
+  if (!surveys.length) return [];
+  const census = await loadCensus(c, code);
+  const out = (await Promise.all(surveys.map(async (s) => pointOf(s, await loadAnswers(c, code, s.id), census)))).filter((x): x is StreetPoint => !!x);
+  return out.sort((a, b) => b.ran.localeCompare(a.ran));
 }
 
 export async function streetSummaries(c: Config, code: string): Promise<StreetSummary[]> {

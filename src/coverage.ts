@@ -16,28 +16,25 @@ import type { Member } from "./accounts";
 import type { Config } from "./config";
 import { refQuery } from "./library";
 import type { Pilot } from "./pilots";
+import { DEFAULT_SERVICE, FUNCTIONS, loadSetup, serviceId, type Setup } from "./setup";
 import { storageJson, savePretty } from "./storage";
 import { scrubContacts } from "./surveyai";
 import { AGES, cellKey, type Census } from "./surveys";
 import { FriendlyError, cached, cleanText, delay, fetchWithTimeout, isCached, londonToday, pickEnum, round, withLock } from "./util";
 
-export const SOURCE_TYPES = ["Local Newspaper", "Local News Website", "National Newspaper", "Local Newsletter", "Social Media", "Local Television", "Local Radio", "Community Event", "Trade Press", "Other"] as const;
+export const SOURCE_TYPES = ["Local Newspaper", "Local News Website", "National Newspaper", "Local Newsletter", "National Magazine", "Trade Press", "Social Media", "Streaming Video", "Local Television", "National Television", "Local Radio", "National Radio", "Community Event", "Other"] as const;
 export const LEANINGS = ["Not known", "None shown", "Left", "Centre left", "Centre", "Centre right", "Right"] as const;
 export const STANCES = ["Balanced", "Usually supportive", "Usually critical"] as const;
 export const REACH_UNITS = ["copies", "readers", "listeners", "viewers", "members", "people"] as const;
 export const REACH_BANDS = ["Small", "Medium", "Large"] as const;
 export const REACH_UNIT_FOR: Record<typeof SOURCE_TYPES[number], typeof REACH_UNITS[number]> = {
   "Local Newspaper": "copies", "Local News Website": "readers", "National Newspaper": "copies", "Local Newsletter": "copies", "Social Media": "members",
-  "Local Television": "viewers", "Local Radio": "listeners", "Community Event": "people", "Trade Press": "copies", Other: "people",
+  "Local Television": "viewers", "National Television": "viewers", "Local Radio": "listeners", "National Radio": "listeners", "Community Event": "people", "Trade Press": "copies", "National Magazine": "copies", "Streaming Video": "viewers", Other: "people",
 };
 export const RELEVANCE = ["High", "Some", "Little", "None"] as const;
 export const TONES = ["Supportive", "Neutral", "Critical"] as const;
 export const PROMINENCE = ["Front page or lead", "Inside page", "Passing mention"] as const;
-// The Climate Toolkit's highways functions, so the two tools can be read together
-export const FUNCTIONS = [
-  ["cw", "Carriageways"], ["fw", "Footways & cycleways"], ["dr", "Drainage & flooding"], ["st", "Bridges & structures"], ["ew", "Earthworks & geotechnical"], ["sl", "Street lighting"],
-  ["ts", "Traffic signals & ITS"], ["sg", "Signs, lines & barriers"], ["tr", "Trees & soft estate"], ["ws", "Winter service"], ["nm", "Network management & incidents"], ["pw", "Public rights of way"], ["cl", "Claims & liability"],
-] as const;
+export { FUNCTIONS };
 
 const MAX_SOURCES = 100;
 const MAX_ASSESSMENTS = 5000;
@@ -60,9 +57,11 @@ export type Source = {
   id: string; name: string; type: typeof SOURCE_TYPES[number]; domain: string;
   reach: number | null; reachUnit: string; reachBand: string; reachFrom: string;
   leaning: string; stance: string; campaign: string[]; added: string; by: string;
+  platform?: string; // for a social or video channel: YouTube, TikTok and so on
 };
 export type Assessment = {
   id: string; source: string; date: string; summary: string; topic: string; relevance: string; tone: string; prominence: string; functions: string[]; reach: number | null; by: string; at: string;
+  service?: string; scope?: string; about?: string; // the service it covers, Local or National if not the source's own, and the key partner it's about
 };
 
 const sourcesPath = (c: Config, code: string) => `${c.root}authorities/${code}/sources.json`;
@@ -109,7 +108,7 @@ export function readSource(b: any, was: Source | null, by: string, today: string
   const reach = readReach(b?.reach);
   return {
     id: was?.id ?? newId(), name, type, domain: readDomain(b?.domain), reach, reachUnit: reach === null ? "" : pickEnum(REACH_UNITS, b?.reachUnit) ?? REACH_UNIT_FOR[type],
-    reachBand: reach === null ? pickEnum(REACH_BANDS, b?.reachBand) ?? "" : "", reachFrom: cleanText(b?.reachFrom, 80),
+    reachBand: reach === null ? pickEnum(REACH_BANDS, b?.reachBand) ?? "" : "", reachFrom: cleanText(b?.reachFrom, 80), platform: cleanText(b?.platform, 40),
     leaning: pickEnum(LEANINGS, b?.leaning) ?? "Not known", stance: pickEnum(STANCES, b?.stance) ?? "Balanced",
     campaign: (Array.isArray(b?.campaign) ? b.campaign : []).map((t: unknown) => cleanText(t, 80)).filter((t: string) => topics.includes(t)).slice(0, 5),
     added: was?.added ?? today, by: was?.by ?? by,
@@ -138,7 +137,7 @@ export async function removeSource(c: Config, p: Pilot, id: unknown): Promise<vo
   }));
 }
 
-export function readAssessment(b: any, sources: Source[], topics: string[], by: string, today: string): Assessment {
+export function readAssessment(b: any, sources: Source[], topics: string[], by: string, today: string, setup?: Setup): Assessment {
   const source = sources.find((s) => s.id === b?.source);
   if (!source) throw new FriendlyError("Choose the source first.");
   const date = String(b?.date ?? "");
@@ -151,11 +150,15 @@ export function readAssessment(b: any, sources: Source[], topics: string[], by: 
   if (!topics.includes(topic)) throw new FriendlyError("Choose a topic.");
   const relevance = pickEnum(RELEVANCE, b?.relevance), tone = pickEnum(TONES, b?.tone), prominence = pickEnum(PROMINENCE, b?.prominence);
   if (!relevance || !tone || !prominence) throw new FriendlyError("Choose its relevance, tone and prominence.");
-  const known = new Set<string>(FUNCTIONS.map((f) => f[0]));
+  const service = serviceId(b?.service);
+  const known = new Set<string>(setup ? (setup.functions[service] ?? []).map((f) => f.id) : FUNCTIONS.map((f) => f[0]));
   const reach = readReach(b?.reach);
+  const about = setup?.partners.find((x) => x.id === b?.about)?.id ?? "";
+  const scope = b?.scope === "Local" || b?.scope === "National" ? b.scope : "";
   return {
     id: newId(), source: source.id, date, summary: scrubContacts(cleanText(raw, SUMMARY_CHARS)), topic, relevance, tone, prominence,
     functions: (Array.isArray(b?.functions) ? b.functions : []).filter((f: string) => known.has(f)), reach: reach ?? source.reach, by, at: new Date().toISOString(),
+    service, ...(scope ? { scope } : {}), ...(about ? { about } : {}),
   };
 }
 
@@ -163,7 +166,7 @@ export async function saveAssessment(c: Config, me: Member, p: Pilot, b: any, to
   return await withLock(assessmentsPath(c, p.code), async () => {
     const all = await loadAssessments(c, p.code);
     if (all.length >= MAX_ASSESSMENTS) throw new FriendlyError(`An authority can hold up to ${MAX_ASSESSMENTS.toLocaleString("en-GB")} assessments.`);
-    const made = readAssessment(b, await loadSources(c, p.code), topics, me.name, londonToday());
+    const made = readAssessment(b, await loadSources(c, p.code), topics, me.name, londonToday(), await loadSetup(c, p.code));
     await savePretty(c, assessmentsPath(c, p.code), [...all, made]);
     return made;
   });
@@ -232,6 +235,8 @@ const AUDIENCES: Partial<Record<Source["type"], { measure: string; note: string 
   "Local News Website": [{ measure: "Read news online from a local news publisher in the last 12 months", note: "" }],
   "National Newspaper": [{ measure: "Read news in a national printed newspaper in the last 12 months", note: "" }],
   "Local Newsletter": [{ measure: `${LOCAL_NEWS}: Printed local magazines`, note: "Based on printed local magazines, the closest published figure." }],
+  "National Magazine": [{ measure: `${LOCAL_NEWS}: Printed local magazines`, note: "Based on printed local magazines, the closest published figure." }],
+  "Streaming Video": [{ measure: `${LOCAL_NEWS}: Video-sharing platforms such as YouTube, Vimeo, etc.`, note: "Based on local news from any video site, not one channel." }],
   "Social Media": [{ measure: `${LOCAL_NEWS}: Social media such as Facebook, X (formerly Twitter) or Instagram, etc.`, note: "Based on local news from any social media, not one group or page." }],
   "Local Television": [{ measure: `${LOCAL_NEWS}: Television`, note: "" }, { measure: "PROXY, not news-specific and not local: watched TV programmes live at the time of broadcast", note: "Based on all live television, the closest published figure." }],
   "Local Radio": [{ measure: `${LOCAL_NEWS}: Radio`, note: "" }, { measure: "PROXY, not news-specific and not local: listened to live radio online through a computer, laptop, tablet or phone", note: "Based on all live radio online, the closest published figure." }],

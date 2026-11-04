@@ -44,6 +44,7 @@ export type Note = JobBase & {
   input: { url: string; title: string; hasText: boolean };
   change: Change | null; headline: string; whyHere: string; impacts: Impact[]; cut: { statement: string; reason: string }[]; mood: Mood | null;
   questions: string[]; unknowns: string[]; dataUsed: { n: number; purpose: string; sources: DataRef[] }[]; cost: number;
+  effect?: number | null; topic?: string; // what an officer expects it to do to mood, from -100 to +100, and the topic it bears on
 };
 
 // ----- step 1: what changed
@@ -289,6 +290,21 @@ const folder = (c: Config, code: string) => `${c.root}authorities/${code}/notes/
 
 export function listNotes(c: Config, code: string) { return listJobs<Note>(c, folder(c, code)); }
 export function getNote(c: Config, code: string, id: string) { return loadJob<Note>(c, `${folder(c, code)}${id}.json`); }
+
+/** An officer confirms what a note is expected to do to mood. Until then it isn't counted. */
+export async function setEffect(c: Config, code: string, id: string, effect: unknown, topic: unknown): Promise<Note> {
+  const path = `${folder(c, code)}${id}.json`;
+  return await withLock(path, async () => {
+    const note = await loadJob<Note>(c, path);
+    if (!note) throw new FriendlyError("That note wasn't found.", 404);
+    if (note.status !== "ready") throw new FriendlyError("That note hasn't finished yet.");
+    const n = effect === null || effect === "" ? null : Number(effect);
+    if (n !== null && (!Number.isFinite(n) || n < -100 || n > 100)) throw new FriendlyError("Give the expected effect from -100 to +100.");
+    const next = { ...note, effect: n === null ? null : Math.round(n), topic: cleanText(topic, 80) };
+    await savePretty(c, path, next);
+    return next;
+  });
+}
 
 export function readInput(b: Record<string, any>): { url: string; title: string; text: string } {
   const url = cleanText(b.url, 500), title = cleanText(b.title, 200), body = cleanLong(b.text, 30_000);

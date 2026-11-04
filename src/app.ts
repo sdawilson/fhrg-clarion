@@ -10,6 +10,7 @@
 //   GET  /r/<link code>            the same page, for someone filling a survey in themselves; no account needed
 //   GET  /demo                     the same page, opening the Northbridge demonstration
 //   GET  /demo/data.json           the demonstration's made-up data (public; see demo.ts)
+//   POST /demo/map                 {service, month, topic, bias, view, partner, include}: the map worked out from that data
 //   POST /api/config               website address and whether the demonstration is on (public)
 //   POST /api/login | /api/logout
 //   POST /api/sso                  {token}: a two-minute, single-use pass signed by the website
@@ -51,6 +52,16 @@
 //   POST /api/abc/save             {text}: ABC's table, pasted (site administrators)
 //   POST /api/attention            {code}: each topic by public concern and media attention
 //   POST /api/admin/overview       site administrators: the position across all authorities
+//   POST /api/map                  {code, service, month, topic, bias, view, partner, include}: the map, and what the Dashboard needs
+//   POST /api/setup/get            {code}: functions, partners and channels, and the mood weights
+//   POST /api/setup/save           {code, part, service, list}: leads and admins
+//   POST /api/setup/weights        {...weights}: site administrators
+//   POST /api/campaign/get         {code, service}: issues and campaign events, held back by the election setting
+//   POST /api/issue/set            {code, service, topic, status, key, own}: confirm, set aside or change a key message
+//   POST /api/issue/drop           {code, service, topic}
+//   POST /api/campaign/item        {code, service, id, title, date, channel, topics, origin, survey}: add or change an event
+//   POST /api/campaign/remove      {code, id}
+//   POST /api/note/effect          {code, id, effect, topic}: what an officer expects a note to do to mood
 //   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: leads and admins
 //   POST /api/facts/notes          {code, notes}: leads and admins
 //
@@ -94,11 +105,15 @@ import {
 } from "./coverage";
 import { monthSpend } from "./claude";
 import { getConfig, missingSettings, type Config } from "./config";
-import { demoPack } from "./demo";
+import { demoMap, demoPack } from "./demo";
 import { addSurvey, loadEvidence, loadFacts, saveNotes } from "./evidence";
 import { validId } from "./jobs";
-import { getNote, listNotes, readInput, startNote } from "./notes";
-import { canEdit, canSee, isMember, pilotByCode, pilotsFor, type Pilot } from "./pilots";
+import { getNote, listNotes, readInput, setEffect, startNote } from "./notes";
+import { loadMapData } from "./mapdata";
+import { buildMap, readFilters } from "./mood";
+import { SERVICES, loadSetup, loadWeights, saveSetup, saveWeights, serviceId, standardFunctions } from "./setup";
+import { dropIssue, held as heldCampaign, loadCampaign, removeItem, saveItem, setIssue } from "./campaign";
+import { canEdit, canSee, isMember, isOwnLead, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
 import { areaOf, outcodeOf, whereIs } from "./postcodes";
 import { qrCode } from "./qr";
@@ -176,6 +191,36 @@ async function handleAuthority(c: Config, request: Request): Promise<Response> {
     reading: readings.find((r) => r.status === "ready") ?? null, working: readings.find((r) => r.status === "working") ?? null,
     adults: census?.adults ?? null, benchmark: middle,
   });
+}
+
+async function handleMap(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 2000);
+  const p = pilotFor(me, b.code);
+  const data = await loadMapData(c, p);
+  return json({ ...buildMap(data, readFilters(b, data.today, data.topics)), canEdit: canEdit(me, p), isLead: isOwnLead(me, p) });
+}
+
+async function handleSetup(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const [setup, weights] = await Promise.all([loadSetup(c, p.code), loadWeights(c)]);
+  return json({ setup, weights, services: SERVICES, standard: Object.fromEntries(SERVICES.map((s) => [s.id, standardFunctions(s.id)])), canEdit: canEdit(me, p), isLead: isOwnLead(me, p), canWeigh: me.siteAdmin });
+}
+
+// Everything held back while the election setting is on, and nothing can be changed
+async function notInElection(c: Config, code: string): Promise<void> {
+  if ((await loadElection(c, code)).on) throw new FriendlyError("The election setting is on, so nothing can be planned until it's off.");
+}
+async function handleCampaign(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const service = serviceId(b.service);
+  const [campaign, setup, election] = await Promise.all([loadCampaign(c, p.code), loadSetup(c, p.code), loadElection(c, p.code)]);
+  const now = heldCampaign(campaign, election.on);
+  return json({ issues: now.issues.filter((x) => x.service === service), items: now.items.filter((x) => x.service === service), channels: setup.channels, election: election.on, canEdit: canEdit(me, p) });
 }
 
 async function handleAttention(c: Config, request: Request): Promise<Response> {
@@ -611,6 +656,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
     if (request.method === "POST") {
       if (path === "/api/config") return json({ websiteUrl: c.websiteUrl, demo: c.demo });
+      if (path === "/demo/map") {
+        if (!c.demo) return json({ error: "Not found." }, 404);
+        return json(demoMap(await readJsonBody(request, 2000)));
+      }
       if (path === "/api/logout") return handleLogout();
       if (missingSettings(c).length) throw new FriendlyError(`Clarion is not set up yet. Missing settings: ${missingSettings(c).join(", ")}.`, 500);
       switch (path) {
@@ -636,6 +685,16 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/facts/survey": return await handleFactsSurvey(c, request);
         case "/api/facts/notes": return await handleFactsNotes(c, request);
         case "/api/attention": return await handleAttention(c, request);
+        case "/api/map": return await handleMap(c, request);
+        case "/api/setup/get": return await handleSetup(c, request);
+        case "/api/setup/save": { const { me, p, b } = await editor(c, request, 20000); return json({ setup: await saveSetup(c, p.code, b, me.name) }); }
+        case "/api/setup/weights": { const me = await signedIn(c, request); if (!me.siteAdmin) throw new FriendlyError("Only FHRG site administrators can do this.", 403); return json({ weights: await saveWeights(c, await readJsonBody(request, 1000)) }); }
+        case "/api/campaign/get": return await handleCampaign(c, request);
+        case "/api/issue/set": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); return json({ issue: await setIssue(c, p.code, b, serviceId(b.service), me.name) }); }
+        case "/api/issue/drop": { const { p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await dropIssue(c, p.code, b.topic, serviceId(b.service)); return json({ ok: true }); }
+        case "/api/campaign/item": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); return json({ item: await saveItem(c, p.code, b, serviceId(b.service), me.name) }); }
+        case "/api/campaign/remove": { const { p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await removeItem(c, p.code, b.id); return json({ ok: true }); }
+        case "/api/note/effect": { const { p, b } = await editor(c, request, 1000); if (!validId(b.id)) throw new FriendlyError("That note wasn't found.", 404); return json({ note: await setEffect(c, p.code, b.id, b.effect, b.topic) }); }
         case "/api/enquiries/get": return await handleEnquiries(c, request);
         case "/api/enquiries/import": { const { me, p, b } = await editor(c, request, 3000000); return json({ import: await saveImport(c, me, p, b) }); }
         case "/api/enquiries/remove": { const { p, b } = await editor(c, request, 1000); await removeImport(c, p, b.id); return json({ ok: true }); }

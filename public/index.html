@@ -53,35 +53,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .brand-logo .fhrg-logo { width: 176px; }
 
 /* shell */
-.app { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100%; }
-.rail { position: sticky; top: 0; align-self: start; height: 100vh; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px 14px; border-right: 1px solid var(--line); background: var(--surface); overflow-y: auto; }
-.brand { display: grid; gap: 8px; padding: 2px 6px 14px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
-.brand-mark { font-weight: 700; font-size: 1.02rem; line-height: 1.15; color: var(--heading); }
-.brand-sub { font-size: 0.84rem; color: var(--ink-3); }
-.nav { display: grid; gap: 2px; }
-.nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px; color: var(--ink); cursor: pointer; font-weight: 600; }
-.nav button svg { flex: none; color: var(--ink-3); }
-.nav button:hover { background: var(--bg); color: var(--accent-2); }
-.nav button[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
-.nav button[aria-current="page"] svg { color: var(--accent-ink); }
-.nav-sep { height: 1px; background: var(--line); margin: 8px 6px; }
-.rail-pick { padding: 4px 10px; }
-.rail-pick select { padding: 5px 8px; }
-.rail-foot { margin-top: auto; display: grid; gap: 8px; padding: 12px 8px 0; border-top: 1px solid var(--line); font-size: 0.86rem; color: var(--ink-3); }
-.rail-foot strong { color: var(--ink); }
-.main { min-width: 0; padding-inline: clamp(16px, 3vw, 36px); padding-block: 22px 60px; }
-.page { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.top { background: var(--navy-deep); color: #fff; }
+.top-in, .defaults, .tabs-in, .page { max-width: 1320px; margin-inline: auto; }
+.top-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 28px; padding: 10px clamp(16px, 3vw, 36px) 6px; }
+.brand { display: flex; align-items: center; gap: 12px; } .brand-logo .fhrg-logo { width: 132px; }
+.brand-mark { font-weight: 800; font-size: 1.25rem; line-height: 1.1; color: #fff; } .brand-sub { font-size: 0.84rem; color: #d2e1f3; }
+.pickers { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; }
+.picker { display: grid; gap: 3px; font-size: 0.78rem; color: #d2e1f3; } .picker select { min-height: 40px; max-width: 220px; padding: 6px 8px; border-radius: 8px; border: 1.5px solid #6d97c9; background: #fff; color: #1a3452; font-weight: 600; font-size: 0.92rem; }
+.top-who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 0.82rem; color: #d2e1f3; } .top-who .btn { color: #fff; border-color: #6d97c9; background: none; }
+.defaults { margin-block: 0; padding: 0 clamp(16px, 3vw, 36px) 8px; font-size: 0.82rem; color: #d2e1f3; }
+.tabs { background: var(--surface); border-bottom: 1px solid var(--line); } .tabs-in { display: flex; flex-wrap: wrap; gap: 2px; padding-inline: clamp(16px, 3vw, 36px); }
+.tab { display: inline-flex; align-items: center; gap: 7px; min-height: 46px; padding: 8px 10px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--ink-2); font-weight: 600; cursor: pointer; }
+.tab[aria-current="page"] { color: var(--heading); border-bottom-color: var(--accent); font-weight: 800; } .tab.gap { margin-left: auto; }
+.tab-n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); color: var(--heading); font-size: 0.8rem; font-weight: 800; } .tab[aria-current="page"] .tab-n { background: var(--accent); color: var(--accent-ink); }
+.main { min-width: 0; padding-inline: clamp(16px, 3vw, 36px); padding-block: 18px 60px; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
 .page-head > div:not(.row) { display: grid; gap: 6px; min-width: 0; }
 .page-head p { color: var(--ink-2); font-size: 1.02rem; }
-.topbar { display: none; }
-@media (max-width: 880px) {
-  .app { grid-template-columns: minmax(0, 1fr); }
-  .rail { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); z-index: 40; transform: translateX(-104%); transition: transform 0.2s ease; box-shadow: var(--shadow); }
-  .rail.open { transform: none; }
-  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; position: sticky; top: 0; z-index: 30; background: var(--surface); border-bottom: 1px solid var(--line); padding: 8px 16px; }
-  .main { padding-block: 16px 50px; }
-}
 .scrim { position: fixed; inset: 0; background: rgba(10, 20, 32, 0.45); z-index: 35; }
 
 /* blocks */
@@ -251,51 +240,82 @@ tr.selected td { background: var(--surface-2); }
 .map-zoom button { width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; }
 .map-credit { position: absolute; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.85); padding: 1px 6px; font-size: 0.72rem; }
 .qr { width: 220px; height: 220px; display: block; }
-/* The two pictures at the top of the Summary. A highways officer's own diagram: a roundabout with the authority or one
-   resident in the middle, and every source of opinion on a road leading in. Wider roads carry more. */
-:root { --lean-down: #d9731f; --lean-down-ink: #17212c; --lean-up: #264a6f; --lean-up-ink: #ffffff; --lean-mixed: #7f8ea3; --lean-mixed-ink: #17212c;
-  --band-1-ink: #17212c; --band-2-ink: #17212c; --band-3-ink: #17212c; --band-4-ink: #ffffff; --band-5-ink: #ffffff; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --lean-down: #e38a3e; --lean-up: #6ea3e0; --lean-up-ink: #0b1420; --lean-mixed: #5c6b7d; --lean-mixed-ink: #ffffff;
-  --band-1-ink: #ffffff; --band-2-ink: #ffffff; --band-3-ink: #ffffff; --band-4-ink: #0b1420; --band-5-ink: #0b1420; } }
-.pic-card { display: grid; gap: 12px; container-type: inline-size; }
-.pic { position: relative; aspect-ratio: 1000 / 680; }
-.pic-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.pic-lines path, .pic-lines line { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; }
-.road { stroke: var(--line-2); stroke-width: 15px; } .road-mark { stroke: var(--surface); stroke-width: 1.5px; stroke-dasharray: 7 9; } .lane { stroke: var(--line-2); stroke-width: 2.5px; }
-.spoke { stroke: var(--line-2); transition: stroke-width 0.3s ease; }
-.pic-middle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 168px; height: 168px; border-radius: 50%; display: grid; place-content: center; justify-items: center; gap: 4px; padding: 14px; text-align: center;
-  background: var(--navy-deep); color: #fff; box-shadow: 0 0 0 7px var(--surface), 0 0 0 22px var(--line-2), 0 0 0 24px var(--surface); }
-.pic-middle strong { font-size: 1.12rem; line-height: 1.15; } .pic-middle span { font-size: 0.84rem; line-height: 1.2; } .pic-middle svg { margin-bottom: 2px; }
-.pic-hub { position: absolute; transform: translate(-50%, -50%); padding: 2px 10px; border-radius: 999px; background: var(--surface); border: 1.5px solid var(--line-2); color: var(--ink-2); font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
-.pic-group, .spots { display: contents; }
-.spot { --d: 50px; position: absolute; display: flex; align-items: center; gap: 8px; width: 178px; color: var(--ink); text-decoration: none; }
-.spot.right { transform: translate(calc(var(--d) / -2), -50%); } .spot.left { transform: translate(calc(var(--d) / 2 - 100%), -50%); flex-direction: row-reverse; text-align: right; }
-.spot.above, .spot.below { width: 132px; gap: 4px; justify-items: center; text-align: center; } .spot.above { flex-direction: column-reverse; transform: translate(-50%, calc(var(--d) / 2 - 100%)); } .spot.below { flex-direction: column; transform: translate(-50%, calc(var(--d) / -2)); }
-.spot.above .spot-tip, .spot.below .spot-tip { left: -40px; }
-a.spot:hover .spot-label { text-decoration: underline; }
-.plate { flex: none; width: var(--d); height: var(--d); border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.02rem; border: 2px solid var(--surface); box-shadow: 0 0 0 1.5px var(--line-2); transition: width 0.3s ease, height 0.3s ease, background-color 0.3s ease, color 0.3s ease; }
-.spot-text { display: grid; gap: 1px; min-width: 0; } .spot-label { font-weight: 700; font-size: 0.9rem; line-height: 1.2; }
-.spot-tip:empty { display: none !important; }
-.spot-tip { display: none; position: absolute; z-index: 5; bottom: calc(100% + 6px); left: 0; width: 230px; padding: 7px 10px; border-radius: var(--radius-sm); background: var(--navy-deep); color: #fff; font-size: 0.82rem; font-weight: 400; line-height: 1.3; text-align: left; box-shadow: var(--shadow); }
-.spot.left .spot-tip { left: auto; right: 0; } .spot:hover .spot-tip, .spot:focus-visible .spot-tip { display: block; } .spot:hover, .spot:focus-visible { z-index: 6; }
-.lean-down .plate { background: var(--lean-down); color: var(--lean-down-ink); } .lean-up .plate { background: var(--lean-up); color: var(--lean-up-ink); } .lean-mixed .plate { background: var(--lean-mixed); color: var(--lean-mixed-ink); }
-.lean-none .plate { background: var(--surface); color: var(--ink-3); box-shadow: none; border: 1.5px dashed var(--line-2); }
-.band-1 .plate { background: var(--h-s1); color: var(--band-1-ink); } .band-2 .plate { background: var(--h-s2); color: var(--band-2-ink); } .band-3 .plate { background: var(--h-s3); color: var(--band-3-ink); } .band-4 .plate { background: var(--h-s4); color: var(--band-4-ink); } .band-5 .plate { background: var(--h-s5); color: var(--band-5-ink); }
-.pic-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.84rem; color: var(--ink-2); } .pic-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.pic-legend i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid var(--line-2); }
-.age-pick { display: flex; flex-wrap: wrap; gap: 6px; } .age-pick button { padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--line-2); background: var(--surface); color: var(--ink); font-weight: 700; font-size: 0.88rem; cursor: pointer; }
-.age-pick button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.pic-line { font-weight: 700; color: var(--heading); }
-@container (max-width: 860px) {
-  .pic { aspect-ratio: auto; display: grid; gap: 14px; } .pic-lines { display: none; }
-  .pic-middle { position: static; transform: none; width: auto; height: auto; border-radius: var(--radius); box-shadow: none; padding: 12px; }
-  .pic-group { display: grid; gap: 8px; } .pic-hub { position: static; transform: none; justify-self: start; }
-  .spots { display: grid; gap: 8px; } .spot, .spot.left, .spot.right, .spot.above, .spot.below { position: static; transform: none; width: auto; gap: 10px; flex-direction: row; text-align: left; }
-  .plate { width: 54px; height: 54px; font-size: 0.95rem; }
-  .spot-tip, .spot.left .spot-tip { display: block; position: static; width: auto; padding: 0; background: none; color: var(--ink-3); box-shadow: none; }
+/* The map, in all three views: the mood in a circle, the same colours, its share below, and a bigger circle for a
+   bigger share. A plain line joins each pair of circles by the shortest route. */
+:root { --lean-down: #d9731f; --lean-down-ink: #17212c; --lean-up: #264a6f; --lean-up-ink: #ffffff; --lean-mixed: #7f8ea3; --lean-mixed-ink: #17212c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --lean-down: #e38a3e; --lean-up: #6ea3e0; --lean-up-ink: #0b1420; --lean-mixed: #5c6b7d; --lean-mixed-ink: #ffffff; } }
+.split { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px; }
+.col-main { flex: 999 1 560px; min-width: 0; display: grid; gap: 12px; }
+.panel { flex: 1 1 340px; min-width: 0; max-width: 100%; display: grid; gap: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.seg { display: inline-flex; flex-wrap: wrap; justify-self: start; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface-2); }
+.seg button { min-height: 40px; padding: 6px 16px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); font-weight: 600; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--heading); font-weight: 800; box-shadow: 0 1px 2px rgba(23, 33, 44, 0.18); }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 28px; } .filter { display: grid; gap: 6px; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin: 0; padding: 0; list-style: none; font-size: 0.9rem; }
+.crumbs li { display: inline-flex; align-items: center; gap: 4px; } .crumbs li + li::before { content: "\203A"; color: var(--ink-3); }
+.crumbs button { padding: 4px 6px; border: 0; background: none; color: var(--accent); text-decoration: underline; cursor: pointer; } .crumbs button[aria-current="page"] { color: var(--ink); font-weight: 700; text-decoration: none; }
+.stage-box { container-type: inline-size; container-name: stage; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
+.stage { position: relative; aspect-ratio: 1000 / 700; } .stage.big { aspect-ratio: 1000 / 820; }
+.wires { position: absolute; inset: 0; width: 100%; height: 100%; } .wires path { fill: none; stroke: var(--line-2); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 176px; height: 176px; border-radius: 50%; display: grid; place-content: center; justify-items: center; gap: 2px; padding: 14px; border: 0; text-align: center; background: var(--navy-deep); color: #fff; cursor: pointer; }
+.hub:disabled { cursor: default; opacity: 1; }
+.hub-title { font-weight: 800; font-size: 1rem; line-height: 1.15; } .hub-line { font-size: 0.82rem; line-height: 1.2; } .hub-strong { font-weight: 800; font-size: 1.7rem; line-height: 1.1; } .hub-mood { font-weight: 700; font-size: 0.84rem; line-height: 1.2; }
+.hub.lean-down { background: var(--lean-down); color: var(--lean-down-ink); } .hub.lean-mixed { background: var(--lean-mixed); color: var(--lean-mixed-ink); } .hub.lean-up { background: var(--lean-up); color: var(--lean-up-ink); }
+.hub.lean-none, .hub.lean-ctx { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 2px var(--line-2); }
+.nd { --d: 72px; --lw: clamp(84px, 15cqw, 132px); position: absolute; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--ink); cursor: pointer; }
+.nd.right { width: calc(var(--d) + 8px + var(--lw)); transform: translate(calc(var(--d) / -2), -50%); text-align: left; }
+.nd.left { width: calc(var(--d) + 8px + var(--lw)); flex-direction: row-reverse; transform: translate(calc(var(--d) / 2 - 100%), -50%); text-align: right; }
+.nd.above { width: 176px; flex-direction: column-reverse; gap: 4px; transform: translate(-50%, calc(var(--d) / 2 - 100%)); text-align: center; }
+.nd.below { width: 176px; flex-direction: column; gap: 4px; transform: translate(-50%, calc(var(--d) / -2)); text-align: center; }
+.nd-text { display: grid; gap: 2px; min-width: 0; justify-items: start; } .nd.left .nd-text { justify-items: end; } .nd.above .nd-text, .nd.below .nd-text { justify-items: center; }
+.nd:hover .nd-label { text-decoration: underline; }
+.bub { flex: none; width: var(--d); height: var(--d); border-radius: 50%; display: grid; place-content: center; justify-items: center; font-weight: 800; font-size: 1.08rem; line-height: 1.05; box-shadow: 0 0 0 1.5px var(--line-2); }
+.bub-u { font-size: 0.68rem; font-weight: 600; }
+.nd-label { font-weight: 700; font-size: 0.9rem; line-height: 1.15; } .nd-sub { font-size: 0.78rem; line-height: 1.15; color: var(--ink-3); }
+.nd-flag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; background: var(--navy-deep); color: #fff; font-size: 0.74rem; font-weight: 700; }
+.nd.sel .bub { box-shadow: 0 0 0 3px var(--accent); }
+.lean-down .bub { background: var(--lean-down); color: var(--lean-down-ink); } .lean-up .bub { background: var(--lean-up); color: var(--lean-up-ink); } .lean-mixed .bub { background: var(--lean-mixed); color: var(--lean-mixed-ink); }
+.lean-none .bub { background: var(--surface); color: var(--ink-2); box-shadow: none; border: 1.5px dashed var(--line-2); } .lean-ctx .bub { background: var(--surface-2); color: var(--ink-2); }
+.lean-add .bub { background: var(--surface); color: var(--accent); box-shadow: none; border: 1.5px dashed var(--accent); font-size: 1.5rem; } .lean-root .bub { background: var(--surface-2); }
+@container stage (max-width: 540px) {
+  .stage, .stage.big { aspect-ratio: auto; display: grid; gap: 8px; } .wires { display: none; }
+  .hub { position: static; transform: none; width: auto; height: auto; border-radius: var(--radius); padding: 12px; }
+  .nd, .nd.left, .nd.right, .nd.above, .nd.below { position: static; transform: none; width: auto; flex-direction: row; gap: 12px; text-align: left; }
+  .nd .nd-text, .nd.left .nd-text, .nd.above .nd-text, .nd.below .nd-text { justify-items: start; }
 }
-@media (prefers-reduced-motion: reduce) { .spoke, .plate { transition: none; } }
-@media print { .pic-card { break-inside: auto; } .spot { break-inside: avoid; } .age-pick { display: none; } .plate, .pic-middle, .pic-legend i { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+.pic-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.84rem; color: var(--ink-2); } .pic-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 14px; border-radius: 50%; display: inline-block; } .sw-down { background: var(--lean-down); } .sw-up { background: var(--lean-up); } .sw-mixed { background: var(--lean-mixed); } .sw-none { background: var(--surface); border: 1.5px dashed var(--line-2); } .sw-ctx { background: var(--surface-2); border: 1.5px solid var(--line-2); }
+.scorebox { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; } .scorebox > div { display: grid; gap: 1px; padding: 8px 10px; border-radius: 8px; background: var(--bg); } .scorebox strong { font-size: 1.3rem; line-height: 1.15; }
+.how { display: grid; gap: 6px; padding: 10px; border-radius: 8px; border: 1px solid var(--line); }
+.made { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 10px; font-size: 0.88rem; align-items: baseline; } .made strong { text-align: right; } .made .note { text-align: right; }
+.tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; } .tag { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--ink-2); font-size: 0.76rem; }
+.tag-b { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+.linkish { padding: 1px 2px; border: 0; background: none; color: var(--accent); font-size: 0.82rem; text-decoration: underline; cursor: pointer; }
+.left-out { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 10px; border-radius: 8px; background: var(--bg); font-size: 0.88rem; }
+.rows { display: grid; gap: 6px; } .row-link, .fact { display: grid; gap: 1px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-decoration: none; color: var(--ink); }
+.row.spread { justify-content: space-between; }
+.mentions { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; } .mentions li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 0.9rem; }
+.tone { align-self: start; min-width: 74px; padding: 1px 6px; border-radius: 4px; font-size: 0.74rem; font-weight: 700; text-align: center; } .tone-critical { background: var(--lean-down); color: var(--lean-down-ink); } .tone-supportive { background: var(--lean-up); color: var(--lean-up-ink); } .tone-neutral { background: var(--surface-2); color: var(--ink); }
+.bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; padding: 2px 4px; border-radius: 6px; font-size: 0.86rem; } .bar-row.sel { background: var(--bg); font-weight: 700; }
+.bar-t { grid-column: 1 / -1; display: block; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; } .bar-f { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.mood-big { --d: 104px; display: flex; align-items: center; gap: 16px; } .mood-big .bub { font-size: 2rem; } .mood-w { font-size: 1.5rem; font-weight: 800; color: var(--heading); line-height: 1.15; }
+.gauge { position: relative; height: 10px; border-radius: 5px; background: var(--surface-2); } .gauge-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--line-2); } .gauge-m { position: absolute; top: 50%; width: 18px; height: 18px; border-radius: 50%; transform: translate(-50%, -50%); background: var(--navy-deep); box-shadow: 0 0 0 2px var(--surface); }
+.gauge-l { display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--ink-3); }
+.mrow { display: grid; grid-template-columns: minmax(130px, 1.3fr) minmax(90px, 1.4fr) 48px 40px; gap: 10px; align-items: center; min-height: 40px; padding: 2px 4px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 0.88rem; } .mrow:hover { background: var(--bg); }
+.tbl-wrap.plain { border: 0; } .fn { display: grid; grid-template-columns: minmax(130px, 1.2fr) minmax(130px, 2fr) 72px 110px; gap: 10px; align-items: center; min-width: 500px; padding: 4px 0; font-size: 0.88rem; } .fn.head { color: var(--ink-3); font-size: 0.8rem; }
+.fn-bar { position: relative; display: block; height: 14px; } .fn-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); } .fn-fill { position: absolute; top: 0; bottom: 0; } .fn-fill.lean-down { background: var(--lean-down); border-radius: 4px 0 0 4px; } .fn-fill.lean-up { background: var(--lean-up); border-radius: 0 4px 4px 0; } .fn-fill.lean-mixed { background: var(--lean-mixed); }
+.heat { display: grid; grid-template-columns: minmax(130px, 1.5fr) repeat(5, minmax(52px, 1fr)); gap: 6px; align-items: center; } .heat-h { font-size: 0.8rem; color: var(--ink-3); text-align: center; } .heat-l { font-weight: 700; font-size: 0.88rem; }
+.heat-c { display: grid; place-items: center; min-height: 42px; border-radius: 8px; font-weight: 800; text-decoration: none; color: var(--ink); } .heat-c.lean-down { background: var(--lean-down); color: var(--lean-down-ink); } .heat-c.lean-up { background: var(--lean-up); color: var(--lean-up-ink); } .heat-c.lean-mixed { background: var(--lean-mixed); color: var(--lean-mixed-ink); } .heat-c.lean-none { background: var(--surface); color: var(--ink-2); border: 1.5px dashed var(--line-2); }
+.meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .meter { display: grid; gap: 2px; font-size: 0.92rem; }
+.cal-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); } .cal { display: grid; min-width: 820px; }
+.cal-h { padding: 8px 10px; font-size: 0.8rem; font-weight: 700; color: var(--ink-2); border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); } .cal-h:first-child { border-left: 0; }
+.cal-r { display: grid; align-content: start; gap: 2px; padding: 10px; font-size: 0.92rem; border-bottom: 1px solid var(--line); } .cal-c { display: grid; align-content: start; gap: 6px; min-height: 96px; padding: 6px; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); }
+.ev { display: grid; gap: 0; width: 100%; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--accent-wash); color: var(--ink); text-align: left; font-size: 0.84rem; line-height: 1.25; cursor: pointer; } .ev[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.ev-add { width: 100%; min-height: 40px; border: 1.5px dashed var(--line-2); border-radius: 6px; background: none; color: var(--ink-3); font-size: 1.1rem; cursor: pointer; } .ev-add:hover { color: var(--accent); border-color: var(--accent); }
+.er { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; } .er input { flex: 1 1 140px; min-width: 0; padding: 6px 10px; border: 1.5px solid var(--line-2); border-radius: 7px; background: var(--surface); }
+.wt { display: grid; grid-template-columns: minmax(130px, 1fr) 90px 44px; gap: 10px; align-items: center; font-size: 0.9rem; } .wt input { padding: 4px 8px; border: 1.5px solid var(--line-2); border-radius: 7px; background: var(--surface); }
+@media print { .bub, .hub, .fn-fill, .heat-c { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .seg, .filters, .panel .row { display: none; } }
 .link-box { padding: 10px 12px; border: 1.5px solid var(--line-2); border-radius: var(--radius-sm); background: var(--bg); overflow-wrap: anywhere; font-weight: 700; }
 .entry-row { display: grid; gap: 4px 12px; grid-template-columns: minmax(0, 3fr) 5rem minmax(0, 2fr); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .entry-row.wide { grid-template-columns: minmax(0, 1fr); }
@@ -421,6 +441,8 @@ const Demo = {
     const b = Demo.brief ??= JSON.parse(JSON.stringify(Demo.pack.briefing)), on = Demo.election.on;
     return { briefing: on ? { ...b, lines: [], questions: b.questions.map((q) => ({ ...q, answer: "" })), electionNote: Demo.pack.electionNote } : { ...b, electionNote: "" }, canEdit: true, canApprove: true, election: Demo.election };
   },
+  camp: null,
+  campaign() { return (this.camp ??= JSON.parse(JSON.stringify(this.pack.campaign))); },
   prepared(kind, result) { this.job = { id: "20261030090000000-de000009", kind, status: "ready", stage: "Ready", result, done: 0, total: 0 }; return { job: this.job }; },
   async call(path, b = {}) {
     const P = Demo.pack;
@@ -429,7 +451,16 @@ const Demo = {
       case "/api/authority": return P.authority;
       case "/api/coverage/get": return P.coverage;
       case "/api/coverage/summary": return { summary: P.coverage.summary };
-      case "/api/picture": return P.picture;
+      case "/api/map": { const res = await fetch("/demo/map", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...b, election: Demo.election.on }) }); return await res.json(); }
+      case "/api/setup/get": return P.setup;
+      case "/api/setup/save": return { setup: { ...P.setup.setup, functions: { ...P.setup.setup.functions, [b.service]: b.list }, ...(b.part === "functions" ? {} : { [b.part]: b.list }) } };
+      case "/api/setup/weights": return { weights: P.setup.weights };
+      case "/api/campaign/get": return { ...Demo.campaign(), election: Demo.election.on, ...(Demo.election.on ? { items: [] } : {}) };
+      case "/api/issue/set": { const c = Demo.campaign(), was = c.issues.find((x) => x.topic === b.topic); if (was) Object.assign(was, b); else c.issues.push({ key: "", ...b, status: b.status || "confirmed" }); return { issue: b }; }
+      case "/api/issue/drop": { const c = Demo.campaign(); c.issues = c.issues.filter((x) => x.topic !== b.topic); return { ok: true }; }
+      case "/api/campaign/item": { const c = Demo.campaign(), was = c.items.find((x) => x.id === b.id), item = { ...was, ...b, id: b.id || `d${Date.now()}` }; c.items = was ? c.items.map((x) => (x === was ? item : x)) : [...c.items, item]; return { item }; }
+      case "/api/campaign/remove": { const c = Demo.campaign(); c.items = c.items.filter((x) => x.id !== b.id); return { ok: true }; }
+      case "/api/note/effect": return { note: { ...P.note, effect: b.effect, topic: b.topic } };
       case "/api/enquiries/get": return P.enquiries;
       case "/api/works/get": return P.works;
       case "/api/abc/find": return { titles: P.abcTitles.filter((x) => (b.q || "").length > 2 && x.name.toLowerCase().includes(b.q.toLowerCase())) };
@@ -537,7 +568,7 @@ function authScreen(message) {
 }
 
 // ---------------------------------------------------------------- shell ------
-// The address says where you are: #a/<code>, #evidence/<code>, #said/<code>/<part>, #attention/<code>, #about/<code>,
+// The address says where you are: #a/<code> (the map), #dash/<code>, #issues/<code>, #campaign/<code>, #setup/<code>, #evidence/<code>, #said/<code>/<part>, #attention/<code>, #about/<code>,
 // #notes/<code>, #note/<code>/<id>, #briefings/<code>, #briefing/<code>/<id>, #surveys/<code>, #survey/<code>/<id>/<part>, #print/<code>/<id>/<first>/<last>,
 // and #all for FHRG administrators.
 function route() {
@@ -546,8 +577,8 @@ function route() {
   App.viewId++;
   shell();
 }
-const NAV = [["a", "Summary", "overview"], ["said", "What's being said", "media"], ["attention", "Attention and concern", "attention"], ["notes", "Impact notes", "notes"], ["briefings", "Councillor briefings", "briefings"], ["surveys", "Street surveys", "surveys"], "sep", ["evidence", "Evidence", "evidence"], ["about", "Sources & method", "sources"]];
-const SECTION_OF = { note: "notes", briefing: "briefings", survey: "surveys", print: "surveys" };
+const TABS = [["a", "Map", 1], ["surveys", "Surveys", 2], ["dash", "Dashboard", 3], ["issues", "High-impact issues", 4], ["campaign", "Campaign calendar", 5], ["briefings", "Briefings", 6], ["said", "Sources", 0, "gap"], ["setup", "Set-up", 0]];
+const SECTION_OF = { note: "a", notes: "a", briefing: "briefings", survey: "surveys", print: "surveys", evidence: "dash", attention: "dash", about: "setup" };
 const signOut = async () => { try { await API.call("/api/logout"); } catch (e) { /* */ } API.setToken(""); location.hash = ""; location.reload(); };
 function shell() {
   const st = App.status;
@@ -557,25 +588,18 @@ function shell() {
   const current = list.find((a) => a.code === code) || (!admin && list.length === 1 ? list[0] : null);
   const all = admin && !current;
   const section = SECTION_OF[view] || view;
-  const nav = h("div", { class: "nav" });
-  if (admin) nav.append(h("button", { type: "button", "aria-current": all ? "page" : null, onclick: () => { location.hash = "#all"; } }, icon("overview"), "All authorities"));
-  if (admin && current) nav.append(h("div", { class: "nav-sep" }));
-  if (current) nav.append(...NAV.map((n) => (n === "sep" ? h("div", { class: "nav-sep" }) : h("button", { type: "button", "aria-current": section === n[0] ? "page" : null, onclick: () => { location.hash = `#${n[0]}/${current.code}`; } }, icon(n[2]), n[1]))));
-  if (admin) {
-    const pick = h("select", { "aria-label": "Open an authority", onchange: () => { if (pick.value) location.hash = `#a/${pick.value}`; } }, h("option", { value: "" }, "Choose…"), list.map((a) => h("option", { value: a.code }, a.name)));
-    pick.value = current ? current.code : "";
-    nav.append(h("div", { class: "nav-sep" }), h("label", { class: "field rail-pick" }, "Open an authority", pick));
-  }
-  const rail = h("nav", { class: "rail", "aria-label": "Sections" },
-    h("div", { class: "brand" }, h("a", { class: "brand-logo", href: "https://fhrg.co.uk", target: "_blank", rel: "noopener noreferrer", title: "Future Highways Research Group" }, logo()), brand(), h("div", { class: "brand-sub" }, all ? "FHRG administration" : admin && current ? current.name : st.user.authority)),
-    nav,
-    h("div", { class: "rail-foot" },
-      App.demo ? [h("span", {}, "Demonstration: made-up data"), h("a", { class: "btn small", href: "/" }, "FHRG members: sign in")] : [h("div", {}, h("strong", {}, st.user.name), h("br"), st.user.authority),
-        st.spend ? h("div", { class: "small" }, `Claude this month: $${st.spend.month.toFixed(2)} of $${st.spend.cap}`) : null,
-        h("button", { class: "btn small ghost", type: "button", onclick: signOut }, icon("logout", 16), "Sign out")]));
+  if (App.code !== current?.code) { App.code = current?.code; App.meta = null; App.map = { view: "authority", path: [], scope: "all", bias: "all", include: [], partner: "", age: "", split: "" }; App.filters = { service: "highways", month: "", topic: "all" }; App.cal = { by: "topic", channel: "all", start: "", open: "" }; }
+  App.pick = {};
+  const pickAuthority = admin ? h("label", { class: "picker" }, "Authority", h("select", { onchange: (e) => { location.hash = e.target.value ? `#a/${e.target.value}` : "#all"; } }, h("option", { value: "" }, "All authorities"), list.map((a) => h("option", { value: a.code, selected: current?.code === a.code }, a.name)))) : null;
+  const who = App.demo ? [h("span", {}, "Demonstration: made-up data"), h("a", { class: "btn small", href: "/" }, "FHRG members: sign in")] : [h("span", {}, st.user.name, st.spend ? `, Claude this month $${st.spend.month.toFixed(2)} of $${st.spend.cap}` : ""), h("button", { class: "btn small", type: "button", onclick: signOut }, "Sign out")];
+  const note = h("p", { class: "defaults" });
+  App.pick.note = note;
+  const head = h("header", { class: "top no-print" }, h("div", { class: "top-in" }, h("div", { class: "brand" }, h("a", { class: "brand-logo", href: "https://fhrg.co.uk", target: "_blank", rel: "noopener noreferrer", title: "Future Highways Research Group" }, logo()), h("div", {}, brand(), h("div", { class: "brand-sub" }, all ? "FHRG administrators" : current?.name ?? st.user.authority))), h("div", { class: "pickers" }, pickAuthority, current ? pickerRow() : null), h("div", { class: "top-who" }, who)), current ? note : null);
+  const tabs = current ? h("nav", { class: "tabs no-print", "aria-label": "Sections" }, h("div", { class: "tabs-in" }, TABS.map(([key, words, n, cls]) => h("button", { type: "button", class: `tab${cls ? ` ${cls}` : ""}`, "aria-current": section === key ? "page" : null, onclick: () => { location.hash = `#${key}/${current.code}`; } }, n ? h("span", { class: "tab-n" }, n) : null, h("span", {}, words))))) : null;
   const main = h("main", { class: "main", id: "main" });
-  const menu = h("button", { class: "btn small", type: "button", "aria-label": "Open sections", onclick: () => rail.classList.toggle("open") }, "Menu");
-  clear($app).append(h("div", { class: "app" }, rail, h("div", {}, h("div", { class: "topbar" }, brand(), menu), main)));
+  clear($app).append(h("div", { class: "app" }, head, tabs, main));
+  fillPickers();
+  if (current && !App.meta && !["a", "dash", "issues", "campaign"].includes(view)) loadMap(current).catch(() => {});
   const page = h("div", { class: "page" });
   main.append(page);
   if (App.demo) page.append(h("div", { class: "demo-banner no-print" },
@@ -594,7 +618,11 @@ function shell() {
   if (view === "said") return saidView(page, current, id);
   if (view === "attention") return attentionView(page, current, id);
   if (view === "about") return aboutView(page, current);
-  return summaryView(page, current);
+  if (view === "dash") return dashView(page, current);
+  if (view === "issues") return issuesView(page, current);
+  if (view === "campaign") return campaignView(page, current);
+  if (view === "setup") return setupView(page, current);
+  return mapView(page, current);
 }
 const pageHead = (title, sub, ...tools) => h("div", { class: "page-head" }, h("div", {}, h("h1", {}, title), sub ? h("p", {}, sub) : null), tools.length ? h("div", { class: "row no-print" }, tools) : null);
 const failure = (e) => h("div", { class: "callout crit", role: "alert" }, e.message);
@@ -618,168 +646,408 @@ const progress = (stage) => h("div", { class: "callout", role: "status" }, h("st
 // ---------------------------------------------------------------- an authority
 const stat = (label, value, detail) => h("div", { class: "stat" }, h("span", { class: "label" }, label), h("span", { class: "value" }, value), detail ? h("span", { class: "detail" }, detail) : null);
 const directionPill = (d) => h("span", { class: `pill ${d === "Worsening" ? "serious" : d === "Improving" ? "ok" : ""}` }, d || "Not yet known");
-async function summaryView(page, a) {
+// ---------------------------------------------------------------- the pull-downs at the top
+App.filters = { service: "highways", month: "", topic: "all" };
+App.map = { view: "authority", path: [], scope: "all", bias: "all", include: [], partner: "", age: "", split: "" };
+App.cal = { by: "topic", channel: "all", start: "", open: "" };
+App.meta = null; App.pick = {};
+
+const mapAsk = (a) => ({ code: a.code, ...App.filters, bias: App.map.bias, view: App.map.view, partner: App.map.partner, include: App.map.include });
+async function loadMap(a) {
+  const d = await API.call("/api/map", mapAsk(a));
+  App.filters.month = d.month; App.meta = d;
+  fillPickers();
+  return d;
+}
+function fillPickers() {
+  const m = App.meta;
+  if (!m) return;
+  const set = (sel, list, value) => { if (!sel) return; clear(sel).append(...list.map(([v, words]) => h("option", { value: v }, words))); sel.value = value; };
+  set(App.pick.service, m.services.map((s) => [s.id, s.label]), App.filters.service);
+  set(App.pick.month, m.months.map((x) => [x.id, x.label]), App.filters.month);
+  set(App.pick.topic, [["all", "All topics"], ...m.topicList.map((t) => [t, t])], App.filters.topic);
+  if (App.pick.note) App.pick.note.textContent = `New posts and automatic collection use ${m.services.find((s) => s.id === App.filters.service)?.label}.`;
+}
+function pickerRow() {
+  const pick = (label, key, first) => {
+    const sel = h("select", { onchange: () => { App.filters[key] = sel.value; App.map.path = []; App.map.scope = "all"; route(); } }, h("option", { value: first[0] }, first[1]));
+    App.pick[key] = sel;
+    return h("label", { class: "picker" }, label, sel);
+  };
+  return h("div", { class: "pickers" }, pick("Service", "service", ["highways", "Highways"]), pick("Month", "month", ["", "Latest full month"]), pick("Topic", "topic", ["all", "All topics"]));
+}
+const planOn = (d, id) => d.planned.filter((p) => p.nodes.includes(id));
+const NEXT_TUESDAY = () => { const x = new Date(`${App.meta?.today ?? new Date().toISOString().slice(0, 10)}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + ((9 - x.getUTCDay()) % 7 || 7)); return x.toISOString().slice(0, 10); };
+async function planFrom(a, topic, origin) {
+  try {
+    const channels = (await API.call("/api/campaign/get", { code: a.code, service: App.filters.service })).channels;
+    const { item } = await API.call("/api/campaign/item", { code: a.code, service: App.filters.service, title: topic ? `Response on ${topic.toLowerCase()}` : "New response", date: NEXT_TUESDAY(), channel: channels[0]?.id ?? "", topics: topic ? [topic] : [], origin });
+    App.cal.open = item.id; App.filters.topic = "all";
+    location.hash = `#campaign/${a.code}`;
+  } catch (e) { toast(e.message); }
+}
+
+// ---------------------------------------------------------------- the map
+// Every view works the same way: the mood in a circle, the same colours, its share below, and a bigger circle for a
+// bigger share. The middle is coloured by its own mood. A line joins each pair of circles by the shortest route.
+const LEANINGS = ["Not known", "None shown", "Left", "Centre left", "Centre", "Centre right", "Right"], STANCES = ["Balanced", "Usually supportive", "Usually critical"];
+const RELEVANCE = ["High", "Some", "Little", "None"], TONES = ["Critical", "Neutral", "Supportive"], PROMINENCE = ["Front page or lead", "Inside page", "Passing mention"];
+const BIAS = [["all", "All sources"], ["left", "Left"], ["centre", "Centre"], ["right", "Right"], ["none", "None shown"]];
+
+function aroundHub(n, rx, ry) {
+  const start = n === 2 ? 180 : -90;
+  return Array.from({ length: n }, (_, i) => {
+    const a = ((start + (360 * i) / n) * Math.PI) / 180, up = Math.sin(a), over = Math.cos(a);
+    // the label sits on the far side of its circle, so a line never crosses one
+    return { x: +(50 + rx * over).toFixed(2), y: +(50 + ry * up).toFixed(2), side: up < -0.85 ? "above" : up > 0.85 ? "below" : over >= 0 ? "right" : "left" };
+  });
+}
+function bubble(x) {
+  const b = h("button", { type: "button", class: `nd lean-${x.lean} ${x.side}${x.sel ? " sel" : ""}`, style: { left: `${x.x}%`, top: `${x.y}%` }, title: x.tip || null, "aria-label": x.aria, onclick: x.open },
+    h("span", { class: "bub" }, h("span", {}, x.txt), x.unit ? h("span", { class: "bub-u" }, x.unit) : null),
+    h("span", { class: "nd-text" }, h("span", { class: "nd-label" }, x.label), x.sub ? h("span", { class: "nd-sub" }, x.sub) : null, x.planned ? h("span", { class: "nd-flag" }, svg("svg", { width: 12, height: 12, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 2, "aria-hidden": "true" }, svg("path", { d: "M5 22V3h13l-3 5 3 5H5" })), x.planned) : null));
+  b.style.setProperty("--d", `${x.d}px`);
+  return b;
+}
+function stageEl(nodes, hub, big, ry, rx) {
+  const pts = aroundHub(nodes.length, rx, ry);
+  const wires = svg("svg", { class: "wires", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" }, svg("path", { d: pts.map((p) => `M50 50L${p.x} ${p.y}`).join("") }));
+  return h("div", { class: "stage-box" }, h("div", { class: `stage${big ? " big" : ""}` }, wires, hub, nodes.map((n, i) => bubble({ ...n, ...pts[i] }))));
+}
+const hubEl = (x) => h("button", { type: "button", class: `hub lean-${x.lean}`, disabled: !x.back, "aria-label": x.back ? "Back one level" : null, onclick: x.back || null }, x.person ? svg("svg", { width: 30, height: 30, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 2, "aria-hidden": "true" }, svg("circle", { cx: 12, cy: 7.5, r: 4 }), svg("path", { d: "M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" })) : null,
+  x.strong ? h("span", { class: "hub-strong" }, x.strong) : null, h("span", { class: "hub-title" }, x.title), x.line ? h("span", { class: "hub-line" }, x.line) : null, x.mood ? h("span", { class: "hub-mood" }, x.mood) : null);
+const cap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+const chipRow = (list, on, pick) => h("div", { class: "chips" }, list.map(([id, words]) => h("button", { type: "button", class: "chip", "aria-pressed": String(on(id)), onclick: () => pick(id) }, words)));
+const filterBox = (label, ...kids) => h("div", { class: "filter" }, h("span", { class: "note" }, label), ...kids);
+const mapLegend = () => h("div", { class: "pic-legend" }, [["down", "Mood below −10"], ["up", "Mood above +10"], ["mixed", "Mixed"], ["none", "Too little to read yet"], ["ctx", "Informs campaigns, not counted in the mood"]].map(([k, words]) => h("span", {}, h("i", { class: `sw sw-${k}` }), words)), h("span", {}, "A bigger circle means a bigger share"));
+const trailOf = (tree, path) => { const out = [tree]; for (const id of path) { const next = out.at(-1).kids.find((k) => k.id === id); if (!next) break; out.push(next); } return out; };
+const sourcesUnder = (node) => (node.source ? [{ id: node.source, label: node.label }] : node.kids.flatMap(sourcesUnder));
+
+async function mapView(page, a) {
+  const box = h("div", { class: "split" }, loading("Drawing the map…"));
+  page.append(box);
+  const view = App.viewId;
+  const ask = async () => { const d = await loadMap(a); if (view === App.viewId) drawMap(box, a, d, ask); };
+  try { await ask(); } catch (e) { if (view === App.viewId) clear(box).append(failure(e)); }
+}
+
+function drawMap(box, a, d, ask) {
+  const m = App.map, redraw = () => drawMap(box, a, d, ask), again = () => ask().catch((e) => toast(e.message));
+  if (!d.partners.some((p) => p.id === m.partner)) m.partner = d.partners[0]?.id ?? "";
+  if (!m.age) m.age = d.public.ages[3] ?? d.public.ages[0] ?? "";
+  const trail = trailOf(d.tree, m.path), cur = trail.at(-1), root = trail.length === 1, isPublic = m.view === "public", isPartners = m.view === "partners";
+  const partner = d.partners.find((p) => p.id === m.partner) ?? null, rootName = isPartners ? partner?.name ?? "Key partners" : a.name;
+  const go = (path) => { m.path = path; m.scope = "all"; m.form = null; redraw(); };
+  const views = [["authority", "The authority"], ["public", "The public"], ["partners", "Key partners"]];
+  const seg = h("div", { class: "seg", role: "group", "aria-label": "Whose view of the service" }, views.map(([id, words]) => h("button", { type: "button", "aria-pressed": String(m.view === id), onclick: () => { m.view = id; m.path = []; m.scope = "all"; m.form = null; again(); } }, words)));
+  const toggleIn = (id) => { m.include = m.include.includes(id) ? m.include.filter((x) => x !== id) : [...m.include, id]; again(); };
+  const tools = isPublic
+    ? filterBox("Age", chipRow(d.public.ages.map((x) => [x, x]), (x) => x === m.age, (x) => { m.age = x; redraw(); }))
+    : isPartners
+      ? h("div", { class: "filters" }, filterBox("Key partners", d.partners.length ? chipRow(d.partners.map((p) => [p.id, p.name]), (x) => x === m.partner, (x) => { m.partner = x; m.path = []; again(); }) : h("p", { class: "note" }, "No partners yet. Add them in Set-up, if a partner is more visible than the authority."), h("a", { href: `#setup/${a.code}` }, "Edit the list")),
+        partner ? filterBox("Include in the authority's position", chipRow([[partner.id, m.include.includes(partner.id) ? "Included" : "Kept apart"]], (x) => m.include.includes(x), toggleIn)) : null)
+      : h("div", { class: "filters" }, filterBox("Filter by political leaning", chipRow(BIAS, (x) => x === m.bias, (x) => { m.bias = x; again(); })), d.partners.length ? filterBox("Add partners to the authority's position", chipRow(d.partners.map((p) => [p.id, p.name]), (x) => m.include.includes(x), toggleIn)) : null);
+  const crumbs = !isPublic && !root ? h("ol", { class: "crumbs", "aria-label": "Where you are on the map" }, trail.map((n, i) => h("li", {}, h("button", { type: "button", "aria-current": i === trail.length - 1 ? "page" : null, onclick: () => go(m.path.slice(0, i)) }, i ? n.label : rootName)))) : null;
+
+  let stage;
+  if (isPublic) {
+    const i = d.public.ages.indexOf(m.age), row = (d.public.groups.Age ?? []).find((g) => g.label === m.age), mood = row && row.sat !== null ? Math.round(row.sat - row.dis) : null;
+    const nodes = d.public.channels.map((c) => {
+      const v = c.rates[i], mo = c.mood ?? { txt: "–", unit: "", lean: "none", tip: "Private groups and search can't be tracked", word: "can't be tracked" };
+      return { lean: mo.lean, txt: mo.txt, unit: mo.unit, label: c.label, sub: `${fmt(v)}% of this age group`, tip: mo.tip, d: Math.round(52 + v * 0.45), aria: `${c.label}: ${mo.txt}, ${mo.word}, ${fmt(v)}% of this age group`, open: () => { if (c.path) { m.view = "authority"; m.path = c.path; m.scope = "all"; again(); } else toast("Private groups and search can't be tracked, so there's nothing to open."); } };
+    });
+    stage = stageEl(nodes, hubEl({ person: true, title: `Aged ${m.age}`, strong: mood === null ? "" : moodFmt(mood), mood: mood === null ? "" : cap(moodName(mood)), line: mood === null ? "Too few to report" : "", lean: mood === null ? "root" : leanName(mood) }), true, 39, 33);
+  } else {
+    const nodes = cur.kids.map((k) => {
+      const count = isPartners ? 0 : planOn(d, k.id).length;
+      return { lean: k.mood.lean, txt: k.mood.txt, unit: k.mood.unit, label: k.label, sub: k.sub, tip: k.mood.tip, d: k.pct === null ? 60 : Math.round(56 + k.pct * 0.6), planned: count ? `${count} planned` : "", aria: `${k.label}: ${k.mood.txt}, ${k.mood.word}${k.sub ? `, ${k.sub}` : ""}`, open: () => go([...m.path, k.id]) };
+    });
+    if (cur.source && trail.some((t) => ["tv", "radio", "press"].includes(t.id))) {
+      const list = d.pieces.filter((p) => p.nodes.includes(cur.id));
+      for (const sc of ["Local", "National"]) { const n = list.filter((p) => p.scope === sc).length; nodes.push({ lean: n ? "mixed" : "none", txt: String(n), unit: "", label: `${sc} mentions`, sub: "", tip: "", d: 60, sel: m.scope === sc, aria: `${sc} mentions: ${n}`, open: () => { m.scope = m.scope === sc ? "all" : sc; redraw(); } }); }
+    }
+    if (cur.add && d.canEdit) nodes.push({ lean: "add", txt: "+", unit: "", label: `Add a ${cur.add}`, sub: "", tip: "", d: 60, aria: `Add a ${cur.add}`, open: () => { m.form = "source"; redraw(); } });
+    const held = cur.mood.v !== null, sub = App.filters.topic !== "all" ? App.filters.topic : "";
+    const hub = root
+      ? isPartners
+        ? { title: partner?.name ?? "No partners yet", line: sub || partner?.role || "", strong: held ? cur.mood.txt : "", mood: held ? cap(cur.mood.word) : "", lean: held ? cur.mood.lean : "root" }
+        : { title: a.name, line: sub || d.services.find((s) => s.id === d.service)?.label, strong: held ? cur.mood.txt : "", mood: held ? `${cap(cur.mood.word)}${sub ? "" : `, ${d.direction.word.toLowerCase()}`}` : "Nothing to read yet", lean: held ? cur.mood.lean : "root" }
+      : { title: cur.label, strong: cur.mood.txt, line: cur.mood.unit || (held ? cap(cur.mood.word) : ""), lean: cur.mood.lean, back: () => go(m.path.slice(0, -1)) };
+    stage = stageEl(nodes, hubEl(hub), false, 34, 30);
+  }
+  const main = h("div", { class: "col-main" }, seg, tools, crumbs, stage, mapLegend());
+  const panel = h("aside", { class: "panel", "aria-label": "Details" }, m.form === "mention" ? mentionForm(a, d, cur, redraw, again) : m.form === "source" ? sourceForm(a, d, cur, redraw, again) : isPublic ? publicPanel(a, d) : nodePanel(a, d, cur, root, rootName, redraw, go));
+  clear(box).append(main, panel);
+}
+
+const moodFmt = (v) => (v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : "0");
+const moodName = (v) => (v <= -40 ? "very negative" : v <= -15 ? "negative" : v < 15 ? "mixed" : v < 40 ? "positive" : "very positive");
+const leanName = (v) => (v <= -10 ? "down" : v >= 10 ? "up" : "mixed");
+
+function publicPanel(a, d) {
+  const m = App.map, i = d.public.ages.indexOf(m.age), groups = Object.keys(d.public.groups);
+  if (!groups.includes(m.split)) m.split = groups[0] ?? "";
+  const top = [...d.public.channels].sort((x, y) => y.rates[i] - x.rates[i]).slice(0, 3).map((c) => (c.key === "bbc" ? c.label : c.label.toLowerCase()));
+  let up = 0, all = 0;
+  for (const c of d.public.channels) if (c.mood && c.mood.v !== null) { up += c.rates[i] * c.mood.v; all += c.rates[i]; }
+  const row = (d.public.groups.Age ?? []).find((g) => g.label === m.age), bars = h("div", { class: "rows" });
+  const drawBars = () => clear(bars).append(...(d.public.groups[m.split] ?? []).map((g) => h("div", { class: `bar-row${m.split === "Age" && g.label === m.age ? " sel" : ""}` }, h("span", {}, `${g.label} (${fmt(g.n)})`), h("span", {}, g.sat === null ? "Too few to report" : `${fmt(g.sat)}% satisfied`), g.sat === null ? null : h("span", { class: "bar-t" }, h("span", { class: "bar-f", style: { width: `${g.sat}%` } })))));
+  drawBars();
+  const panel = h("div", { class: "stack" },
+    h("div", {}, h("h2", {}, `Aged ${m.age}`), top.length ? h("p", {}, `Most likely to reach them: ${wordList(top)}.`) : null),
+    h("div", { class: "scorebox" }, h("div", {}, h("strong", {}, row && row.sat !== null ? moodFmt(Math.round(row.sat - row.dis)) : "–"), h("span", { class: "note" }, "Mood in the street survey")), h("div", {}, h("strong", {}, all ? moodFmt(Math.round(up / all)) : "–"), h("span", { class: "note" }, "Mood of what they're likely to hear"))),
+    h("p", { class: "note" }, `Each circle shows the mood recorded here. The percentage below it is a national pattern by age, from one Ofcom question, and doesn't measure ${a.name}. Click a circle to see what's recorded for it.`));
+  if (d.street && groups.length) add(panel, h("h3", {}, "What people said in the street survey"), chipRow(groups.map((g) => [g, g]), (x) => x === m.split, (x) => { m.split = x; route(); }), bars, h("p", { class: "note" }, `${d.street.title}, ${fmt(d.street.responses)} replies. Indicative. Groups under 30 aren't reported.`));
+  return panel;
+}
+
+function nodePanel(a, d, cur, root, rootName, redraw, go) {
+  const m = App.map, topic = App.filters.topic !== "all" ? App.filters.topic : "", isPartners = m.view === "partners";
+  const leaf = cur.pool || root, list = leaf ? d.pieces.filter((p) => p.nodes.includes(cur.id)) : [];
+  const scoped = cur.source && m.scope !== "all" ? list.filter((p) => p.scope === m.scope) : list;
+  const act = (words, fn) => h("button", { class: "btn small", type: "button", onclick: fn }, words);
+  const to = (words, hash) => h("a", { class: "btn small", href: `#${hash}/${a.code}` }, words);
+  const acts = [];
+  if (d.canEdit && (leaf)) acts.push(act("Add a mention", () => { m.form = "mention"; redraw(); }));
+  if (d.canEdit && cur.add) acts.push(act(`Add a ${cur.add}`, () => { m.form = "source"; redraw(); }));
+  if (cur.source) acts.push(to("Grade this source", "said/sources".replace("/sources", "")));
+  if (["surveys", "street", "residents", "bylink"].includes(cur.id)) acts.push(to("Open surveys", "surveys"));
+  if (cur.id === "gov") acts.push(to("Impact notes", "notes"));
+  if (cur.id === "enquiries") acts.push(h("a", { class: "btn small", href: `#said/${a.code}/enquiries` }, "Add this month's counts"));
+  if (cur.id === "works" || cur.id === "weather") acts.push(h("a", { class: "btn small", href: `#attention/${a.code}/works` }, "Works and weather"));
+  if (cur.id === "published") acts.push(to("Published evidence", "evidence"));
+  if (["bylink", "news", "weather", "published"].includes(cur.id)) acts.push(to("See what to bear in mind", "campaign"));
+  if (cur.question && cur.topic && d.canEdit && !d.election) acts.push(act("Plan a response", () => planFrom(a, cur.topic, `Survey result: ${cur.label}, ${cur.mood.tip}`)));
+  if (topic && d.canEdit && !d.election && !isPartners) acts.push(act("Plan a response", () => planFrom(a, topic, `Topic on the map: ${topic}`)));
+  const planned = isPartners ? [] : planOn(d, cur.id);
+  const leftOut = isPartners ? [] : d.leftOut.map((q) => ({ ...q, n: q.pieces.filter((t) => t.includes(cur.id)).length })).filter((q) => q.n);
+  const panel = h("div", { class: "stack" },
+    h("div", {}, h("h2", {}, root ? rootName : cur.label), h("p", { class: "note" }, topic ? `${topic} only` : root ? (isPartners ? d.partners.find((p) => p.id === m.partner)?.role ?? "" : d.services.find((s) => s.id === d.service)?.label) : cur.sub)),
+    h("div", { class: "scorebox" }, h("div", {}, h("strong", {}, cur.mood.txt), h("span", { class: "note" }, `Mood: ${cur.mood.word}`)), cur.mood.raw === undefined || cur.mood.raw === null ? null : [h("div", {}, h("strong", {}, moodFmt(cur.mood.raw)), h("span", { class: "note" }, "Before weighting")), h("div", {}, h("strong", {}, fmt(cur.mood.n)), h("span", { class: "note" }, "Pieces"))]),
+    root && !isPartners && !topic ? h("p", { class: "note" }, `${d.direction.word}. ${d.direction.note}`) : null,
+    cur.notes.map((t) => h("p", { class: "note" }, t)),
+    acts.length ? h("div", { class: "row" }, acts) : null,
+    h("div", { class: "how" }, h("h3", {}, "How this is worked out"), h("p", { class: "note" }, cur.how), cur.has.length ? h("div", { class: "tags" }, cur.has.map((t) => h("span", { class: "tag" }, t))) : null),
+    cur.made.length ? [h("h3", {}, "What makes up this mood"), h("div", { class: "made" }, cur.made.map((r) => [h("span", {}, r.label), h("strong", {}, r.txt), h("span", { class: "note" }, r.share)]))] : null,
+    leftOut.map((q) => h("div", { class: "left-out" }, h("span", {}, `${q.n} ${q.n === 1 ? "piece" : "pieces"} about ${q.name} left out`), h("button", { class: "btn small ghost", type: "button", onclick: () => { m.include = [...m.include, q.id]; route(); } }, "Add them"))),
+    planned.length ? [h("h3", {}, `Campaign events${topic ? ` on ${topic}` : ""}`), h("div", { class: "rows" }, planned.map((p) => h("a", { class: "row-link", href: `#campaign/${a.code}`, onclick: () => { App.cal.open = p.id; } }, h("strong", {}, p.title), h("span", { class: "note" }, `${p.channel}, ${fmtDate(p.date)}`))))] : null,
+    cur.facts.length ? h("div", { class: "rows" }, cur.facts.map((f) => h("div", { class: "fact" }, h("strong", {}, f.title), h("span", { class: "note" }, f.sub), f.tags ? h("div", { class: "tags" }, f.tags.map((t) => h("span", { class: "tag" }, t))) : null))) : null);
+  if (list.length) {
+    add(panel, h("h3", {}, `Mentions, ${d.months.find((x) => x.id === d.month)?.label}`));
+    if (cur.source) add(panel, chipRow([["all", "All"], ["Local", "Local"], ["National", "National"]], (x) => x === m.scope, (x) => { m.scope = x; redraw(); }));
+    add(panel, h("ul", { class: "mentions" }, scoped.slice(0, 12).map((p) => mentionRow(a, d, p))));
+    if (scoped.length > 12) add(panel, h("p", { class: "note" }, `Showing the latest 12 of ${scoped.length}.`));
+  }
+  return panel;
+}
+function mentionRow(a, d, p) {
+  const about = d.partners.find((x) => x.id === p.about), planned = d.planned.filter((x) => d.topicOf?.[x.id]?.includes(p.topic)).length;
+  return h("li", {}, h("span", { class: `tone tone-${p.tone.toLowerCase()}` }, p.tone), h("div", {}, h("strong", {}, p.source), " ", h("span", { class: "note" }, fmtDate(p.date)), h("p", {}, p.summary),
+    h("div", { class: "tags" }, h("span", { class: "tag" }, p.scope), h("span", { class: "tag" }, p.covers.join(", ") || d.services.find((s) => s.id === d.service)?.label), about ? h("span", { class: "tag" }, `About ${about.name}`) : null),
+    h("div", { class: "tags" }, p.topic ? h("button", { class: "tag-b", type: "button", onclick: () => { App.filters.topic = p.topic; location.hash = `#campaign/${a.code}`; } }, `${p.topic}${planned ? `: ${planned} planned` : ""}`) : null,
+      d.canEdit && !d.election ? h("button", { class: "linkish", type: "button", onclick: () => planFrom(a, p.topic, `Mention: ${p.source}, ${fmtDate(p.date)}`) }, "Plan a response") : null)));
+}
+
+function mentionForm(a, d, cur, redraw, again) {
+  const m = App.map, pool = sourcesUnder(cur), msg = h("div", {}), today = (d.today ?? "").slice(0, 10);
+  const date = h("input", { type: "date", max: today, value: d.month === today.slice(0, 7) ? today : `${d.month}-28` });
+  const text = h("textarea", { rows: 3, maxlength: 200 }), reach = h("input", { inputmode: "numeric" }), source = h("select", {}, pool.map((s) => h("option", { value: s.id }, s.label)));
+  const choose = (list) => h("select", {}, list.map((t) => h("option", { value: t }, t)));
+  const tone = choose(TONES), relevance = choose(RELEVANCE), prominence = choose(PROMINENCE), scope = h("select", {}, h("option", { value: "" }, "As the source"), ["Local", "National"].map((t) => h("option", { value: t }, t)));
+  const topic = h("select", {}, h("option", { value: "" }, "Choose a topic"), d.topicList.map((t) => h("option", { value: t }, t))), about = h("select", {}, h("option", { value: "" }, "The authority"), d.partners.map((p) => h("option", { value: p.id }, p.name)));
+  if (App.filters.topic !== "all") topic.value = App.filters.topic;
+  if (m.view === "partners") about.value = m.partner;
+  const fns = []; // whole service unless functions are chosen
+  const covers = chipRow(d.functions.map((f) => [f.id, f.name]), () => false, () => {});
+  covers.querySelectorAll("button").forEach((b, i) => b.addEventListener("click", () => { const id = d.functions[i].id, at = fns.indexOf(id); if (at < 0) fns.push(id); else fns.splice(at, 1); b.setAttribute("aria-pressed", String(at < 0)); }));
+  const save = once(async () => {
+    await API.call("/api/coverage/assess", { code: a.code, service: App.filters.service, source: source.value, date: date.value, summary: text.value, topic: topic.value, relevance: relevance.value, tone: tone.value, prominence: prominence.value, functions: fns, reach: reach.value, scope: scope.value, about: about.value });
+    m.form = null; toast(App.demo ? "In the demonstration, nothing is saved." : "Saved. The mood has been worked out again."); await again();
+  }, (e) => { clear(msg).append(failure(e)); });
+  return h("div", { class: "stack" }, h("h2", {}, "Add a mention"), h("p", { class: "note" }, "You find the piece outside Clarion and record it in your own words. Please don't paste the article."),
+    h("label", { class: "field" }, "Source", source), h("label", { class: "field" }, "Date", date), h("label", { class: "field" }, "What was said, in one line of your own words", text), h("label", { class: "field" }, "Tone", tone), h("label", { class: "field" }, "Relevance", relevance), h("label", { class: "field" }, "Prominence", prominence),
+    h("label", { class: "field" }, "Local or national", scope), h("label", { class: "field" }, "Reach, if different from the source's", reach), h("div", { class: "field" }, "Covers the whole service, or choose functions", covers), h("label", { class: "field" }, "Topic", topic), h("label", { class: "field" }, "About", about), msg,
+    h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: save }, "Save"), h("button", { class: "btn ghost", type: "button", onclick: () => { m.form = null; redraw(); } }, "Cancel")));
+}
+
+function sourceForm(a, d, cur, redraw, again) {
+  const m = App.map, msg = h("div", {}), types = cur.types.length ? cur.types : ["Other"];
+  const name = h("input", { maxlength: 100 }), type = h("select", {}, types.map((t) => h("option", { value: t }, t))), domain = h("input", { placeholder: "northbridgecourier.co.uk" }), platform = h("input", { maxlength: 40, placeholder: "YouTube or TikTok, say" }), reach = h("input", { inputmode: "numeric" });
+  const leaning = h("select", {}, LEANINGS.map((t) => h("option", { value: t }, t))), stance = h("select", {}, STANCES.map((t) => h("option", { value: t }, t)));
+  const social = types.some((t) => /Social|Streaming/.test(t));
+  const save = once(async () => {
+    await API.call("/api/coverage/source", { code: a.code, name: name.value, type: type.value, domain: social ? "" : domain.value, platform: platform.value, reach: reach.value, leaning: leaning.value, stance: stance.value, campaign: [] });
+    m.form = null; toast(App.demo ? "In the demonstration, nothing is saved." : `${name.value} added.`); await again();
+  }, (e) => { clear(msg).append(failure(e)); });
+  return h("div", { class: "stack" }, h("h2", {}, `Add a ${cur.add || "source"}`), h("label", { class: "field" }, "Name", name), types.length > 1 ? h("label", { class: "field" }, "Kind", type) : null,
+    social ? [h("label", { class: "field" }, "Platform", platform), h("p", { class: "note" }, "Organisations, groups and public pages only, never individuals.")] : h("label", { class: "field" }, "Its website, for coverage checks", domain),
+    h("label", { class: "field" }, "Reach, in people", reach, h("span", { class: "hint" }, "The Sources page can look a title up in ABC's register.")), h("label", { class: "field" }, "Political leaning: recorded, and can be filtered on", leaning), h("label", { class: "field" }, "Friendliness to the authority: changes the weighting", stance), msg,
+    h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: save }, "Save"), h("button", { class: "btn ghost", type: "button", onclick: () => { m.form = null; redraw(); } }, "Cancel")));
+}
+
+// ---------------------------------------------------------------- the dashboard
+const barOf = (v) => (v === null || v === undefined ? null : h("i", { class: `fn-fill lean-${leanName(v)}`, style: { left: `${v < 0 ? 50 + v / 2 : 50}%`, width: `${Math.abs(v) / 2}%` } }));
+function moodCard(a, d) {
+  const t = d.tree, v = t.mood.v, topic = App.filters.topic !== "all" ? App.filters.topic : "";
+  return h("section", { class: "card" }, h("h3", {}, "Mood"),
+    h("div", { class: `mood-big lean-${t.mood.lean}` }, h("span", { class: "bub" }, t.mood.txt), h("div", {}, h("div", { class: "mood-w" }, cap(t.mood.word)), h("p", { class: "note" }, topic ? `${topic} only` : `${d.direction.word}. ${d.direction.note}`))),
+    h("div", { class: "gauge" }, h("i", { class: "gauge-mid" }), v === null ? null : h("i", { class: "gauge-m", style: { left: `${(v + 100) / 2}%` } })), h("div", { class: "gauge-l" }, h("span", {}, "−100"), h("span", {}, "0"), h("span", {}, "+100")),
+    h("h4", {}, "What makes it up"), t.kids.map((k) => h("a", { class: "mrow", href: `#a/${a.code}`, title: k.mood.tip || null, onclick: () => { App.map.view = "authority"; App.map.path = [k.id]; } }, h("span", {}, k.label), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(k.mood.v)), h("strong", {}, k.mood.txt), h("span", { class: "note" }, k.pct === null ? "–" : `${k.pct}%`))));
+}
+function functionCard(d) {
+  const used = d.functions.filter((f) => f.pieces || f.survey !== null).sort((x, y) => (x.mood ?? 999) - (y.mood ?? 999)), empty = d.functions.filter((f) => !f.pieces && f.survey === null).map((f) => f.name);
+  return h("section", { class: "card" }, h("h3", {}, "By function"), h("div", { class: "tbl-wrap plain" }, h("div", { class: "fn head" }, h("span", {}, "Function"), h("span", {}, "Media mood, from −100 to +100"), h("span", {}, "Mood"), h("span", {}, "Street survey")),
+    used.map((f) => h("div", { class: "fn" }, h("span", {}, f.name), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(f.mood)), h("span", {}, f.mood === null ? `${f.pieces} ${f.pieces === 1 ? "piece" : "pieces"}` : moodFmt(f.mood)), h("span", {}, f.survey === null ? "–" : `${fmt(f.survey)}% satisfied`)))),
+    empty.length ? h("p", { class: "note" }, `Nothing yet for: ${empty.join(", ")}.`) : null);
+}
+function heatCard(a, d) {
+  return h("section", { class: "card" }, h("h3", {}, "Month by month"), h("div", { class: "heat" }, h("div", {}), d.heatMonths.map((m) => h("div", { class: "heat-h" }, m.id === d.today?.slice(0, 7) ? "So far" : m.label.split(" ")[0])),
+    d.heat.map((r) => [h("div", { class: "heat-l" }, r.label), r.cells.map((c) => h("a", { class: `heat-c lean-${c.lean}`, href: `#a/${a.code}`, "aria-label": `${r.label}, ${c.month}: ${c.txt}`, onclick: () => { App.filters.month = c.month; App.map.view = "authority"; App.map.path = r.id === "root" ? [] : [r.id]; } }, c.txt))])),
+    h("p", { class: "note" }, "A dashed box means too little to read. Click any box to open that part of the map for that month."));
+}
+async function dashView(page, a) {
   const body = h("div", { class: "stack gap" }, loading("Gathering the evidence…"));
   page.append(body);
   const view = App.viewId;
-  let d, coverage, att;
-  try { [d, coverage, att] = await Promise.all([API.call("/api/authority", { code: a.code }), API.call("/api/coverage/summary", { code: a.code }).catch(() => null), API.call("/api/attention", { code: a.code }).catch(() => ({ ready: false, needs: "" }))]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  let d, map, att;
+  try { [d, map, att] = await Promise.all([API.call("/api/authority", { code: a.code }), loadMap(a), API.call("/api/attention", { code: a.code }).catch(() => ({ ready: false, needs: "" }))]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
   if (view !== App.viewId) return;
-  const street = d.evidence.streets.find((x) => !x.selfOnly) ?? null; // the latest with interviewers
-  const assessed = coverage?.summary ?? { pieces: 0, previous: 0 };
-  const from = [street ? `${fmt(street.responses)} street survey replies` : null, assessed.pieces ? `${fmt(assessed.pieces)} assessed press and media pieces` : null, "published data"].filter(Boolean);
-  const latest = d.evidence.surveys.filter((s) => s.year === d.evidence.surveys[0]?.year);
-  const survey = (s) => stat(s.measure, `${s.score} / ${s.outOf}`, `${s.source}${s.responses ? `, ${fmt(s.responses)} replies` : ""}`);
-  const adults = stat("Adults in the authority", d.adults ? fmt(d.adults) : "–", "Census 2021, aged 16 and over");
-  const tiles = street
-    ? [stat("Direction of mood", d.reading?.direction || "Not yet known", d.reading?.direction ? `Reading of ${fmtDate(d.reading.created)}` : "No reading yet"), stat("Satisfied with roads and pavements", `${fmt(street.satisfied)}%`, `Street survey, ${fmt(street.responses)} replies. Indicative`),
-      assessed.pieces ? stat("Pieces assessed", fmt(assessed.pieces), `${fmt(assessed.previous)} in the previous 4 weeks`) : stat("Say roads have got worse", street.worse === null ? "–" : `${fmt(street.worse)}%`, "Street survey. Indicative"), att.ready ? stat("Early signs", fmt(att.earlySigns.length), "Felt by many, reported by few") : adults]
-    : [...(latest.length ? latest.slice(0, 2).map(survey) : [stat("Residents' survey", "None held", "Add one on the Evidence page")]), stat("DfT road maintenance rating", d.authority.rating.overall, `Overall, ${d.authority.rating.published}`), adults];
-  const picture = h("section", { class: "card pic-card" }, loading("Drawing the picture…"));
-  clear(body).append(pageHead(`${a.name}: how people feel about their roads`, `From ${from.join(", ")} and public reports.`), picture, h("div", { class: "grid g4" }, tiles), readingCard(a, d));
-  drawPicture(picture, a, d, assessed);
-  if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
-  else add(body, h("div", { class: "grid g-wide" }, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Shows what's loud, what's felt, and what nobody is reporting yet."))),
-    h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, att.needs ? `This needs ${att.needs}.` : "This can't be worked out just now."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))), roleCard()));
-  add(body, compareCard(a, d, street));
-}
-// ----- the two pictures
-const SHORT_TYPES = { "Local Newspaper": "Local papers", "Local News Website": "Local news sites", "National Newspaper": "National papers", "Local Newsletter": "Newsletters", "Social Media": "Social media", "Local Television": "Local TV", "Local Radio": "Local radio", "Community Event": "Community events", "Trade Press": "Trade press", Other: "Other sources" };
-const LEAN_WORDS = { down: "More critical than supportive", up: "More supportive than critical", mixed: "Neutral or no direction", none: "Nothing held yet" };
-const wordList = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list.join(""));
-const MOST_KINDS = 6; // any more won't fit around the roundabout, so the rest are pooled
-const count = (n, one, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
-const shortNumber = (n) => (n >= 1000 ? `${fmt(n / 1000, 1)}k` : fmt(n)); // a circle holds about four characters
-const noData = (label, note, href) => ({ label, value: "–", lean: "none", note, href });
-// What feeds opinion here, from what Clarion already holds. A colour only where there's a real direction: the tone officers
-// gave a piece, or more people dissatisfied than satisfied. A count that has a limit says so, and a sample never reads as a total
-function opinionGroups(a, d, assessed, p) {
-  const e = d.evidence, s = e.signals, code = a.code, said = `#said/${code}`, evidence = `#evidence/${code}`, own = `${said}/enquiries`;
-  const byType = [...(assessed.byType || [])].sort((x, y) => y.pieces - x.pieces);
-  const pool = byType.slice(MOST_KINDS - 1), kinds = byType.length > MOST_KINDS ? [...byType.slice(0, MOST_KINDS - 1), { type: "Other", pieces: pool.reduce((n, x) => n + x.pieces, 0), critical: pool.reduce((n, x) => n + x.critical, 0), supportive: pool.reduce((n, x) => n + x.supportive, 0) }] : byType;
-  const press = kinds.map((x) => ({ label: SHORT_TYPES[x.type] || x.type, value: fmt(x.pieces), lean: x.critical > x.supportive ? "down" : x.supportive > x.critical ? "up" : "mixed", note: `${count(x.pieces, "piece")} assessed in the last 4 weeks: ${fmt(x.critical)} critical, ${fmt(x.supportive)} supportive.`, href: said }));
-  const number = (label, n, note, href) => (n === null || n === undefined ? noData(label, "This couldn't be read just now.", href) : { label, value: shortNumber(n), lean: "mixed", note, href });
-  const faults = s.fixMyStreet.data, petitions = s.petitions.data, questions = s.questions.data;
-  const contacts = e.contacts || [], total = contacts.reduce((n, x) => n + x.enquiries + x.complaints, 0), sizeOf = (trend) => contacts.filter((x) => x.trend === trend).reduce((n, x) => n + x.enquiries + x.complaints, 0);
-  const movement = sizeOf("Rising") > sizeOf("Falling") ? "rising" : sizeOf("Falling") > sizeOf("Rising") ? "falling" : "";
-  const survey = e.surveys[0], street = e.streets.find((x) => !x.selfOnly);
-  return [
-    { label: "Press and media", spots: press.length ? press : [noData("Press and media", "Nothing assessed in the last 4 weeks. Add your sources, then search and assess.", said)] },
-    { label: "Government and MPs", spots: [
-      number("Government news", p?.announcements, "Road announcements on GOV.UK in the last 4 weeks, from the latest 20 Clarion reads.", `#notes/${code}`),
-      number("MPs' questions", questions?.length, "The latest written questions on roads from local MPs, up to 12.", evidence),
-      number("Petitions", petitions?.filter((x) => x.localShare > x.fairShare).length, "Road petitions drawing more than a fair share of their signatures from here, from the top few nationally.", evidence),
-    ] },
-    { label: "The council", spots: [
-      number("Council news", p?.posts, "Road stories on your own news page in the last 4 weeks, from the latest few Clarion reads.", own),
-      p?.weather ? { label: "Weather events", value: fmt(p.weather.events), lean: "mixed", note: `In the 4 weeks to ${fmtDate(p.weather.to) || "the latest records"}.${p.weather.latest ? ` The latest was ${p.weather.latest.toLowerCase()}.` : ""}`, href: `#attention/${code}/works` } : noData("Weather events", "Turn on Works and weather to see these.", `#attention/${code}/works`),
-    ] },
-    { label: "What people do", spots: [
-      faults ? number("Fault reports", faults.reports, `The latest reports on the public feed${faults.from ? `, ${fmtDate(faults.from)} to ${fmtDate(faults.to)}` : ""}: a sample, not a total.`, evidence) : noData("Fault reports", "This couldn't be read just now.", evidence),
-      total ? { label: `Enquiries${movement ? `, ${movement}` : ""}`, value: shortNumber(total), lean: "mixed", note: `${fmt(total)} enquiries and complaints in the latest month, against the three months before.`, href: own } : noData("Enquiries", "Bring in a file of enquiries to see these.", own),
-    ] },
-    { label: "What people say", spots: [
-      survey ? { label: "Residents' survey", value: fmt(survey.score, 1), lean: "mixed", note: `${survey.measure}: ${fmt(survey.score, 1)} out of ${fmt(survey.outOf)}. ${survey.source}.`, href: evidence } : noData("Residents' survey", "Add a result on the Evidence page.", evidence),
-      street ? { label: "Street survey (indicative)", value: street.satisfied === null ? "–" : `${fmt(street.satisfied)}%`, lean: street.dissatisfied > street.satisfied ? "down" : street.satisfied > street.dissatisfied ? "up" : "mixed", note: `Satisfied with roads and pavements, from ${fmt(street.responses)} replies. A street sample isn't random.`, href: `#survey/${code}/${street.id}/results` } : noData("Street survey", "Plan a street survey to hear from people directly.", `#surveys/${code}`),
-    ] },
+  const street = d.evidence.streets.find((x) => !x.selfOnly) ?? null, month = map.months.find((x) => x.id === map.month)?.label;
+  const tiles = [
+    street ? stat("Satisfied with roads and pavements", `${fmt(street.satisfied)}%`, `Street survey, ${fmt(street.responses)} replies. Indicative`) : stat("Street survey", "None yet", "Plan one under Surveys"),
+    stat("Media pieces", fmt(map.pieces.length), `${fmt(map.pieces.filter((p) => p.tone === "Critical").length)} critical, ${fmt(map.pieces.filter((p) => p.tone === "Supportive").length)} supportive`),
+    d.evidence.surveys[0] ? stat(d.evidence.surveys[0].measure, `${d.evidence.surveys[0].score} / ${d.evidence.surveys[0].outOf}`, d.evidence.surveys[0].source) : stat("Residents' survey", "None held", "Add one on the Evidence page"),
+    att.ready ? stat("Early signs", fmt(att.earlySigns.length), "Felt by many, reported by few") : stat("DfT road maintenance rating", d.authority.rating.overall, `Overall, ${d.authority.rating.published}`),
   ];
+  clear(body).append(pageHead(`${a.name}: ${map.services.find((s) => s.id === map.service)?.label}, ${month}`, "The figures behind the map, and what they mean."), h("div", { class: "grid g2" }, moodCard(a, map), readingCard(a, d)), h("div", { class: "grid g4" }, tiles), h("div", { class: "grid g2" }, functionCard(map), heatCard(a, map)));
+  if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
+  else add(body, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Shows what's loud, what's felt, and what nobody is reporting yet."))), h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, att.needs ? `This needs ${att.needs}.` : "This can't be worked out just now."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))));
+  add(body, h("div", { class: "row" }, h("a", { class: "btn small", href: `#evidence/${a.code}` }, "Published evidence and what's missing"), h("a", { class: "btn small", href: `#attention/${a.code}` }, "Attention and concern in full")), compareCard(a, d, street), roleCard());
 }
-// Spaces everything evenly around the roundabout, with a gap between groups
-function placeAround(groups, rx = 29, ry = 40) {
-  const total = groups.reduce((n, g) => n + g.spots.length, 0), gap = groups.length > 1 ? 0.2 : 0, step = (Math.PI * 2 - gap * groups.length) / total;
-  let at = -Math.PI / 2 + gap / 2;
-  for (const g of groups) {
-    const from = at;
-    for (const x of g.spots) {
-      const t = at + step / 2, across = Math.cos(t);
-      x.x = 50 + rx * across; x.y = 50 + ry * Math.sin(t);
-      x.side = Math.abs(across) < 0.2 ? (Math.sin(t) < 0 ? "above" : "below") : across < 0 ? "left" : "right"; // labels point outwards, clear of the next circle
-      at += step;
-    }
-    const mid = (from + at) / 2;
-    g.x = 50 + rx * 0.58 * Math.cos(mid); g.y = 50 + ry * 0.58 * Math.sin(mid);
-    at += gap;
-  }
-}
-function spotEl(x) {
-  return h("a", { class: `spot ${x.side} lean-${x.lean}`, href: x.href, style: { left: `${x.x}%`, top: `${x.y}%` }, "aria-label": `${x.label}: ${x.value}. ${LEAN_WORDS[x.lean]}. ${x.note}` },
-    h("span", { class: "plate" }, x.value), h("span", { class: "spot-text" }, h("span", { class: "spot-label" }, `${x.label}${x.lean === "down" ? " ▼" : x.lean === "up" ? " ▲" : ""}`), h("span", { class: "spot-tip" }, x.note)));
-}
-function opinionMap(a, d, assessed, p) {
-  const groups = opinionGroups(a, d, assessed, p);
-  placeAround(groups);
-  const lines = svg("svg", { class: "pic-lines", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" });
-  for (const g of groups) {
-    for (const x of g.spots) lines.append(svg("path", { class: "lane", d: `M${g.x} ${g.y}Q${(g.x + x.x) / 2} ${(g.y + x.y) / 2 - 2} ${x.x} ${x.y}` }));
-    lines.append(svg("line", { class: "road", x1: 50, y1: 50, x2: g.x, y2: g.y }), svg("line", { class: "road-mark", x1: 50, y1: 50, x2: g.x, y2: g.y }));
-  }
-  const street = d.evidence.streets.find((x) => !x.selfOnly);
-  return h("div", { class: "stack" },
-    h("div", { class: "pic" }, lines, h("div", { class: "pic-middle" }, h("strong", {}, a.name), h("span", {}, d.reading?.direction ? `Mood: ${d.reading.direction.toLowerCase()}` : "Mood not read yet"), street?.satisfied != null ? h("span", {}, `${fmt(street.satisfied)}% satisfied in a street survey (indicative)`) : null),
-      groups.map((g) => h("div", { class: "pic-group" }, h("div", { class: "pic-hub", style: { left: `${g.x}%`, top: `${g.y}%` } }, g.label), h("div", { class: "spots" }, g.spots.map(spotEl))))),
-    h("div", { class: "pic-legend" }, [["down", "More critical than supportive ▼"], ["up", "More supportive than critical ▲"], ["mixed", "Neutral or no direction"], ["none", "Nothing held yet"]].map(([k, words]) => h("span", { class: `lean-${k}` }, h("i", { style: { background: `var(--lean-${k})` } }), words)), h("span", { class: "note" }, "Click any circle to see what's behind it.")));
-}
-const BANDS = [15, 30, 45, 60]; // the five shades run from under 15% to 60% or more
-const bandOf = (n) => BANDS.filter((x) => n >= x).length + 1;
-function oneResident(a, p) {
-  const held = p.channels.length ? p : null;
-  if (!held) return h("p", { class: "muted" }, "The figures for this aren't available just now.");
-  const all = p.adults ? p.adults.reduce((n, x) => n + x, 0) : 0;
-  const everyone = (rates) => Math.round(p.adults.reduce((n, x, i) => n + x * rates[i], 0) / all);
-  const choices = [...(all ? [["all", "Everyone here"]] : []), ...p.ages.map((x, i) => [i, x])];
-  let picked = choices[0][0];
-  const spots = p.channels.map((c) => ({ ...c, label: c.label }));
-  placeAround([{ spots }], 30, 40);
-  const centre = h("strong", {}), share = h("span", {}), line = h("p", { class: "pic-line", role: "status" });
-  const lines = svg("svg", { class: "pic-lines", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" });
-  const rows = spots.map((c) => {
-    const spoke = svg("line", { class: "spoke", x1: 50, y1: 50, x2: c.x, y2: c.y }), plate = h("span", { class: "plate" }), tip = h("span", { class: "spot-tip" });
-    lines.append(spoke);
-    const el = h("div", { class: `spot ${c.side}`, style: { left: `${c.x}%`, top: `${c.y}%` }, role: "img", tabindex: "0" }, plate, h("span", { class: "spot-text" }, h("span", { class: "spot-label" }, c.label), tip));
-    return { c, spoke, plate, tip, el };
-  });
-  const person = svg("svg", { width: 42, height: 42, viewBox: "0 0 24 24", fill: "currentColor", "aria-hidden": "true" }, svg("circle", { cx: 12, cy: 7, r: 4.2 }), svg("path", { d: "M3.5 21.5c0-5.2 3.8-8.2 8.5-8.2s8.5 3 8.5 8.2z" }));
-  const buttons = choices.map(([key, words]) => h("button", { type: "button", onclick: () => { picked = key; draw(); } }, words));
-  const draw = () => {
-    const name = picked === "all" ? "Everyone here" : `Aged ${p.ages[picked]}`, valueOf = (c) => (picked === "all" ? everyone(c.rates) : c.rates[picked]);
-    buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(choices[i][0] === picked)));
-    centre.textContent = name;
-    for (const { c, spoke, plate, tip, el } of rows) {
-      const n = valueOf(c), diff = all && picked !== "all" ? n - everyone(c.rates) : null;
-      plate.textContent = `${n}%`;
-      el.className = `spot ${c.side} band-${bandOf(n)}`;
-      el.style.setProperty("--d", `${Math.round(46 + n * 0.62)}px`);
-      spoke.style.strokeWidth = `${Math.max(2, n / 3.5)}px`;
-      tip.textContent = diff === null ? "" : diff ? `${fmt(Math.abs(diff))} ${diff > 0 ? "more" : "fewer"} in every 100 than everyone here` : "The same as everyone here";
-      el.setAttribute("aria-label", `${c.label}: ${n}%. ${tip.textContent}`);
-    }
-    line.textContent = `Most likely to reach them: ${wordList([...spots].sort((x, y) => valueOf(y) - valueOf(x)).slice(0, 3).map((c) => (c.key === "bbc" ? c.label : c.label.toLowerCase())))}.`;
-    share.textContent = all && picked !== "all" ? `${fmt(Math.round((p.adults[picked] / all) * 100))}% of adults here` : "";
-  };
-  draw();
-  return h("div", { class: "stack" }, h("div", { class: "age-pick", role: "group", "aria-label": "Age group" }, buttons), line,
-    h("div", { class: "pic" }, lines, h("div", { class: "pic-middle" }, person, centre, share), h("div", { class: "pic-group" }, h("div", { class: "spots" }, rows.map((x) => x.el)))),
-    h("div", { class: "pic-legend" }, [["1", "Under 15%"], ["2", "15 to 29%"], ["3", "30 to 44%"], ["4", "45 to 59%"], ["5", "60% or more"]].map(([k, words]) => h("span", {}, h("i", { style: { background: `var(--h-s${k})` } }), words))),
-    h("p", { class: "note" }, `The share who got local news this way in the last month or so. A national pattern by age from Ofcom, so it's for comparing and doesn't measure ${a.name}.`),
-    h("details", {}, h("summary", {}, "See every age as a table"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "How they got local news"), p.ages.map((x) => h("th", { class: "r" }, x)))), h("tbody", {}, p.channels.map((c) => h("tr", {}, h("td", {}, c.label), c.rates.map((n) => h("td", { class: "r" }, `${n}%`)))))))));
-}
-async function drawPicture(box, a, d, assessed) {
+
+// ---------------------------------------------------------------- high-impact issues
+async function issuesView(page, a) {
+  const body = h("div", { class: "stack gap" }, loading("Loading…"));
+  page.append(body);
   const view = App.viewId;
-  let p = null;
-  try { p = await API.call("/api/picture", { code: a.code }); } catch (e) { console.warn(e); }
-  if (view !== App.viewId) return;
-  const parts = [["map", "What shapes opinion"], ["person", "One resident"]], body = h("div", {});
-  const tabs = h("div", { class: "tab-row no-print", role: "tablist" });
-  const buttons = parts.map(([k, words]) => h("button", { type: "button", role: "tab", onclick: () => show(k) }, words));
-  tabs.append(...buttons);
-  const show = (key) => {
-    App.picture = key;
-    buttons.forEach((b, i) => b.setAttribute("aria-selected", String(parts[i][0] === key))); // changed in place, so the keyboard stays where it was
-    clear(body).append(key === "person" ? (p ? oneResident(a, p) : failure({ message: "The figures for this aren't available just now." })) : opinionMap(a, d, assessed, p));
+  const draw = async () => {
+    const [d, camp] = await Promise.all([loadMap(a), API.call("/api/campaign/get", { code: a.code, service: App.filters.service })]);
+    if (view !== App.viewId) return;
+    const status = (t) => camp.issues.find((x) => x.topic === t)?.status, canAct = d.canEdit && !d.election, month = d.months.find((x) => x.id === d.month)?.label;
+    const peak = (k) => Math.max(1, ...d.topics.map((t) => Math.abs(t[k] || 0)));
+    const meters = (t) => h("div", { class: "meters" }, [["Concern", `${fmt(t.enquiries)} enquiries`, (100 * t.concern) / peak("concern")], ["Reach", `${fmt(t.reach)} people`, (100 * t.reach) / peak("reach")], ["Mood", t.mood === null ? "–" : moodFmt(t.mood), Math.abs(t.mood ?? 0)]].map(([label, value, pct]) => h("div", { class: "meter" }, h("span", { class: "note" }, label), h("strong", {}, value), h("span", { class: "bar-t" }, h("span", { class: "bar-f", style: { width: `${pct}%` } })))));
+    const set = (topic, fields) => once(async () => { await API.call("/api/issue/set", { code: a.code, service: App.filters.service, topic, ...fields }); await draw(); }, (e) => toast(e.message));
+    const drop = (topic) => once(async () => { await API.call("/api/issue/drop", { code: a.code, service: App.filters.service, topic }); await draw(); }, (e) => toast(e.message));
+    const proposed = d.topics.filter((t) => t.proposed && !status(t.topic)), aside = camp.issues.filter((x) => x.status === "aside"), confirmed = camp.issues.filter((x) => x.status === "confirmed");
+    const own = h("input", { maxlength: 80 }), msg = h("div", {});
+    const left = h("section", { class: "stack" }, h("h2", {}, "Proposed by Clarion"), proposed.length ? proposed.map((t) => h("article", { class: "card" }, h("div", { class: "row spread" }, h("h3", {}, t.topic), h("span", { class: "pill" }, "Proposed")), meters(t),
+      h("p", { class: "note" }, `Ranks ${t.rankConcern} of ${d.topics.length} for concern, ${t.rankReach} for reach and ${t.rankMood} for mood. A calculation, not a judgement.`),
+      canAct ? h("div", { class: "row" }, h("button", { class: "btn primary small", type: "button", onclick: set(t.topic, { status: "confirmed" }) }, "Confirm"), h("button", { class: "btn ghost small", type: "button", onclick: set(t.topic, { status: "aside" }) }, "Set aside")) : null)) : h("p", { class: "muted" }, "Nothing to propose for this month."),
+      canAct ? h("div", { class: "card" }, h("label", { class: "field" }, "Add your own issue", own), msg, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: once(async () => { if (!own.value.trim()) throw new Error("Say what the issue is."); await API.call("/api/issue/set", { code: a.code, service: App.filters.service, topic: own.value, status: "confirmed", own: true }); await draw(); }, (e) => clear(msg).append(failure(e))) }, "Add"))) : null,
+      aside.map((x) => h("div", { class: "left-out" }, h("span", {}, `${x.topic}: set aside`), canAct ? h("button", { class: "btn small ghost", type: "button", onclick: drop(x.topic) }, "Bring back") : null)));
+    const right = h("section", { class: "stack" }, h("h2", {}, "Confirmed"), d.election ? h("div", { class: "callout warn" }, "The election setting is on, so key messages are held back and nothing can be changed.") : null,
+      confirmed.length ? confirmed.map((x) => {
+        const t = d.topics.find((y) => y.topic === x.topic), key = h("textarea", { rows: 3, maxlength: 600 }), n = camp.items.filter((i) => i.topics.includes(x.topic)).length, bear = d.considerations.filter((b) => b.topic === x.topic);
+        key.value = x.key;
+        if (canAct) key.addEventListener("change", () => API.call("/api/issue/set", { code: a.code, service: App.filters.service, topic: x.topic, status: "confirmed", key: key.value }).catch((e) => toast(e.message)));
+        return h("article", { class: "card" }, h("div", { class: "row spread" }, h("h3", {}, x.topic), h("span", { class: "pill" }, `${n} planned`)), t && t.mood !== null ? meters(t) : null, d.election ? null : h("label", { class: "field" }, "Key message", key), bear.length ? h("p", { class: "note" }, `Bear in mind: ${bear.map((b) => `${b.title} (${b.kind.toLowerCase()})`).join("; ")}`) : null,
+          h("div", { class: "row" }, h("a", { class: "btn primary small", href: `#campaign/${a.code}`, onclick: () => { App.filters.topic = x.topic; } }, "Plan responses"), canAct ? h("button", { class: "btn ghost small", type: "button", onclick: drop(x.topic) }, "Step back") : null));
+      }) : h("p", { class: "muted" }, "Nothing confirmed yet."));
+    clear(body).append(pageHead(`High-impact issues, ${month}`, "Clarion proposes these from concern, reach and mood. An officer confirms them, and can add their own."), h("div", { class: "grid g2" }, left, right));
   };
-  show(App.picture || "map");
-  clear(box).append(tabs, body);
+  try { await draw(); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); }
 }
+
+// ---------------------------------------------------------------- the campaign calendar
+const mondayOn = (iso) => { const x = new Date(`${iso}T12:00:00Z`); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x.toISOString().slice(0, 10); };
+const plusDays = (iso, n) => { const x = new Date(`${iso}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+const shortDay = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+async function campaignView(page, a) {
+  const body = h("div", { class: "split" }, loading("Loading the calendar…"));
+  page.append(body);
+  const view = App.viewId, cal = App.cal;
+  const draw = async () => {
+    const [d, camp] = await Promise.all([loadMap(a), API.call("/api/campaign/get", { code: a.code, service: App.filters.service })]);
+    if (view !== App.viewId) return;
+    cal.start ||= mondayOn(d.today ?? new Date().toISOString().slice(0, 10));
+    const weeks = [0, 7, 14, 21, 28].map((n) => plusDays(cal.start, n)), canPlan = d.canEdit && !camp.election, byTopic = cal.by === "topic", topic = App.filters.topic !== "all" ? App.filters.topic : "";
+    const chName = (id) => camp.channels.find((c) => c.id === id)?.name ?? "No channel";
+    const confirmed = camp.issues.filter((x) => x.status === "confirmed").map((x) => x.topic), tied = [...new Set(camp.items.flatMap((i) => i.topics))];
+    const moods = Object.fromEntries(d.topics.map((t) => [t.topic, t.mood]));
+    const rows = byTopic
+      ? [...(topic ? [topic] : [...new Set([...confirmed, ...tied])]).map((t) => ({ label: t, sub: moods[t] === null || moods[t] === undefined ? "" : `Mood ${moodFmt(moods[t])}`, match: (i) => i.topics.includes(t), seed: { topics: [t] } })), ...(!topic && camp.items.some((i) => !i.topics.length) ? [{ label: "No topic yet", sub: "", match: (i) => !i.topics.length, seed: {} }] : [])]
+      : camp.channels.map((c) => ({ label: c.name, sub: "", match: (i) => i.channel === c.id, seed: { channel: c.id } }));
+    const shown = camp.items.filter((i) => !byTopic || cal.channel === "all" || i.channel === cal.channel);
+    const addTo = (week, seed) => once(async () => { const { item } = await API.call("/api/campaign/item", { code: a.code, service: App.filters.service, title: "New response", date: plusDays(week, 1), channel: cal.channel !== "all" ? cal.channel : camp.channels[0]?.id ?? "", topics: [], origin: "Added on the calendar", ...seed }); cal.open = item.id; await draw(); }, (e) => toast(e.message));
+    const grid = h("div", { class: "cal", style: { gridTemplateColumns: `170px repeat(${weeks.length}, minmax(128px, 1fr))` } }, h("div", { class: "cal-h" }, byTopic ? "Topic" : "Channel"), weeks.map((w) => h("div", { class: "cal-h" }, `From ${shortDay(w)}`)),
+      rows.map((r) => [h("div", { class: "cal-r" }, h("strong", {}, r.label), r.sub ? h("span", { class: "note" }, r.sub) : null), weeks.map((w) => h("div", { class: "cal-c" }, shown.filter((i) => r.match(i) && i.date >= w && i.date < plusDays(w, 7)).sort((x, y) => x.date.localeCompare(y.date)).map((i) => h("button", { class: "ev", type: "button", "aria-pressed": String(cal.open === i.id), onclick: () => { cal.open = i.id; draw().catch((e) => toast(e.message)); } }, h("span", { class: "note" }, shortDay(i.date)), h("strong", {}, i.title), h("span", { class: "note" }, byTopic ? chName(i.channel) : i.topics.join(", ") || "No topic yet"))),
+        canPlan ? h("button", { class: "ev-add", type: "button", "aria-label": `Add to ${r.label}, week from ${shortDay(w)}`, onclick: addTo(w, r.seed) }, "+") : null))]));
+    const main = h("div", { class: "col-main" }, pageHead("Campaign calendar", "Responses placed by date, each tied to one or more topics."), camp.election ? h("div", { class: "callout warn" }, "The election setting is on. Campaign events and key messages are held back until it's off.") : null,
+      h("div", { class: "filters" }, filterBox("Arrange by", chipRow([["topic", "By topic"], ["channel", "By channel"]], (x) => x === cal.by, (x) => { cal.by = x; draw(); })), byTopic ? filterBox("Show channel", chipRow([["all", "All"], ...camp.channels.map((c) => [c.id, c.name])], (x) => x === cal.channel, (x) => { cal.channel = x; draw(); })) : null,
+        filterBox("Weeks", h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => { cal.start = plusDays(cal.start, -28); draw(); } }, "Earlier"), h("button", { class: "btn small", type: "button", onclick: () => { cal.start = plusDays(cal.start, 28); draw(); } }, "Later")))),
+      h("div", { class: "cal-box" }, grid), rows.length ? null : h("p", { class: "muted" }, "Nothing planned on this yet. Plan a response from a mention, a survey result or a high-impact issue, and it appears here."));
+    const it = camp.items.find((i) => i.id === cal.open), panel = h("aside", { class: "panel", "aria-label": "Details" });
+    const bear = d.considerations.filter((b) => !topic || !b.topic || b.topic === topic);
+    if (it) {
+      const save = async (fields) => { Object.assign(it, fields); try { await API.call("/api/campaign/item", { code: a.code, service: App.filters.service, ...it }); } catch (e) { toast(e.message); } };
+      const title = h("input", { value: it.title, maxlength: 140, onchange: () => save({ title: title.value }).then(draw) }), date = h("input", { type: "date", value: it.date, onchange: () => { if (date.value) save({ date: date.value }).then(draw); } });
+      const issues = d.topicList.map((t) => [t, t]), keys = it.topics.map((t) => camp.issues.find((x) => x.topic === t)?.key).filter(Boolean), tiedBear = d.considerations.filter((b) => b.topic && it.topics.includes(b.topic));
+      add(panel, h("h2", {}, "Campaign event"), it.origin ? h("p", { class: "note" }, `Came from: ${it.origin}`) : null, h("label", { class: "field" }, "What it is", title), h("label", { class: "field" }, "Date", date),
+        h("div", { class: "field" }, "Channel", chipRow(camp.channels.map((c) => [c.id, c.name]), (x) => x === it.channel, (x) => save({ channel: x }).then(draw))), h("div", { class: "field" }, "Topics it answers: choose one or more", chipRow(issues, (x) => it.topics.includes(x), (x) => save({ topics: it.topics.includes(x) ? it.topics.filter((y) => y !== x) : [...it.topics, x] }).then(draw))),
+        keys.length ? h("div", { class: "field" }, "Key message", keys.map((t) => h("p", { class: "note" }, t))) : null, tiedBear.length ? h("div", { class: "field" }, "Bear in mind", tiedBear.map((b) => h("p", { class: "note" }, `${b.title}: ${b.sub}`))) : null,
+        h("div", { class: "row" }, h("button", { class: "btn primary small", type: "button", onclick: () => { cal.open = ""; draw(); } }, "Done"), it.survey ? h("a", { class: "btn small", href: `#survey/${a.code}/${it.survey}/tell` }, "Open the survey") : null, h("button", { class: "btn ghost small", type: "button", onclick: once(async () => { await API.call("/api/campaign/remove", { code: a.code, id: it.id }); cal.open = ""; await draw(); }, (e) => toast(e.message)) }, "Take it out")));
+    } else {
+      if (bear.length) add(panel, h("h2", {}, "Bear in mind"), h("p", { class: "note" }, "Not counted in the mood, but these should inform a campaign."), h("div", { class: "rows" }, bear.map((b) => h("div", { class: "fact" }, h("strong", {}, b.title), h("span", { class: "note" }, b.sub), h("div", { class: "tags" }, h("span", { class: "tag" }, b.kind), b.topic ? h("span", { class: "tag" }, b.topic) : null, canPlan ? h("button", { class: "linkish", type: "button", onclick: () => planFrom(a, b.topic, `${b.kind}: ${b.title}`) }, "Plan around this") : null)))));
+      const keys = camp.issues.filter((x) => x.key);
+      if (keys.length) add(panel, h("h2", {}, "Key messages"), h("div", { class: "rows" }, keys.map((x) => h("div", { class: "fact" }, h("strong", {}, x.topic), h("span", { class: "note" }, x.key)))));
+      add(panel, h("a", { class: "btn small", href: `#setup/${a.code}` }, "Change the channels"));
+    }
+    clear(body).append(main, panel);
+  };
+  try { await draw(); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); }
+}
+
+// ---------------------------------------------------------------- set-up
+function listEditor(rows, fields, addWords, save, canEdit, tagOf) {
+  const box = h("div", { class: "rows" }), msg = h("div", {});
+  const draw = () => {
+    clear(box).append(...rows.map((r, i) => h("div", { class: "er" }, fields.map(([key, label]) => { const el = h("input", { value: r[key] ?? "", "aria-label": label, disabled: !canEdit, maxlength: 80, onchange: () => { r[key] = el.value; saveNow(); } }); return el; }), tagOf ? h("span", { class: "tag" }, tagOf(r)) : null,
+      canEdit ? h("button", { class: "btn small ghost", type: "button", "aria-label": `Take out ${r[fields[0][0]]}`, onclick: () => { rows.splice(i, 1); saveNow().then(draw); } }, "Take out") : null)));
+    if (canEdit) { const name = h("input", { placeholder: addWords, "aria-label": addWords, maxlength: 80 }); box.append(h("div", { class: "er" }, name, h("button", { class: "btn small", type: "button", onclick: () => { if (!name.value.trim()) return; rows.push({ [fields[0][0]]: name.value }); saveNow().then(draw); } }, "Add"))); }
+  };
+  const saveNow = async () => { clear(msg); try { const next = await save(rows); rows.splice(0, rows.length, ...next); } catch (e) { msg.append(failure(e)); } };
+  draw();
+  return [box, msg];
+}
+async function setupView(page, a) {
+  const body = h("div", { class: "stack gap" }, loading("Loading…"));
+  page.append(pageHead("Set-up", "Functions, key partners and campaign channels for this authority."), body);
+  const view = App.viewId;
+  let d;
+  try { d = await API.call("/api/setup/get", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  if (view !== App.viewId) return;
+  const service = App.filters.service, label = d.services.find((s) => s.id === service)?.label, std = d.standard[service] ?? [], s = d.setup;
+  const save = (part, extra = {}) => async (rows) => { const r = await API.call("/api/setup/save", { code: a.code, part, list: rows, ...extra }); return part === "functions" ? r.setup.functions[service] : r.setup[part]; };
+  const fns = listEditor(s.functions[service] ?? [], [["name", "Function name"]], "Add a function", save("functions", { service }), d.canEdit, (f) => (!f.orig ? "Added here" : f.name === f.orig ? "Standard" : "Renamed"));
+  const partners = listEditor(s.partners, [["name", "Partner's name"], ["role", "What they do"]], "Add a partner", save("partners"), d.canEdit);
+  const channels = listEditor(s.channels, [["name", "Channel name"]], "Add a channel", save("channels"), d.canEdit);
+  const total = Object.values(d.weights).reduce((x, y) => x + y, 0) || 1;
+  const names = { surveys: "Surveys", broadcast: "TV and radio", print: "Press and magazines", social: "Social and video", contact: "People getting in touch", events: "Events and context" };
+  const weightMsg = saveNote(), weights = Object.keys(names).map((k) => { const el = h("input", { type: "number", min: 0, max: 100, step: 5, value: d.weights[k], disabled: !d.canWeigh, "aria-label": `Weight for ${names[k]}` }); return { k, el }; });
+  clear(body).append(h("div", { class: "grid g2" },
+    h("section", { class: "card" }, h("h2", {}, `Functions for ${label}`), h("p", { class: "note" }, `${service === "highways" ? "FHRG's standard list is the Climate Toolkit's 13 highways functions." : std.length ? "FHRG sets a starting list." : "FHRG has no list for this service yet, so add your own."} Each authority's lead can rename, take out or add to it. A renamed function keeps its link to the Climate Toolkit.`), fns,
+      d.canEdit && std.length ? h("button", { class: "btn small ghost", type: "button", onclick: once(async () => { await API.call("/api/setup/save", { code: a.code, part: "functions", service, list: std }); route(); }, (e) => toast(e.message)) }, "Go back to the standard list") : null),
+    h("div", { class: "stack gap" },
+      h("section", { class: "card" }, h("h2", {}, "How mood is worked out"), h("p", { class: "note" }, "Every part of the map has its own method, and each gives one figure from −100 to +100. These weights blend them into the mood in the middle. A change is only reported when two kinds of signal agree."),
+        weights.map(({ k, el }) => h("label", { class: "wt" }, h("span", {}, names[k]), el, h("strong", {}, `${Math.round((100 * d.weights[k]) / total)}%`))), h("p", { class: "note" }, "Starting weights, a judgement to test in the pilot. Surveys carry the most because they set the level. FHRG sets these, so that mood means the same everywhere."),
+        d.canWeigh ? [weightMsg, h("button", { class: "btn small", type: "button", onclick: once(async () => { const b = Object.fromEntries(weights.map(({ k, el }) => [k, Number(el.value)])); await API.call("/api/setup/weights", b); route(); }, (e) => said(weightMsg, e.message, "bad")) }, "Save the weights")] : null),
+      h("section", { class: "card" }, h("h2", {}, "Key partners"), h("p", { class: "note" }, "Optional. Useful where a partner is more visible than the authority. Ratings stick to what was said."), partners),
+      h("section", { class: "card" }, h("h2", {}, "Campaign channels"), channels),
+      h("section", { class: "card" }, h("h2", {}, "Switches"), h("div", { class: "fact" }, h("strong", {}, "Press from an NLA licence"), h("span", { class: "note" }, "Off until NLA confirms which licence covers it. Until then an officer posts and rates each piece.")), h("div", { class: "fact" }, h("strong", {}, "Works and weather"), h("span", { class: "note" }, "Only a lead of this authority can turn it on, and turning it off removes what's held."), h("a", { href: `#attention/${a.code}/works` }, "Works and weather")), h("div", { class: "fact" }, h("strong", {}, "Election setting"), h("span", { class: "note" }, "Only a lead of this authority can use it. It holds back campaign events and key messages, takes lines to take out of briefings, and pauses street surveys."), h("a", { href: `#briefings/${a.code}` }, "Councillor briefings"))),
+      h("a", { class: "btn small", href: `#about/${a.code}` }, "Sources and method"))));
+}
+
+const wordList = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list.join(""));
 function roleCard() {
   return h("section", { class: "card" }, h("h3", {}, "What each role can do"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}), h("th", {}, "Lead"), h("th", {}, "Member"))),
     h("tbody", {}, [["See your authority's evidence and results", "Yes", "Yes"], ["Read comments, with names removed", "Yes", "Yes"], ["Write readings and notes", "Yes", "Yes"], ["Run surveys and enter forms", "Yes", "No"], ["Add officer notes and results", "Yes", "No"]].map((r) => h("tr", {}, r.map((x) => h("td", {}, x))))))));
