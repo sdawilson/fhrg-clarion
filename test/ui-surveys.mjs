@@ -46,7 +46,7 @@ const see = (d, pattern) => until(() => pattern.test(text(d.querySelector(".main
 // ---- starting a survey
 let dom = await open(lead, `#surveys/${WSX}`), d = dom.window.document, w = dom.window;
 await see(d, /No surveys yet/);
-ok(button(d, "Street surveys").getAttribute("aria-current") === "page", "Street surveys has its own section");
+ok(d.querySelector('.tabs button[aria-current="page"]').textContent === "2Surveys", "Surveys has its own tab");
 let f = d.querySelector(".card form");
 f.querySelector("input").value = "Autumn roads";
 f.querySelector("textarea").value = "How people feel about the A27 works.";
@@ -334,7 +334,7 @@ ok((await w.downloaded.text()).includes("form,site,entered_by,weight"), "a lead 
 w.location.hash = `#evidence/${WSX}`;
 await see(d, /Street samples aren't random/);
 ok(d.querySelector(`a[href="#survey/${WSX}/${id}/results"]`), "the authority's page links to the survey");
-w.location.hash = `#a/${WSX}`;
+w.location.hash = `#dash/${WSX}`;
 await see(d, /Satisfied with roads and pavements/);
 ok(/Indicative/.test(text(d.querySelector(".main"))), "and the summary leads with its result, labelled indicative");
 

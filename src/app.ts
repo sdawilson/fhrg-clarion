@@ -11,6 +11,7 @@
 //   GET  /demo                     the same page, opening the Northbridge demonstration
 //   GET  /demo/data.json           the demonstration's made-up data (public; see demo.ts)
 //   POST /demo/map                 {service, month, topic, bias, view, partner, include}: the map worked out from that data
+//   POST /demo/officers            {service, month, word}: the officers' briefing from that data
 //   POST /api/config               website address and whether the demonstration is on (public)
 //   POST /api/login | /api/logout
 //   POST /api/sso                  {token}: a two-minute, single-use pass signed by the website
@@ -33,7 +34,6 @@
 //   POST /api/briefing/election    {code, on}: the pre-election setting
 //   POST /api/coverage/get         {code}: sources, assessments, and what's been read automatically
 //   POST /api/coverage/summary     {code}: the last four weeks' assessments, for the Summary page
-//   POST /api/picture              {code}: what the Summary page's two pictures need beyond those
 //   POST /api/coverage/source      {code, ...source}: add or change a source
 //   POST /api/coverage/unsource    {code, id}: take a source off
 //   POST /api/coverage/assess      {code, ...assessment}: record an assessment
@@ -53,9 +53,11 @@
 //   POST /api/attention            {code}: each topic by public concern and media attention
 //   POST /api/admin/overview       site administrators: the position across all authorities
 //   POST /api/map                  {code, service, month, topic, bias, view, partner, include}: the map, and what the Dashboard needs
+//   POST /api/rate                 {code, key, tone}: an officer's rating of a petition or an MP's question
 //   POST /api/setup/get            {code}: functions, partners and channels, and the mood weights
 //   POST /api/setup/save           {code, part, service, list}: leads and admins
 //   POST /api/setup/weights        {...weights}: site administrators
+//   POST /api/briefing/officers    {code, service, month, word}: the officers' briefing, or as a Word file
 //   POST /api/campaign/get         {code, service}: issues and campaign events, held back by the election setting
 //   POST /api/issue/set            {code, service, topic, status, key, own}: confirm, set aside or change a key message
 //   POST /api/issue/drop           {code, service, topic}
@@ -100,19 +102,20 @@ import { adminOverview, benchmark } from "./admin";
 import { MAX_LISTED, PAUSED, approveBriefing, canApprove, copyBriefing, forReader, getBriefing, listBriefings, loadElection, removeBriefing, saveBriefing, setElection, startBriefing, wordCopy, type Briefing, type Election } from "./briefings";
 import { loadComparison } from "./comparison";
 import {
-  FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, adultsByAge, audienceFor, channelsFrom, checkCoverage, loadAssessments, loadRates, loadSources,
-  removeAssessment, removeSource, saveAssessment, saveSource, summarise, withWeights, type Rate,
+  FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, adultsByAge, audienceFor, channelsFrom, checkCoverage, loadAssessments, loadChecks, loadRates, loadSources,
+  removeAssessment, removeSource, saveAssessment, saveRating, saveSource, summarise, withWeights, type Rate,
 } from "./coverage";
 import { monthSpend } from "./claude";
 import { getConfig, missingSettings, type Config } from "./config";
-import { demoMap, demoPack } from "./demo";
+import { demoMap, demoOfficers, demoPack } from "./demo";
 import { addSurvey, loadEvidence, loadFacts, saveNotes } from "./evidence";
 import { validId } from "./jobs";
 import { getNote, listNotes, readInput, setEffect, startNote } from "./notes";
 import { loadMapData } from "./mapdata";
 import { buildMap, readFilters } from "./mood";
-import { SERVICES, loadSetup, loadWeights, saveSetup, saveWeights, serviceId, standardFunctions } from "./setup";
-import { dropIssue, held as heldCampaign, loadCampaign, removeItem, saveItem, setIssue } from "./campaign";
+import { officersBriefing, officersWord } from "./officers";
+import { DEFAULT_SERVICE, SERVICES, loadSetup, loadWeights, saveSetup, saveWeights, serviceId, standardFunctions } from "./setup";
+import { dropIssue, held as heldCampaign, loadCampaign, removeItem, saveItem, setIssue, syncTell } from "./campaign";
 import { canEdit, canSee, isMember, isOwnLead, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
 import { areaOf, outcodeOf, whereIs } from "./postcodes";
@@ -211,14 +214,28 @@ async function handleSetup(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
-  const [setup, weights] = await Promise.all([loadSetup(c, p.code), loadWeights(c)]);
-  return json({ setup, weights, services: SERVICES, standard: Object.fromEntries(SERVICES.map((s) => [s.id, standardFunctions(s.id)])), canEdit: canEdit(me, p), isLead: isOwnLead(me, p), canWeigh: me.siteAdmin });
+  const [setup, weights, election] = await Promise.all([loadSetup(c, p.code), loadWeights(c), loadElection(c, p.code)]);
+  return json({ setup, weights, election: election.on, canApprove: canApprove(me, p), services: SERVICES, standard: Object.fromEntries(SERVICES.map((s) => [s.id, standardFunctions(s.id)])), canEdit: canEdit(me, p), isLead: isOwnLead(me, p), canWeigh: me.siteAdmin });
 }
 
 // Everything held back while the election setting is on, and nothing can be changed
 async function notInElection(c: Config, code: string): Promise<void> {
-  if ((await loadElection(c, code)).on) throw new FriendlyError("The election setting is on, so nothing can be planned until it's off.");
+  if ((await loadElection(c, code)).on) throw new FriendlyError("The election setting is on, so nothing can be planned until it's off.", 409);
 }
+
+async function handleOfficers(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const data = await loadMapData(c, p), map = buildMap(data, readFilters({ service: b.service, month: b.month }, data.today, data.topics));
+  const [readings, comparison] = await Promise.all([latestReadings(c, p.code), briefly(`comparison|${p.code}`, { ready: false as const }, () => loadComparison(c, p))]);
+  const signs = comparison.ready ? comparison.earlySigns.map((x: { topic: string }) => x.topic) : [];
+  const roads = map.service === DEFAULT_SERVICE, reading = roads ? readings.find((r) => r.status === "ready") ?? null : null;
+  const issues = data.campaign.issues.filter((x) => x.status === "confirmed" && x.service === map.service);
+  const briefing = officersBriefing(map, issues, reading, roads ? signs : [], data.today);
+  return json(b.word === true ? officersWord(briefing) : { briefing });
+}
+
 async function handleCampaign(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
@@ -250,7 +267,7 @@ async function handleCoverage(c: Config, request: Request): Promise<Response> {
   const faults = signals?.fixMyStreet.data, petitions = signals?.petitions.data, questions = signals?.questions.data;
   const unread = "Couldn't be read just now";
   return json({
-    ready: true, canEdit: canEdit(me, p), today: londonToday(), searchReady: !!c.searchKey, adults: census?.adults ?? null, sources, rows, summary: summarise(rows, londonToday()),
+    ready: true, canEdit: canEdit(me, p), today: londonToday(), searchReady: !!c.searchKey, adults: census?.adults ?? null, sources, rows, summary: summarise(rows, londonToday()), checks: await loadChecks(c, p.code),
     topics, functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachUnitFor: REACH_UNIT_FOR, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
     audiences: Object.fromEntries(SOURCE_TYPES.map((t) => [t, audienceFor(t, census, rates)])),
     automatic: [
@@ -271,25 +288,6 @@ async function handleCoverageSummary(c: Config, request: Request): Promise<Respo
   const p = pilotFor(me, b.code);
   const [sources, assessments] = await Promise.all([loadSources(c, p.code), loadAssessments(c, p.code)]);
   return json({ summary: summarise(withWeights(assessments, sources), londonToday()) });
-}
-
-// Extras for the pictures. Like the coverage page, none of them may hold up the Summary
-async function handlePicture(c: Config, request: Request): Promise<Response> {
-  const me = await signedIn(c, request);
-  const b = await readJsonBody(request, 1000);
-  const p = pilotFor(me, b.code);
-  const [census, rates, gov, topics, enquiries, works] = await Promise.all([
-    briefly(`census|${p.code}`, null, () => loadCensus(c, p.code), (x) => x === null), briefly("audience-rates", [] as Rate[], () => loadRates(c), (x) => !x.length),
-    briefly("announcements", null, () => announcements()), sharedTopics(c), loadEnquiries(c, p.code), loadWorks(c, p.code),
-  ]);
-  const posts = await councilNews(p, enquiries.page || p.newsPage, topics);
-  const fourWeeksBefore = (date: number) => new Date(date - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const since = fourWeeksBefore(Date.now()), recent = (list: { date: string }[] | null) => (list ? list.filter((x) => x.date >= since).length : null);
-  const weatherFrom = fourWeeksBefore(Date.parse(`${works.weatherTo || londonToday()}T12:00:00Z`)); // these figures stand still until the page is next opened, so they say how far they go
-  return json({
-    ages: AGES.map(([age]) => age), adults: census ? adultsByAge(census) : null, channels: channelsFrom(rates), announcements: recent(gov), posts: recent(posts),
-    weather: works.on ? { events: works.events.filter((e) => e.end >= weatherFrom).length, latest: works.events.at(-1)?.label ?? "", to: works.weatherTo } : null,
-  });
 }
 
 async function handleAdminOverview(c: Config, request: Request): Promise<Response> {
@@ -459,7 +457,7 @@ async function handleSurveyList(c: Config, request: Request): Promise<Response> 
   return json({
     paused: election.on,
     canEdit: canEdit(me, p),
-    surveys: surveys.map((s, i) => { const used = counts[i].filter((r) => !r.excluded); return { id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: used.filter((r) => r.via !== "self").length, byLink: used.filter((r) => r.via === "self").length, target: s.plan.target }; }),
+    surveys: surveys.map((s, i) => { const used = counts[i].filter((r) => !r.excluded); return { id: s.id, title: s.title, service: s.service ?? DEFAULT_SERVICE, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: used.filter((r) => r.via !== "self").length, byLink: used.filter((r) => r.via === "self").length, target: s.plan.target }; }),
   });
 }
 
@@ -480,8 +478,12 @@ async function handleSurveyNew(c: Config, request: Request): Promise<Response> {
 }
 
 async function handleSurveySave(c: Config, request: Request): Promise<Response> {
-  const { b, s } = await surveyEditor(c, request, 30_000);
-  return json({ survey: await saveSurvey(c, s, b) });
+  const { me, b, s } = await surveyEditor(c, request, 30_000);
+  if (b.tell === undefined) return json({ survey: await saveSurvey(c, s, b) });
+  await notPaused(c, s.code); // messages are held back with the rest of a campaign
+  const saved = await saveSurvey(c, s, b), { channels } = await loadSetup(c, s.code);
+  await syncTell(c, s.code, saved, saved.service ?? DEFAULT_SERVICE, channels.find((x) => x.node === "street")?.id ?? "", me.name);
+  return json({ survey: saved });
 }
 
 async function handleSurveyStatus(c: Config, request: Request): Promise<Response> {
@@ -662,9 +664,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
     if (request.method === "POST") {
       if (path === "/api/config") return json({ websiteUrl: c.websiteUrl, demo: c.demo });
-      if (path === "/demo/map") {
+      if (path === "/demo/map" || path === "/demo/officers") {
         if (!c.demo) return json({ error: "Not found." }, 404);
-        return json(demoMap(await readJsonBody(request, 2000)));
+        const b = await readJsonBody(request, 2000);
+        return json(path === "/demo/map" ? demoMap(b) : demoOfficers(b));
       }
       if (path === "/api/logout") return handleLogout();
       if (missingSettings(c).length) throw new FriendlyError(`Clarion is not set up yet. Missing settings: ${missingSettings(c).join(", ")}.`, 500);
@@ -692,9 +695,11 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/facts/notes": return await handleFactsNotes(c, request);
         case "/api/attention": return await handleAttention(c, request);
         case "/api/map": return await handleMap(c, request);
+        case "/api/rate": { const { p, b } = await editor(c, request, 1000); await saveRating(c, p.code, b.key, b.tone); return json({ ok: true }); }
         case "/api/setup/get": return await handleSetup(c, request);
         case "/api/setup/save": { const { me, p, b } = await editor(c, request, 20000); return json({ setup: await saveSetup(c, p.code, b, me.name) }); }
         case "/api/setup/weights": { const me = await signedIn(c, request); if (!me.siteAdmin) throw new FriendlyError("Only FHRG site administrators can do this.", 403); return json({ weights: await saveWeights(c, await readJsonBody(request, 1000)) }); }
+        case "/api/briefing/officers": return await handleOfficers(c, request);
         case "/api/campaign/get": return await handleCampaign(c, request);
         case "/api/issue/set": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); return json({ issue: await setIssue(c, p.code, b, serviceId(b.service), me.name) }); }
         case "/api/issue/drop": { const { p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await dropIssue(c, p.code, b.topic, serviceId(b.service)); return json({ ok: true }); }
@@ -714,7 +719,6 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/abc/save": return await handleAbc(c, request, "save");
         case "/api/coverage/get": return await handleCoverage(c, request);
         case "/api/coverage/summary": return await handleCoverageSummary(c, request);
-        case "/api/picture": return await handlePicture(c, request);
         case "/api/coverage/source": { const { me, p, b } = await editor(c, request, 3000); return json({ source: await saveSource(c, me, p, b, await sharedTopics(c)) }); }
         case "/api/coverage/unsource": { const { p, b } = await editor(c, request, 1000); await removeSource(c, p, b.id); return json({ ok: true }); }
         case "/api/coverage/assess": { const { me, p, b } = await editor(c, request, 3000); return json({ assessment: await saveAssessment(c, me, p, b, await topicsHere(c, p.code)) }); }

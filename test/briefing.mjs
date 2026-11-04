@@ -286,15 +286,22 @@ await until(() => /Ready for the next person|paused/.test(text(empty.getElementB
 ok(/Ready for the next person/.test(text(empty.getElementById("app"))), "a tablet with nothing waiting can try again too");
 
 // briefings
+const members = (d) => button(d, "For members").click();
 d = await open(lead, `#briefings/${WSX}`);
+await until(() => button(d, "For members"), "the choice of briefing");
+members(d);
 await see(d, /Briefings so far/);
 main = text(d.querySelector(".main"));
 ok(button(d, "Write a briefing") && button(d, "Turn this on") && /Released/.test(main) && /Draft/.test(main), "a lead sees the list, and can write one and set the election setting");
-ok([...d.querySelectorAll(".rail .nav button")].some((b) => b.textContent === "Councillor briefings"), "it has its place in the menu");
+ok([...d.querySelectorAll(".tabs button")].some((b) => b.textContent === "6Briefings"), "it has its place in the tabs");
 d = await open(boss, `#briefings/${WSX}`);
+await until(() => button(d, "For members"), "the choice of briefing");
+members(d);
 await see(d, /Briefings so far/);
 ok(button(d, "Write a briefing") && !button(d, "Turn this on"), "a site administrator can write one, but the setting is the authority's");
 d = await open(member, `#briefings/${WSX}`);
+await until(() => button(d, "For members"), "the choice of briefing");
+members(d);
 await see(d, /Briefings so far/);
 ok(!button(d, "Write a briefing") && !button(d, "Turn this on"), "a member can only read");
 
@@ -380,6 +387,8 @@ await api("/api/briefing/election", { code: WSX, on: false }, lead);
 const pack = t.buildPack(), packed = (x) => unzip(Buffer.from(x.file, "base64"))["word/document.xml"].text;
 ok(packed(pack.briefingWord).includes("Northbridge") && packed(pack.briefingWord).includes("Factual lines") && !packed(pack.briefingWordElection).includes("Factual lines"), "the demonstration's Word files are real, made by the same code");
 d = await open("", "#briefings/NORTHBRIDGE", "demo");
+await until(() => button(d, "For members"), "the choice of briefing");
+members(d);
 await see(d, /Briefings so far/);
 ok(/northbridge/i.test(d.querySelector(".main .note-row a").textContent), "the demonstration has a briefing");
 const beforeDemo = claude.calls.length;

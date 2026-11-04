@@ -10,13 +10,15 @@ import {
 import { ELECTION_NOTE, longDate, wordCopy, type Briefing } from "./briefings";
 import { held as heldCampaign, type Campaign } from "./campaign";
 import { buildMap, readFilters, type MapData } from "./mood";
-import { SERVICES, WEIGHTS, standardFunctions, type Setup } from "./setup";
+import { officersBriefing, officersWord } from "./officers";
+import type { Reading } from "./reading";
+import { DEFAULT_SERVICE, SERVICES, WEIGHTS, standardFunctions, type Setup } from "./setup";
 import { compare } from "./comparison";
 import { mondayOf, worksFigures, type Week } from "./works";
 import { enquiriesByMonth, enquiriesView, type Month } from "./enquiries";
 import { qrCode } from "./qr";
 import { packFrom, standFor, type SitesPack } from "./sites";
-import { ABOUT, ACCESS_CHECKS, CORE, answersCsv, cellKey, pointOf, summarise, surveyPage, type Answer, type Census, type Question, type Site, type Survey } from "./surveys";
+import { ABOUT, ACCESS_CHECKS, CORE, answersCsv, cellKey, pointOf, summarise, surveyPage, type Answer, type Census, type Message, type Question, type Site, type Survey } from "./surveys";
 import { cached } from "./util";
 
 export const DEMO_CODE = "NORTHBRIDGE";
@@ -49,8 +51,14 @@ const census: Census = {
 };
 
 const LOCALS: Question[] = [
-  { id: "l1", part: "local", kind: "choice", text: "Have you heard about the closure of the Relief Road?", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"] },
-  { id: "l2", part: "local", kind: "choice", text: "How would you rate the condition of the pavements near where you live?", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"] },
+  { id: "l1", part: "local", kind: "choice", text: "Have you heard about the closure of the Relief Road?", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"], fn: "nm", topic: "Relief Road closure" },
+  { id: "l2", part: "local", kind: "choice", text: "How would you rate the condition of the pavements near where you live?", options: ["Very good", "Fairly good", "Fairly poor", "Very poor", "Don't know"], fn: "fw", topic: "Pavements" },
+  { id: "l3", part: "local", kind: "choice", text: "How satisfied are you with the information you get about roadworks?", options: ["Very satisfied", "Fairly satisfied", "Neither satisfied nor dissatisfied", "Fairly dissatisfied", "Very dissatisfied", "Don't know"], fn: "nm", topic: "Roadworks information" },
+];
+const ROADWORKS = (n: number) => { const x = (n * 13) % 100, q = LOCALS[2].options; return q[x < 4 ? 0 : x < 26 ? 1 : x < 48 ? 2 : x < 76 ? 3 : x < 95 ? 4 : 5]; };
+const TOLD: Message[] = [
+  { id: "1", topic: "Potholes", text: "You can report a pothole online and follow its repair.", how: ["Read out by the interviewer", "On the tablet after the last question"], aware: true },
+  { id: "2", topic: "Roadworks information", text: "Every diversion in Northbridge is listed on one page of the council's website.", how: ["On the tablet after the last question", "Printed on the form", "On the page after replying by link"], aware: false },
 ];
 
 // A made-up place: a rough grid of neighbourhoods around made-up towns, out at sea so it can't land on a real one,
@@ -85,6 +93,7 @@ const SITE_PACK = demoSites();
 const SPOTS = [["Market Square, Saturdays 10am to 2pm", "2"], ["Station Approach, weekdays 7am to 9am", "2"], ["Riverside Retail Park, Sundays 11am to 3pm", "2"], ["The library, Tuesdays 10am to 1pm", "1"]];
 const SITES: Site[] = standFor(SITE_PACK, SITE_PACK.proposals[4], 30).map((x, i) => ({
   name: x.town.name, when: SPOTS[i][0], interviewers: SPOTS[i][1], share: x.share, ages: x.ages, lat: x.town.lat, lng: x.town.lng,
+  ...(i === 0 ? { spotLat: x.town.lat + 0.0021, spotLng: x.town.lng - 0.0032, where: "Outside the library, by the market cross" } : {}),
 }));
 
 // In order of public concern: the demonstration ranks topics by how often people raise them, as Clarion will
@@ -215,7 +224,7 @@ const PIECES: Assessment[] = [
 ];
 // Published national rates, the same ones the data library holds, with no links
 const DEMO_RATES: Rate[] = ([[0,16,19,7.6],[0,20,24,9],[0,25,29,9.9],[0,30,34,12.3],[0,35,39,14.4],[0,40,44,18.4],[0,45,49,19.7],[0,50,54,21.7],[0,55,59,23.8],[0,60,64,27.4],[0,65,69,31.3],[0,70,74,35.6],[0,75,79,39.3],[0,80,84,41.4],[0,85,null,39.7],[1,16,19,20.8],[1,20,24,31.7],[1,25,29,34.9],[1,30,34,41.8],[1,35,39,41],[1,40,44,40.6],[1,45,49,46],[1,50,54,48],[1,55,59,45.8],[1,60,64,46.6],[1,65,69,44.4],[1,70,74,39.6],[1,75,79,32.6],[1,80,84,30.8],[1,85,null,16],[2,16,19,9.8],[2,20,24,11.7],[2,25,29,14],[2,30,34,15.4],[2,35,39,18.7],[2,40,44,22.3],[2,45,49,26],[2,50,54,27.5],[2,55,59,30.8],[2,60,64,36],[2,65,69,41.4],[2,70,74,47.9],[2,75,79,54.2],[2,80,84,56.2],[2,85,null,53.7],[9,17,20,32.5],[9,21,29,60.7],[9,30,39,72.1],[9,40,49,80.6],[9,50,59,83.7],[9,60,69,83.8],[9,70,null,74.3],[10,16,24,70.8],[10,25,34,71.1],[10,35,44,68.5],[10,45,54,71.4],[10,55,64,71],[10,65,74,71.9],[10,75,84,61.2],[10,85,null,35.7],[11,16,24,11.5],[11,25,34,11],[11,35,44,11.2],[11,45,54,12.3],[11,55,64,11.2],[11,65,74,7.8],[11,75,84,4.2],[11,85,null,1.7],[12,16,24,28.3],[12,25,34,37.5],[12,35,49,40.9],[12,50,64,41.5],[12,65,74,43],[12,75,null,34.3],[13,16,24,9],[13,25,34,22],[13,35,44,38],[13,45,54,33],[13,55,64,24],[13,65,null,31],[3,16,24,5],[3,25,34,9],[3,35,44,9],[3,45,54,13],[3,55,64,15],[3,65,74,14],[3,75,null,23],[4,16,24,59],[4,25,34,59],[4,35,44,52],[4,45,54,52],[4,55,64,40],[4,65,74,38],[4,75,null,26],[5,16,24,25],[5,25,34,29],[5,35,44,38],[5,45,54,39],[5,55,64,51],[5,65,74,59],[5,75,null,64],[7,16,24,18],[7,25,34,17],[7,35,44,27],[7,45,54,26],[7,55,64,28],[7,65,74,31],[7,75,null,33]] as [number, number, number | null, number][]).map(([m, age_from, age_to, value]) => ({ measure: RATE_MEASURES[m], age_from, age_to, value, publisher: "", year: "2025" }));
-// More of the same published Ofcom figures, for the picture of one resident
+// More of the same published Ofcom figures, for the public view on the map
 const HEARD_BY_AGE: Record<string, number[]> = {
   word: [42, 49, 49, 61, 55, 60, 63], sites: [20, 27, 29, 33, 30, 30, 23], bbc: [18, 27, 26, 27, 24, 25, 24], print: [10, 10, 16, 14, 17, 23, 30], messaging: [15, 16, 22, 18, 19, 21, 19], search: [29, 29, 22, 25, 21, 19, 16], video: [25, 16, 11, 8, 4, 4, 1],
 };
@@ -279,7 +288,7 @@ function replies(): Answer[] {
   for (let n = 1; n <= 412; n++) {
     const tablet = n % 5 < 3;
     const answers: Record<string, string> = {
-      c1: said("c1", [5, 24, 20, 28, 20, 3]), c2: said("c2", [12, 36, 46, 6]), c4: said("c4", [58, 14, 8, 10, 10]), l1: said("l1", [18, 34, 44, 4]), l2: said("l2", [6, 31, 38, 20, 5]),
+      k1: (n * 7) % 100 < 39 ? "Yes" : "No", l3: ROADWORKS(n), c1: said("c1", [5, 24, 20, 28, 20, 3]), c2: said("c2", [12, 36, 46, 6]), c4: said("c4", [58, 14, 8, 10, 10]), l1: said("l1", [18, 34, 44, 4]), l2: said("l2", [6, 31, 38, 20, 5]),
       a1: r.pick(AGE_SHARES.map((x) => x[0]), [8, 10, 12, 16, 18, 19, 17]), a2: said("a2", [54, 44, 2]), a3: said("a3", [66, 13, 15, 3, 3]), a4: said("a4", [17, 78, 5]),
     };
     const comment = COMMENTS[n / 11 - 1]; // every eleventh person left a comment
@@ -290,7 +299,7 @@ function replies(): Answer[] {
   // people who chose to fill it in themselves are a little crosser than the people interviewers stopped
   for (let n = 413; n <= 532; n++) {
     const answers: Record<string, string> = {
-      c1: said("c1", [3, 16, 15, 30, 33, 3]), c2: said("c2", [8, 24, 62, 6]), c4: said("c4", [62, 12, 8, 10, 8]), l1: said("l1", [18, 34, 44, 4]), l2: said("l2", [6, 31, 38, 20, 5]),
+      k1: (n * 7) % 100 < 44 ? "Yes" : "No", l3: ROADWORKS(n), c1: said("c1", [3, 16, 15, 30, 33, 3]), c2: said("c2", [8, 24, 62, 6]), c4: said("c4", [62, 12, 8, 10, 8]), l1: said("l1", [18, 34, 44, 4]), l2: said("l2", [6, 31, 38, 20, 5]),
       a1: r.pick(AGE_SHARES.map((x) => x[0]), [4, 8, 12, 18, 24, 22, 12]), a2: said("a2", [46, 52, 2]), a3: said("a3", [74, 8, 12, 4, 2]), a4: said("a4", [14, 82, 4]),
     };
     out.push({ n, form: `R${n}`, via: "self", where: r.pick(["here", "elsewhere", "unknown"], [80, 7, 13]) as Answer["where"], site: "", at: "2026-10-21T19:00:00.000Z", secs: 150 + Math.floor(r.next() * 200), answers, topics: {}, clean: {}, checked: {} });
@@ -305,12 +314,22 @@ const survey = (over: Partial<Survey>): Survey => ({
 
 const autumnSurvey = () => survey({
   id: "20261001090000000-de000001", title: "Autumn roads survey", purpose: "How people feel about the state of the roads, and whether the Relief Road closure and the extra pothole money have reached them.",
-  status: "closed", locals: LOCALS, openedBy: "Demo officer", openedOn: "2026-10-03", closedOn: "2026-10-24", printedTo: 450, self: "NBDEMQLINKAB", selfOn: true,
+  status: "closed", locals: LOCALS, tell: TOLD, openedBy: "Demo officer", openedOn: "2026-10-03", closedOn: "2026-10-24", printedTo: 450, self: "NBDEMQLINKAB", selfOn: true,
 });
+const reading = {
+  id: "20261030090000000-de000003", code: DEMO_CODE, status: "ready", stage: "Ready", created: WHEN, updated: WHEN, by: "Demo officer",
+  headline: "People are less satisfied with their roads than a year ago. Potholes are the main worry, and pavements and flooding matter more than the coverage suggests.",
+  level: "Condition of highways scored 29 out of 100.", levelBasis: "Residents' survey 2025", direction: "Worsening", directionNote: "", confidence: "Moderate",
+  confidenceReason: "A street survey and public fault reports agree, but a street sample isn't random and press coverage is led by a few stories.",
+  drivers: [{ theme: "Potholes", evidence: "Raised most often in the street survey, and most fault reports are about them.", kind: "street survey" }, { theme: "Pavements", evidence: "Second in the street survey, and rising in fault reports, with little coverage.", kind: "actions" }, { theme: "Flooding on minor roads", evidence: "Third in the street survey, named by people on the same few roads.", kind: "street survey" }],
+  gaps: ["Fault report counts by category and month"], nextSteps: ["Ask about pavements on their own in the next street survey", "Check the flooding reports against drainage records"], cost: 0,
+};
+
+let earlySigns: string[] | null = null;
 export function buildPack() {
   const rows = replies();
   const autumn = autumnSurvey();
-  const winter = survey({ id: "20261028090000000-de000002", title: "Winter roads survey", purpose: "Whether people have noticed more pothole repairs, and how much pavements and flooding matter to them." });
+  const winter = survey({ id: "20261028090000000-de000002", title: "Winter roads survey", purpose: "Whether people have noticed more pothole repairs, and how much pavements and flooding matter to them.", tell: [{ id: "1", topic: "Potholes", text: "We are repairing more potholes than last year. Tell us where they are and we will tell you when each one is fixed.", how: ["On the tablet after the last question"], aware: false }] });
   const pages = { [autumn.id]: surveyPage(autumn, rows, census, true, true, 4, { NB1: 31, NB2: 26, NB3: 17, NB4: 11, NB5: 6, NB6: 3 }), [winter.id]: surveyPage(winter, [], census, true, true, 4) };
   const street = summarise(autumn, rows, census);
   const counted = new Map<string, number>();
@@ -318,14 +337,6 @@ export function buildPack() {
   const enquiries = demoEnquiries(DEMO_TOPICS), today = COUNTY_DAY(0);
   const said = summariseCoverage(withWeights(PIECES, SOURCES), today).topics;
   const comparison = compare(said, [...counted.entries()].map(([topic, count]) => ({ topic, count })), enquiries.view.ready ? enquiries.view.rows : []);
-  const reading = {
-    id: "20261030090000000-de000003", code: DEMO_CODE, status: "ready", stage: "Ready", created: WHEN, updated: WHEN, by: "Demo officer",
-    headline: "People are less satisfied with their roads than a year ago. Potholes are the main worry, and pavements and flooding matter more than the coverage suggests.",
-    level: "Condition of highways scored 29 out of 100.", levelBasis: "Residents' survey 2025", direction: "Worsening", directionNote: "", confidence: "Moderate",
-    confidenceReason: "A street survey and public fault reports agree, but a street sample isn't random and press coverage is led by a few stories.",
-    drivers: [{ theme: "Potholes", evidence: "Raised most often in the street survey, and most fault reports are about them.", kind: "street survey" }, { theme: "Pavements", evidence: "Second in the street survey, and rising in fault reports, with little coverage.", kind: "actions" }, { theme: "Flooding on minor roads", evidence: "Third in the street survey, named by people on the same few roads.", kind: "street survey" }],
-    gaps: ["Fault report counts by category and month"], nextSteps: ["Ask about pavements on their own in the next street survey", "Check the flooding reports against drainage records"], cost: 0,
-  };
   const note = {
     id: "20261012090000000-de000004", code: DEMO_CODE, status: "ready", stage: "Ready", created: "2026-10-12T09:00:00.000Z", updated: "2026-10-12T09:00:00.000Z", by: "Demo officer", input: { url: "", title: "", hasText: false },
     change: {
@@ -363,7 +374,7 @@ export function buildPack() {
     },
     noteList: [{ id: note.id, status: "ready", stage: "Ready", created: note.created, by: note.by, title: note.change.title, headline: note.headline }],
     note, announcements: [{ title: "£4.2m extra for pothole repairs", url: "", date: "2026-10-06", summary: "" }],
-    surveyList: { canEdit: true, surveys: [autumn, winter].map((s) => ({ id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: s.id === autumn.id ? rows.filter((x) => x.via !== "self").length : 0, byLink: s.id === autumn.id ? rows.filter((x) => x.via === "self").length : 0, target: s.plan.target })) },
+    surveyList: { canEdit: true, surveys: [autumn, winter].map((s) => ({ id: s.id, title: s.title, service: s.service ?? "highways", status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: s.id === autumn.id ? rows.filter((x) => x.via !== "self").length : 0, byLink: s.id === autumn.id ? rows.filter((x) => x.via === "self").length : 0, target: s.plan.target })) },
     surveys: pages, sites: SITE_PACK,
     suggestions: [
       { text: "Have you heard about the closure of the Relief Road?", kind: "choice", options: ["Yes, and it has affected me", "Yes, but it hasn't affected me", "No", "Don't know"], reason: "Loud: has it reached people?", topic: "Relief Road closure", basedOn: ["Impact note"], why: "5 assessed pieces in four weeks, but nothing yet shows how many people it affects." },
@@ -373,7 +384,6 @@ export function buildPack() {
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
     coverage: demoCoverage(census), enquiries, works: demoWorks(street?.satisfied ?? null), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
-    picture: { ages: AGE_BANDS.map(([from, to]) => (to ? `${from} to ${to}` : `${from} or over`)), adults: census ? adultsByAge(census) : null, channels: channelsFrom([...DEMO_RATES, ...demoChannels()]), announcements: 3, posts: 5, weather: { events: 2, latest: "Heavy rain", to: today } },
     setup: demoSetupPack(), campaign: demoCampaignPack(), attention: comparison, qr: { url: "", rows: qrCode("Northbridge is a demonstration, so this code leads nowhere.") },
     ...demoBriefing(street?.satisfied ?? null, street?.responses ?? 0, today),
   };
@@ -419,18 +429,20 @@ const demoSetup = (): Setup => {
   const fns = Object.fromEntries(SERVICES.map((x) => [x.id, standardFunctions(x.id)]));
   return { functions: fns, partners: [{ id: "dale", name: "Dale Highways", role: "Term maintenance contractor" }, { id: "bright", name: "Brightway Lighting", role: "Street lighting partner" }, { id: "nwater", name: "Northern Valley Water", role: "Utility works" }], channels: [{ id: "press", name: "Press announcement", node: "press" }, { id: "social", name: "Social media post", node: "socialm" }, { id: "liaison", name: "Community liaison meeting", node: "meetings" }, { id: "radio", name: "Radio interview", node: "radio" }, { id: "survey", name: "Street survey", node: "street" }], updated: "", by: "" };
 };
-export const demoSetupPack = () => ({ setup: demoSetup(), weights: WEIGHTS, services: SERVICES, standard: Object.fromEntries(SERVICES.map((x) => [x.id, standardFunctions(x.id)])), canEdit: true, isLead: true, canWeigh: false });
+export const demoSetupPack = () => ({ setup: demoSetup(), weights: WEIGHTS, services: SERVICES, standard: Object.fromEntries(SERVICES.map((x) => [x.id, standardFunctions(x.id)])), canEdit: true, canApprove: true, election: false, isLead: true, canWeigh: false });
 export const demoCampaignPack = () => { const x = demoCampaign(); return { ...x, channels: demoSetup().channels, election: false, canEdit: true }; };
 
 function demoMapData(): MapData {
   const autumn = autumnSurvey(), point = pointOf(autumn, replies(), census);
   if (!worksHeld) demoWorks(null);
   const w = worksHeld!;
-  const enquiries = { "2026-07": enquiryMonth(1500, 680, 300, 330), "2026-08": enquiryMonth(1450, 690, 310, 340), "2026-09": enquiryMonth(1480, 670, 330, 345), "2026-10": enquiryMonth(1976, 685, 537, 340) };
+  const enquiries = { "2026-06": enquiryMonth(1490, 680, 305, 335), "2026-07": enquiryMonth(1500, 680, 300, 330), "2026-08": enquiryMonth(1450, 690, 310, 340), "2026-09": enquiryMonth(1480, 670, 330, 345), "2026-10": enquiryMonth(1976, 685, 537, 340) };
   return {
     today: MAP_TODAY, setup: demoSetup(), weights: WEIGHTS, topics: DEMO_TOPICS, sources: SOURCES, assessments: PIECES, streets: point ? [point] : [], adults: ADULTS,
     residents: { score: 29, outOf: 100, year: 2025, source: "Residents' survey 2025" }, enquiries: enquiriesByMonth({ months: enquiries, matches: {}, imports: [], page: "" }, DEMO_TOPICS),
-    monthly: { "2026-08": { perDay: 2.0, reports: 52, petitions: [] }, "2026-09": { perDay: 2.2, reports: 58, petitions: [] }, "2026-10": { perDay: 2.4, reports: 64, petitions: [{ title: "Keep the lights on at night in Northbridge", local: 1520 }] } },
+    monthly: { "2026-08": { perDay: 2.0, reports: 52, petitions: [] }, "2026-09": { perDay: 2.2, reports: 58, petitions: [] }, "2026-10": { perDay: 2.4, reports: 64, petitions: [{ title: "Keep the lights on at night in Northbridge", local: 1520, above: true }] } },
+    rated: { "petition|Keep the lights on at night in Northbridge": "Critical", "question|2026-10-09|Roads: Northbridge": "Critical" }, ageAdults: census ? adultsByAge(census) : null,
+    announcements: [{ title: "£4.2m extra for pothole repairs", date: "2026-10-06" }],
     questions: [{ date: "2026-10-09", heading: "Roads: Northbridge" }],
     works: { on: true, weeks: w.weeks.map((x) => ({ week: x.week, public: x.public })), events: w.events.map((e) => ({ label: e.label, start: e.start, end: e.end })) },
     notes: [{ id: "n1", title: "£4.2m extra for pothole repairs", date: "2026-10-12", effect: 20, topic: "Potholes", routes: ["Money", "Delivery capacity", "Public and media reaction"] }],
@@ -440,9 +452,18 @@ function demoMapData(): MapData {
   };
 }
 let mapData: MapData | null = null;
-export function demoMap(b: any) {
+const dataFor = (b: any) => {
   mapData ??= demoMapData();
-  const on = b?.election === true;
-  const data = on ? { ...mapData, election: true, campaign: heldCampaign(mapData.campaign, true) } : mapData;
+  return b?.election === true ? { ...mapData, election: true, campaign: heldCampaign(mapData.campaign, true) } : mapData;
+};
+export function demoMap(b: any) {
+  const data = dataFor(b);
   return { ...buildMap(data, readFilters(b, data.today, data.topics)), canEdit: true, isLead: true };
+}
+export function demoOfficers(b: any) {
+  const data = dataFor(b), map = buildMap(data, readFilters({ service: b?.service, month: b?.month }, data.today, data.topics));
+  earlySigns ??= ((buildPack().attention as { earlySigns?: { topic: string }[] }).earlySigns ?? []).map((x) => x.topic);
+  const roads = map.service === DEFAULT_SERVICE, issues = data.campaign.issues.filter((x) => x.status === "confirmed" && x.service === map.service);
+  const briefing = officersBriefing(map, issues, roads ? (reading as unknown as Reading) : null, roads ? earlySigns : [], data.today);
+  return b?.word === true ? officersWord(briefing) : { briefing };
 }

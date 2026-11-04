@@ -38,7 +38,7 @@ const MAX_FUNCTIONS = 40;
 const MAX_PARTNERS = 12;
 const MAX_CHANNELS = 16;
 const NAME_CHARS = 80;
-const CHANNEL_NODES = ["press", "socialm", "meetings", "radio", "tv", "street", "video"] as const;
+export const CHANNEL_NODES = ["press", "socialm", "meetings", "radio", "tv", "street", "video"] as const;
 
 export const standardFunctions = (service: string): Fn[] => (STANDARD[service] ?? []).map(([id, name]) => ({ id, name, orig: name }));
 const startChannels = (): Channel[] => [

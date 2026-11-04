@@ -385,6 +385,36 @@ async function searchSite(c: Config, domain: string, keyword: string, from: stri
   return { found: hits.length > 0, date: dates.at(-1) ?? "" };
 }
 
+// A petition or an MP's question has no direction of its own, so an officer rates it. Only the rating is kept here.
+const ratingsPath = (c: Config, code: string) => `${c.root}authorities/${code}/ratings.json`;
+export const loadRatings = (c: Config, code: string) => storageJson<Record<string, string>>(c, ratingsPath(c, code), {});
+export async function saveRating(c: Config, code: string, key: unknown, tone: unknown): Promise<void> {
+  const k = cleanText(key, 260);
+  if (!/^(petition|question)\|/.test(k)) throw new FriendlyError("That can't be rated.");
+  await withLock(ratingsPath(c, code), async () => {
+    const held = await loadRatings(c, code);
+    if ((TONES as readonly unknown[]).includes(tone)) held[k] = tone as string; else delete held[k];
+    await savePretty(c, ratingsPath(c, code), held);
+  });
+}
+
+// A coverage check keeps only yes or no and the date, for each source
+export type LastCheck = { found: boolean; date: string; on: string };
+const checksPath = (c: Config, code: string) => `${c.root}authorities/${code}/coverage-checks.json`;
+export const loadChecks = (c: Config, code: string) => storageJson<Record<string, LastCheck>>(c, checksPath(c, code), {});
+async function keepChecks(c: Config, code: string, checks: Check[], on: string): Promise<void> {
+  const done = checks.filter((x) => x.result !== "Not checked");
+  if (!done.length) return;
+  await withLock(checksPath(c, code), async () => {
+    const held = await loadChecks(c, code);
+    for (const id of new Set(done.map((x) => x.source))) {
+      const rows = done.filter((x) => x.source === id), hit = rows.find((x) => x.result !== "No match");
+      held[id] = { found: !!hit, date: hit?.date ?? "", on };
+    }
+    await savePretty(c, checksPath(c, code), held);
+  });
+}
+
 export async function checkCoverage(c: Config, p: Pilot, b: any): Promise<{ ready: boolean; why: string; from: string; to: string; left: number; checks: Check[] }> {
   const days = [7, 14, 30].includes(b?.days) ? b.days : 14;
   const to = londonToday(), from = shiftDays(to, -days);
@@ -422,5 +452,6 @@ export async function checkCoverage(c: Config, p: Pilot, b: any): Promise<{ read
     countChecks(p.code, Math.min(0, made - needed)); // only searches really made count
     monthTotal = await addSearches(c, made).catch((e) => { console.log(`[warn] searches not counted: ${(e as Error).message}`); return 0; });
   }
+  await keepChecks(c, p.code, checks, to).catch((e) => { console.log(`[warn] coverage checks not kept: ${(e as Error).message}`); });
   return { ready: true, why: "", from, to, left: Math.max(0, Math.min(checksLeft(p.code), c.searchesAMonth - monthTotal)), checks };
 }

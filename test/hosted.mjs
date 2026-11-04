@@ -69,7 +69,7 @@ ok(r.url === `https://clarion.fhrg.co.uk/r/${link}` && r.rows.length > 20, "it c
 ok((await api("/api/survey/qr", { code: WSX, id, origin: "javascript:alert(1)" }, lead)).status === 400 && (await api("/api/survey/qr", { code: WSX, id, origin: "https://x" }, member)).status === 403, "for its own officers, and a proper address");
 
 r = await api("/api/r/get", { access: link });
-ok(Object.keys(r.survey).sort().join() === "collector,questions,title" && !JSON.stringify(r).includes("PRIVATE-PURPOSE") && !JSON.stringify(r).includes("High Street"), "someone with the link gets the questions and nothing else");
+ok(Object.keys(r.survey).sort().join() === "collector,questions,title,told" && r.survey.told.length === 0 && !JSON.stringify(r).includes("PRIVATE-PURPOSE") && !JSON.stringify(r).includes("High Street"), "someone with the link gets the questions and nothing else");
 ok((await api("/api/r/get", { access })).status === 404 && (await api("/api/s/get", { access: link })).status === 404, "and neither code opens the other's page");
 ok((await api("/api/r/get", { access: "AAAAAAAAAAAA" })).status === 404, "a made-up link is refused");
 setSurveyPage(fs.readFileSync(new URL("../public/survey.html", import.meta.url), "utf8"));
@@ -504,10 +504,10 @@ d = await open(lead, `#survey/${WSX}/${id}/results`);
 await see(d, /Everyone here chose to reply/);
 ok(/weaker than a street sample/.test(text(d.querySelector(".main"))), "a survey with no interviewers says so at the top");
 ok(!/Interviewers/.test([...d.querySelectorAll("thead")].map(text).join()), "and has nothing to set beside it");
-d = await open(lead, `#a/${WSX}`);
-await see(d, /how people feel about their roads/);
+d = await open(lead, `#dash/${WSX}`);
+await see(d, /Mood reading/);
 await new Promise((done) => setTimeout(done, 50));
-ok(!/Street survey, \d+ replies/.test(text(d.querySelector(".main"))) && !/\d+ street survey replies/.test(text(d.querySelector(".main"))), "the Summary page doesn't call it a street survey");
+ok(!/Street survey, \d+ replies/.test(text(d.querySelector(".main"))) && !/\d+ street survey replies/.test(text(d.querySelector(".main"))), "the Dashboard doesn't call it a street survey");
 d = await open(lead, `#evidence/${WSX}`);
 await see(d, /People who chose to reply, with no interviewers/);
 await api("/api/r/submit", { ...reply("one-bn", "BN11 1AA"), answers: { c1: "Fairly satisfied" } });

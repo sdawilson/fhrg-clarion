@@ -50,6 +50,19 @@ export function dropIssue(c: Config, code: string, topic: unknown, service: stri
   return change(c, code, (all) => { all.issues = all.issues.filter((x) => !(x.topic === topic && x.service === service)); });
 }
 
+/** Each message on a survey shows on the calendar under its topic, on the channel for street surveys if there is one. */
+export function syncTell(c: Config, code: string, survey: { id: string; title: string; service?: string; tell?: { topic: string }[] }, service: string, channel: string, by: string): Promise<void> {
+  const wanted = [...new Set((survey.tell ?? []).map((m) => m.topic).filter(Boolean))], origin = `Message on the survey: ${survey.title}`;
+  return change(c, code, (all) => {
+    const theirs = (x: Item) => x.survey === survey.id && x.origin.startsWith("Message on the survey");
+    all.items = all.items.filter((x) => !theirs(x) || x.topics.some((t) => wanted.includes(t)));
+    for (const topic of wanted) {
+      if (all.items.some((x) => theirs(x) && x.topics.includes(topic)) || all.items.length >= MAX_ITEMS) continue;
+      all.items.push({ id: newId(), title: `${topic}: told on the survey`.slice(0, TITLE_CHARS), date: londonToday(), channel, topics: [topic], service, origin, survey: survey.id, by, at: new Date().toISOString() });
+    }
+  });
+}
+
 export function saveItem(c: Config, code: string, b: any, service: string, by: string): Promise<Item> {
   const title = cleanText(b?.title, TITLE_CHARS);
   if (!title) throw new FriendlyError("Say what the event is.");

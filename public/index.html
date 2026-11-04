@@ -302,10 +302,10 @@ tr.selected td { background: var(--surface-2); }
 .mood-big { --d: 104px; display: flex; align-items: center; gap: 16px; } .mood-big .bub { font-size: 2rem; } .mood-w { font-size: 1.5rem; font-weight: 800; color: var(--heading); line-height: 1.15; }
 .gauge { position: relative; height: 10px; border-radius: 5px; background: var(--surface-2); } .gauge-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--line-2); } .gauge-m { position: absolute; top: 50%; width: 18px; height: 18px; border-radius: 50%; transform: translate(-50%, -50%); background: var(--navy-deep); box-shadow: 0 0 0 2px var(--surface); }
 .gauge-l { display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--ink-3); }
-.mrow { display: grid; grid-template-columns: minmax(130px, 1.3fr) minmax(90px, 1.4fr) 48px 40px; gap: 10px; align-items: center; min-height: 40px; padding: 2px 4px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 0.88rem; } .mrow:hover { background: var(--bg); }
-.tbl-wrap.plain { border: 0; } .fn { display: grid; grid-template-columns: minmax(130px, 1.2fr) minmax(130px, 2fr) 72px 110px; gap: 10px; align-items: center; min-width: 500px; padding: 4px 0; font-size: 0.88rem; } .fn.head { color: var(--ink-3); font-size: 0.8rem; }
+.mrow { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(50px, 1.2fr) 44px 36px; gap: 10px; align-items: center; min-height: 40px; padding: 2px 4px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 0.88rem; } .mrow:hover { background: var(--bg); }
+.tbl-wrap.plain { border: 0; } .fn { display: grid; grid-template-columns: minmax(120px, 1.2fr) minmax(110px, 2fr) 64px 76px 110px; gap: 10px; align-items: center; min-width: 560px; padding: 4px 0; font-size: 0.88rem; } .fn.head { color: var(--ink-3); font-size: 0.8rem; }
 .fn-bar { position: relative; display: block; height: 14px; } .fn-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); } .fn-fill { position: absolute; top: 0; bottom: 0; } .fn-fill.lean-down { background: var(--lean-down); border-radius: 4px 0 0 4px; } .fn-fill.lean-up { background: var(--lean-up); border-radius: 0 4px 4px 0; } .fn-fill.lean-mixed { background: var(--lean-mixed); }
-.heat { display: grid; grid-template-columns: minmax(130px, 1.5fr) repeat(5, minmax(52px, 1fr)); gap: 6px; align-items: center; } .heat-h { font-size: 0.8rem; color: var(--ink-3); text-align: center; } .heat-l { font-weight: 700; font-size: 0.88rem; }
+.heat-grid { display: grid; grid-template-columns: minmax(120px, 1.5fr) repeat(5, minmax(52px, 1fr)); gap: 6px; align-items: center; min-width: 410px; } .heat-h { font-size: 0.8rem; color: var(--ink-3); text-align: center; } .heat-l { font-weight: 700; font-size: 0.88rem; }
 .heat-c { display: grid; place-items: center; min-height: 42px; border-radius: 8px; font-weight: 800; text-decoration: none; color: var(--ink); } .heat-c.lean-down { background: var(--lean-down); color: var(--lean-down-ink); } .heat-c.lean-up { background: var(--lean-up); color: var(--lean-up-ink); } .heat-c.lean-mixed { background: var(--lean-mixed); color: var(--lean-mixed-ink); } .heat-c.lean-none { background: var(--surface); color: var(--ink-2); border: 1.5px dashed var(--line-2); }
 .meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .mtr { display: grid; gap: 2px; font-size: 0.92rem; }
 .cal-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); } .cal { display: grid; min-width: 820px; }
@@ -314,6 +314,13 @@ tr.selected td { background: var(--surface-2); }
 .ev { display: grid; gap: 0; width: 100%; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--accent-wash); color: var(--ink); text-align: left; font-size: 0.84rem; line-height: 1.25; cursor: pointer; } .ev[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .ev-add { width: 100%; min-height: 40px; border: 1.5px dashed var(--line-2); border-radius: 6px; background: none; color: var(--ink-3); font-size: 1.1rem; cursor: pointer; } .ev-add:hover { color: var(--accent); border-color: var(--accent); }
 .grid.top-align { align-items: start; }
+.foot { display: flex; flex-wrap: wrap; gap: 6px 22px; max-width: 1320px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 36px) 36px; font-size: 0.9rem; }
+.screen-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.phone { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line-2); border-radius: 14px; background: var(--bg); }
+.spot-box { aspect-ratio: 3 / 2; cursor: crosshair; overflow: hidden; background: var(--surface-2); }
+.spot-ring { position: absolute; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; border: 2px dashed var(--navy-deep); background: rgba(38, 74, 111, 0.08); pointer-events: none; }
+.spot-pin { position: absolute; width: 28px; height: 38px; transform: translate(-50%, -100%); fill: var(--lean-down); stroke: #fff; pointer-events: none; }
+.plan-site { break-inside: avoid; } .plan-site .spot-box { max-width: 520px; }
 .er { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; } .er input { flex: 1 1 140px; min-width: 0; padding: 6px 10px; border: 1.5px solid var(--line-2); border-radius: 7px; background: var(--surface); }
 .wt { display: grid; grid-template-columns: minmax(130px, 1fr) 90px 44px; gap: 10px; align-items: center; font-size: 0.9rem; } .wt input { padding: 4px 8px; border: 1.5px solid var(--line-2); border-radius: 7px; background: var(--surface); }
 @media print { .bub, .hub, .fn-fill, .heat-c { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .seg, .filters, .panel .row { display: none; } }
@@ -452,11 +459,15 @@ const Demo = {
       case "/api/authority": return P.authority;
       case "/api/coverage/get": return P.coverage;
       case "/api/coverage/summary": return { summary: P.coverage.summary };
+      case "/api/briefing/officers": { const res = await fetch("/demo/officers", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...b, election: Demo.election.on }) }); return await res.json(); }
       case "/api/map": { const res = await fetch("/demo/map", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...b, election: Demo.election.on }) }); return await res.json(); }
-      case "/api/setup/get": return P.setup;
+      case "/api/setup/get": return { ...P.setup, election: Demo.election.on };
       case "/api/setup/save": return { setup: { ...P.setup.setup, functions: { ...P.setup.setup.functions, [b.service]: b.list }, ...(b.part === "functions" ? {} : { [b.part]: b.list }) } };
       case "/api/setup/weights": return { weights: P.setup.weights };
-      case "/api/campaign/get": return { ...Demo.campaign(), election: Demo.election.on, ...(Demo.election.on ? { items: [] } : {}) };
+      case "/api/campaign/get": { const c = Demo.campaign(), on = Demo.election.on, mine = (x) => (x.service || "highways") === (b.service || "highways"); return { ...c, issues: c.issues.filter(mine).map((x) => (on ? { ...x, key: "" } : x)), items: on ? [] : c.items.filter(mine), election: on }; }
+      case "/api/coverage/assess": return { assessment: b };
+      case "/api/coverage/source": return { source: { ...b, id: "demo" } };
+      case "/api/rate": return { ok: true };
       case "/api/issue/set": { const c = Demo.campaign(), was = c.issues.find((x) => x.topic === b.topic); if (was) Object.assign(was, b); else c.issues.push({ key: "", ...b, status: b.status || "confirmed" }); return { issue: b }; }
       case "/api/issue/drop": { const c = Demo.campaign(); c.issues = c.issues.filter((x) => x.topic !== b.topic); return { ok: true }; }
       case "/api/campaign/item": { const c = Demo.campaign(), was = c.items.find((x) => x.id === b.id), item = { ...was, ...b, id: b.id || `d${Date.now()}` }; c.items = was ? c.items.map((x) => (x === was ? item : x)) : [...c.items, item]; return { item }; }
@@ -505,7 +516,7 @@ async function boot() {
   try { App.config = { ...App.config, ...(await API.call("/api/config")) }; } catch (e) { /* the defaults will do */ }
   // On this address anyone can explore Northbridge. Everything else needs an FHRG sign-in.
   if (location.pathname.replace(/\/+$/, "") === "/demo" && App.config.demo !== false) {
-    clear($app).append(h("div", { class: "busy" }, brand(), h("p", { role: "status" }, "Opening the Northbridge demonstration…")));
+    add(clear($app), h("div", { class: "busy" }, brand(), h("p", { role: "status" }, "Opening the Northbridge demonstration…")));
     try {
       const res = await fetch("/demo/data.json");
       if (!res.ok) throw new Error("The demonstration isn't available.");
@@ -516,7 +527,7 @@ async function boot() {
     } catch (e) {
       // never carry on here: a signed-in viewer would see real figures with nothing to say this isn't the demonstration
       console.warn(e);
-      return clear($app).append(h("div", { class: "busy" }, brand(), h("p", { class: "err", role: "alert" }, "The demonstration couldn't start. Please try again shortly."), h("a", { class: "btn", href: "/" }, "Back to sign in")));
+      return add(clear($app), h("div", { class: "busy" }, brand(), h("p", { class: "err", role: "alert" }, "The demonstration couldn't start. Please try again shortly."), h("a", { class: "btn", href: "/" }, "Back to sign in")));
     }
   }
   // Arriving from the FHRG website: /sso#t=<pass>. Tidy the address first, so the pass isn't left in the
@@ -531,7 +542,7 @@ async function boot() {
   }
   window.addEventListener("hashchange", route);
   if (API.token) {
-    clear($app).append(h("div", { class: "busy" }, brand(), h("p", { role: "status" }, "Signing you in…")));
+    add(clear($app), h("div", { class: "busy" }, brand(), h("p", { role: "status" }, "Signing you in…")));
     try { App.status = await API.call("/api/status"); return route(); }
     catch (e) { if (e.status !== 401) console.warn(e); API.setToken(""); }
   }
@@ -560,7 +571,7 @@ function authScreen(message) {
     } catch (e) { msg.textContent = e.message; msg.className = "err"; btn.disabled = false; }
   });
   const site = App.config.websiteUrl;
-  clear($app).append(h("div", { class: "auth" }, h("div", { class: "auth-sign" }, h("div", { class: "auth-card" },
+  add(clear($app), h("div", { class: "auth" }, h("div", { class: "auth-sign" }, h("div", { class: "auth-card" },
     logo(), h("h1", { class: "auth-title" }, "Clarion"),
     h("p", { class: "note" }, "How people in your area feel about their roads, and why. For FHRG member authorities."),
     h("div", { class: "stack auth-form" }, h("h2", { class: "auth-sub" }, "Sign in"), h("p", { class: "note" }, "Use the same email and password as the FHRG website."), f),
@@ -579,7 +590,7 @@ function route() {
   shell();
 }
 const TABS = [["a", "Map", 1], ["surveys", "Surveys", 2], ["dash", "Dashboard", 3], ["issues", "High-impact issues", 4], ["campaign", "Campaign calendar", 5], ["briefings", "Briefings", 6], ["said", "Sources", 0, "gap"], ["setup", "Set-up", 0]];
-const SECTION_OF = { note: "a", notes: "a", briefing: "briefings", survey: "surveys", print: "surveys", evidence: "dash", attention: "dash", about: "setup" };
+const SECTION_OF = { note: "a", notes: "a", briefing: "briefings", survey: "surveys", print: "surveys", plan: "surveys", evidence: "dash", attention: "dash", about: "setup" };
 const signOut = async () => { try { await API.call("/api/logout"); } catch (e) { /* */ } API.setToken(""); location.hash = ""; location.reload(); };
 function shell() {
   const st = App.status;
@@ -596,9 +607,10 @@ function shell() {
   const note = h("p", { class: "defaults" });
   App.pick.note = note;
   const head = h("header", { class: "top no-print" }, h("div", { class: "top-in" }, h("div", { class: "brand" }, h("a", { class: "brand-logo", href: "https://fhrg.co.uk", target: "_blank", rel: "noopener noreferrer", title: "Future Highways Research Group" }, logo()), h("div", {}, brand(), h("div", { class: "brand-sub" }, all ? "FHRG administrators" : current?.name ?? st.user.authority))), h("div", { class: "pickers" }, pickAuthority, current ? pickerRow() : null), h("div", { class: "top-who" }, who)), current ? note : null);
-  const tabs = current ? h("nav", { class: "tabs no-print", "aria-label": "Sections" }, h("div", { class: "tabs-in" }, TABS.map(([key, words, n, cls]) => h("button", { type: "button", class: `tab${cls ? ` ${cls}` : ""}`, "aria-current": section === key ? "page" : null, onclick: () => { location.hash = `#${key}/${current.code}`; } }, n ? h("span", { class: "tab-n" }, n) : null, h("span", {}, words))))) : null;
+  const tabs = current ? h("nav", { class: "tabs no-print", "aria-label": "Sections" }, h("div", { class: "tabs-in" }, [...TABS, ...(admin ? [["all", "All authorities", 0]] : [])].map(([key, words, n, cls]) => h("button", { type: "button", class: `tab${cls ? ` ${cls}` : ""}`, "aria-current": section === key ? "page" : null, onclick: () => { location.hash = key === "all" ? "#all" : `#${key}/${current.code}`; } }, n ? h("span", { class: "tab-n" }, n) : null, h("span", {}, words))))) : null;
   const main = h("main", { class: "main", id: "main" });
-  clear($app).append(h("div", { class: "app" }, head, tabs, main));
+  const foot = current ? h("footer", { class: "foot no-print" }, [["evidence", "Published evidence"], ["attention", "Attention and concern"], ["notes", "Impact notes"], ["about", "Sources and method"]].map(([key, words]) => h("a", { href: `#${key}/${current.code}` }, words))) : null;
+  add(clear($app), h("div", { class: "app" }, head, tabs, main, foot));
   fillPickers();
   if (current && !App.meta && !["a", "dash", "issues", "campaign"].includes(view)) loadMap(current, true).catch(() => {});
   const page = h("div", { class: "page" });
@@ -619,6 +631,7 @@ function shell() {
   if (view === "said") return saidView(page, current, id);
   if (view === "attention") return attentionView(page, current, id);
   if (view === "about") return aboutView(page, current);
+  if (view === "plan") return planView(page, current, id);
   if (view === "dash") return dashView(page, current);
   if (view === "issues") return issuesView(page, current);
   if (view === "campaign") return campaignView(page, current);
@@ -664,7 +677,7 @@ async function loadMap(a, own) {
 function fillPickers() {
   const m = App.meta;
   if (!m) return;
-  const set = (sel, list, value) => { if (!sel) return; clear(sel).append(...list.map(([v, words]) => h("option", { value: v }, words))); sel.value = value; };
+  const set = (sel, list, value) => { if (!sel) return; add(clear(sel), ...list.map(([v, words]) => h("option", { value: v }, words))); sel.value = value; };
   set(App.pick.service, m.services.map((s) => [s.id, s.label]), App.filters.service);
   set(App.pick.month, m.months.map((x) => [x.id, x.label]), App.filters.month);
   set(App.pick.topic, [["all", "All topics"], ...m.topicList.map((t) => [t, t])], App.filters.topic);
@@ -680,12 +693,12 @@ function pickerRow() {
 }
 const planOn = (d, id) => d.planned.filter((p) => p.nodes.includes(id));
 const NEXT_TUESDAY = () => { const x = new Date(`${App.meta?.today ?? new Date().toISOString().slice(0, 10)}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + ((9 - x.getUTCDay()) % 7 || 7)); return x.toISOString().slice(0, 10); };
-async function planFrom(a, topic, origin) {
+async function planFrom(a, topic, origin, survey = "") {
   try {
     const channels = (await API.call("/api/campaign/get", { code: a.code, service: App.filters.service })).channels;
-    const { item } = await API.call("/api/campaign/item", { code: a.code, service: App.filters.service, title: topic ? `Response on ${topic.toLowerCase()}` : "New response", date: NEXT_TUESDAY(), channel: channels[0]?.id ?? "", topics: topic ? [topic] : [], origin });
+    const { item } = await API.call("/api/campaign/item", { code: a.code, service: App.filters.service, title: topic ? `Response on ${topic.toLowerCase()}` : "New response", date: NEXT_TUESDAY(), channel: channels[0]?.id ?? "", topics: topic ? [topic] : [], origin, survey });
     App.cal.open = item.id; App.filters.topic = "all";
-    location.hash = `#campaign/${a.code}`;
+    if (location.hash === `#campaign/${a.code}`) route(); else location.hash = `#campaign/${a.code}`;
   } catch (e) { toast(e.message); }
 }
 
@@ -727,16 +740,18 @@ const sourcesUnder = (node) => (node.source ? [{ id: node.source, label: node.la
 
 async function mapView(page, a) {
   const box = h("div", { class: "split" }, loading("Drawing the map…"));
-  page.append(box);
+  page.append(h("h1", { class: "screen-only" }, `${a.name}: the map of mood`), box);
   const view = App.viewId;
   const ask = async () => { const d = await loadMap(a); if (view === App.viewId) drawMap(box, a, d, ask); };
-  try { await ask(); } catch (e) { if (view === App.viewId) clear(box).append(failure(e)); }
+  try { await ask(); } catch (e) { if (view === App.viewId) add(clear(box), failure(e)); }
 }
 
 function drawMap(box, a, d, ask) {
   const m = App.map, redraw = () => drawMap(box, a, d, ask), again = () => ask().catch((e) => toast(e.message));
   if (!d.partners.some((p) => p.id === m.partner)) m.partner = d.partners[0]?.id ?? "";
-  if (!m.age) m.age = d.public.ages[3] ?? d.public.ages[0] ?? "";
+  const adults = d.public.adults, allAdults = adults ? adults.reduce((x, y) => x + y, 0) : 0, everyone = (rates) => Math.round(rates.reduce((sum, n, i) => sum + n * adults[i], 0) / allAdults);
+  if (!m.age || (m.age === "all" && !allAdults)) m.age = d.public.ages[3] ?? d.public.ages[0] ?? "";
+  const whole = m.age === "all", rateOf = (c) => (whole ? everyone(c.rates) : c.rates[d.public.ages.indexOf(m.age)]);
   const trail = trailOf(d.tree, m.path), cur = trail.at(-1), root = trail.length === 1, isPublic = m.view === "public", isPartners = m.view === "partners";
   const partner = d.partners.find((p) => p.id === m.partner) ?? null, rootName = isPartners ? partner?.name ?? "Key partners" : a.name;
   const go = (path) => { m.path = path; m.scope = "all"; m.form = null; redraw(); };
@@ -744,7 +759,7 @@ function drawMap(box, a, d, ask) {
   const seg = h("div", { class: "seg", role: "group", "aria-label": "Whose view of the service" }, views.map(([id, words]) => h("button", { type: "button", "aria-pressed": String(m.view === id), onclick: () => { m.view = id; m.path = []; m.scope = "all"; m.form = null; again(); } }, words)));
   const toggleIn = (id) => { m.include = m.include.includes(id) ? m.include.filter((x) => x !== id) : [...m.include, id]; again(); };
   const tools = isPublic
-    ? filterBox("Age", chipRow(d.public.ages.map((x) => [x, x]), (x) => x === m.age, (x) => { m.age = x; redraw(); }))
+    ? filterBox("Age", chipRow([...(allAdults ? [["all", "Everyone here"]] : []), ...d.public.ages.map((x) => [x, x])], (x) => x === m.age, (x) => { m.age = x; redraw(); }))
     : isPartners
       ? h("div", { class: "filters" }, filterBox("Key partners", d.partners.length ? chipRow(d.partners.map((p) => [p.id, p.name]), (x) => x === m.partner, (x) => { m.partner = x; m.path = []; again(); }) : h("p", { class: "note" }, "No partners yet. Add them in Set-up, if a partner is more visible than the authority."), h("a", { href: `#setup/${a.code}` }, "Edit the list")),
         partner ? filterBox("In the authority's position", chipRow([["apart", "Kept apart"], ["in", "Included"]], (x) => (x === "in") === m.include.includes(partner.id), (x) => { if ((x === "in") !== m.include.includes(partner.id)) toggleIn(partner.id); })) : null)
@@ -753,12 +768,13 @@ function drawMap(box, a, d, ask) {
 
   let stage;
   if (isPublic) {
-    const i = d.public.ages.indexOf(m.age), row = (d.public.groups.Age ?? []).find((g) => g.label === m.age), mood = row && row.sat !== null ? Math.round(row.sat - row.dis) : null;
+    const row = whole ? null : (d.public.groups.Age ?? []).find((g) => g.label === m.age), overall = whole ? d.tree.kids.find((k) => k.id === "surveys")?.kids.find((k) => k.id === "street")?.mood.v ?? null : null, mood = whole ? overall : row && row.sat !== null ? Math.round(row.sat - row.dis) : null;
     const nodes = d.public.channels.map((c) => {
-      const v = c.rates[i], mo = c.mood ?? { txt: "–", unit: "", lean: "none", tip: "Private groups and search can't be tracked", word: "can't be tracked" };
-      return { lean: mo.lean, txt: mo.txt, unit: mo.unit, label: c.label, sub: `${fmt(v)}% of this age group`, tip: mo.tip, d: Math.round(52 + v * 0.45), aria: `${c.label}: ${mo.txt}, ${mo.word}, ${fmt(v)}% of this age group`, open: () => { if (c.path) { m.view = "authority"; m.path = c.path; m.scope = "all"; again(); } else toast("Private groups and search can't be tracked, so there's nothing to open."); } };
+      const v = rateOf(c), mo = c.mood ?? { txt: "–", unit: "", lean: "none", tip: "Private groups and search can't be tracked", word: "can't be tracked" };
+      const diff = whole || !allAdults ? 0 : v - everyone(c.rates), against = diff ? `${fmt(Math.abs(diff))} ${diff > 0 ? "more" : "fewer"} in every 100 than everyone here` : "";
+      return { lean: mo.lean, txt: mo.txt, unit: mo.unit, label: c.label, sub: `${fmt(v)}% of ${whole ? "adults here" : "this age group"}`, tip: [mo.tip, against].filter(Boolean).join(". "), d: Math.round(52 + v * 0.45), aria: `${c.label}: ${mo.txt}, ${mo.word}, ${fmt(v)}% of ${whole ? "adults here" : "this age group"}`, open: () => { if (c.path) { m.view = "authority"; m.path = c.path; m.scope = "all"; again(); } else toast("Private groups and search can't be tracked, so there's nothing to open."); } };
     });
-    stage = stageEl(nodes, hubEl({ person: true, title: `Aged ${m.age}`, strong: mood === null ? "" : moodFmt(mood), mood: mood === null ? "" : cap(moodName(mood)), line: mood === null ? "Too few to report" : "", lean: mood === null ? "root" : leanName(mood) }), true, 39, 33);
+    stage = stageEl(nodes, hubEl({ person: true, title: whole ? "Everyone here" : `Aged ${m.age}`, strong: mood === null ? "" : moodFmt(mood), mood: mood === null ? "" : cap(moodName(mood)), line: mood === null ? "Too few to report" : "", lean: mood === null ? "root" : leanName(mood) }), true, 39, 33);
   } else {
     const nodes = cur.kids.map((k) => {
       const count = isPartners ? 0 : planOn(d, k.id).length;
@@ -779,7 +795,7 @@ function drawMap(box, a, d, ask) {
   }
   const main = h("div", { class: "col-main" }, seg, tools, crumbs, stage, mapLegend());
   const panel = h("aside", { class: "panel", "aria-label": "Details" }, m.form === "mention" ? mentionForm(a, d, cur, redraw, again) : m.form === "source" ? sourceForm(a, d, cur, redraw, again) : isPublic ? publicPanel(a, d) : nodePanel(a, d, cur, root, rootName, redraw, go));
-  clear(box).append(main, panel);
+  add(clear(box), main, panel);
 }
 
 const moodFmt = (v) => (v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : "0");
@@ -787,18 +803,20 @@ const moodName = (v) => (v <= -40 ? "very negative" : v <= -10 ? "negative" : v 
 const leanName = (v) => (v <= -10 ? "down" : v >= 10 ? "up" : "mixed");
 
 function publicPanel(a, d) {
-  const m = App.map, i = d.public.ages.indexOf(m.age), groups = Object.keys(d.public.groups);
+  const m = App.map, whole = m.age === "all", groups = Object.keys(d.public.groups), adults = d.public.adults, allAdults = adults ? adults.reduce((x, y) => x + y, 0) : 0;
+  const rateOf = (c) => (whole ? Math.round(c.rates.reduce((sum, n, i) => sum + n * adults[i], 0) / allAdults) : c.rates[d.public.ages.indexOf(m.age)]);
   if (!groups.includes(m.split)) m.split = groups[0] ?? "";
-  const top = [...d.public.channels].sort((x, y) => y.rates[i] - x.rates[i]).slice(0, 3).map((c) => (/^(BBC|YouTube|WhatsApp)/.test(c.label) ? c.label : c.label.toLowerCase()));
+  const top = [...d.public.channels].sort((x, y) => rateOf(y) - rateOf(x)).slice(0, 3).map((c) => (/^(BBC|YouTube|WhatsApp)/.test(c.label) ? c.label : c.label.toLowerCase()));
   let up = 0, all = 0;
-  for (const c of d.public.channels) if (c.mood && c.mood.v !== null) { up += c.rates[i] * c.mood.v; all += c.rates[i]; }
-  const row = (d.public.groups.Age ?? []).find((g) => g.label === m.age), bars = h("div", { class: "rows" });
-  const drawBars = () => clear(bars).append(...(d.public.groups[m.split] ?? []).map((g) => h("div", { class: `bar-row${m.split === "Age" && g.label === m.age ? " sel" : ""}` }, h("span", {}, `${g.label} (${fmt(g.n)})`), h("span", {}, g.sat === null ? "Too few to report" : `${fmt(g.sat)}% satisfied`), g.sat === null ? null : h("span", { class: "bar-t" }, h("span", { class: "bar-f", style: { width: `${g.sat}%` } })))));
+  for (const c of d.public.channels) if (c.mood && c.mood.v !== null) { up += rateOf(c) * c.mood.v; all += rateOf(c); }
+  const row = whole ? null : (d.public.groups.Age ?? []).find((g) => g.label === m.age), street = d.tree.kids.find((k) => k.id === "surveys")?.kids.find((k) => k.id === "street")?.mood.v ?? null, inStreet = whole ? street : row && row.sat !== null ? Math.round(row.sat - row.dis) : null, bars = h("div", { class: "rows" });
+  const drawBars = () => add(clear(bars), ...(d.public.groups[m.split] ?? []).map((g) => h("div", { class: `bar-row${m.split === "Age" && g.label === m.age ? " sel" : ""}` }, h("span", {}, `${g.label} (${fmt(g.n)})`), h("span", {}, g.sat === null ? "Too few to report" : `${fmt(g.sat)}% satisfied`), g.sat === null ? null : h("span", { class: "bar-t" }, h("span", { class: "bar-f", style: { width: `${g.sat}%` } })))));
   drawBars();
   const panel = h("div", { class: "stack" },
-    h("div", {}, h("h2", {}, `Aged ${m.age}`), top.length ? h("p", {}, `Most likely to reach them: ${wordList(top)}.`) : null),
-    h("div", { class: "scorebox" }, h("div", {}, h("strong", {}, row && row.sat !== null ? moodFmt(Math.round(row.sat - row.dis)) : "–"), h("span", { class: "note" }, "Mood in the street survey")), h("div", {}, h("strong", {}, all ? moodFmt(Math.round(up / all)) : "–"), h("span", { class: "note" }, "Mood of what they're likely to hear"))),
-    h("p", { class: "note" }, `Each circle shows the mood recorded here. The percentage below it is a national pattern by age, from one Ofcom question, and doesn't measure ${a.name}. Click a circle to see what's recorded for it.`));
+    h("div", {}, h("h2", {}, whole ? "Everyone here" : `Aged ${m.age}`), allAdults && !whole ? h("p", { class: "note" }, `${fmt(Math.round((adults[d.public.ages.indexOf(m.age)] / allAdults) * 100))}% of adults here`) : null, top.length ? h("p", {}, `Most likely to reach them: ${wordList(top)}.`) : null),
+    h("div", { class: "scorebox" }, h("div", {}, h("strong", {}, inStreet === null ? "–" : moodFmt(inStreet)), h("span", { class: "note" }, "Mood in the street survey")), h("div", {}, h("strong", {}, all ? moodFmt(Math.round(up / all)) : "–"), h("span", { class: "note" }, "Mood of what they're likely to hear"))),
+    h("p", { class: "note" }, `Each circle shows the mood recorded here. The percentage below it is a national pattern by age, from one Ofcom question, and doesn't measure ${a.name}.${whole ? " Everyone here weights it by local ages from Census 2021." : ""} Click a circle to see what's recorded for it.`),
+    h("details", {}, h("summary", {}, "See every age as a table"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "How they got local news"), d.public.ages.map((x) => h("th", { class: "r" }, x)))), h("tbody", {}, d.public.channels.map((c) => h("tr", {}, h("td", {}, c.label), c.rates.map((n) => h("td", { class: "r" }, `${n}%`)))))))));
   if (d.street && groups.length) add(panel, h("h3", {}, "What people said in the street survey"), chipRow(groups.map((g) => [g, g]), (x) => x === m.split, (x) => { m.split = x; route(); }), bars, h("p", { class: "note" }, `${d.street.title}, ${fmt(d.street.responses)} replies. Indicative. Groups under 30 aren't reported.`));
   return panel;
 }
@@ -813,15 +831,20 @@ function nodePanel(a, d, cur, root, rootName, redraw, go) {
   if (d.canEdit && (leaf)) acts.push(act("Add a mention", () => { m.form = "mention"; redraw(); }));
   if (d.canEdit && cur.add) acts.push(act(`Add a ${cur.add}`, () => { m.form = "source"; redraw(); }));
   if (cur.source) acts.push(to("Grade this source", "said/sources".replace("/sources", "")));
-  if (["surveys", "street", "residents", "bylink"].includes(cur.id)) acts.push(to("Open surveys", "surveys"));
+  if (["surveys", "bylink"].includes(cur.id)) acts.push(to("Open surveys", "surveys"));
+  if (cur.id === "street") acts.push(d.street?.id ? h("a", { class: "btn small", href: `#survey/${a.code}/${d.street.id}/results` }, "See its results") : to("Open surveys", "surveys"));
+  if (cur.id === "surveys" && d.canEdit && !d.election) acts.push(to("Start a survey", "surveys"));
+  if (["residents", "faults", "petitions", "mps"].includes(cur.id)) acts.push(to("Published evidence", "evidence"));
+  if (cur.id === "news") acts.push(h("a", { class: "btn small", href: `#said/${a.code}/enquiries` }, "The council's website"));
   if (cur.id === "gov") acts.push(to("Impact notes", "notes"));
   if (cur.id === "enquiries") acts.push(h("a", { class: "btn small", href: `#said/${a.code}/enquiries` }, "Add this month's counts"));
   if (cur.id === "works" || cur.id === "weather") acts.push(h("a", { class: "btn small", href: `#attention/${a.code}/works` }, "Works and weather"));
   if (cur.id === "published") acts.push(to("Published evidence", "evidence"));
   if (["bylink", "news", "weather", "published"].includes(cur.id)) acts.push(to("See what to bear in mind", "campaign"));
-  if (cur.question && cur.topic && d.canEdit && !d.election) acts.push(act("Plan a response", () => planFrom(a, cur.topic, `Survey result: ${cur.label}, ${cur.mood.tip}`)));
+  if (cur.topic && !topic && d.canEdit && !d.election && !isPartners) acts.push(act("Plan a response", () => planFrom(a, cur.topic, cur.question ? `Survey result: ${cur.label}, ${cur.mood.tip}` : `Enquiries: ${cur.label}`)));
   if (topic && d.canEdit && !d.election && !isPartners) acts.push(act("Plan a response", () => planFrom(a, topic, `Topic on the map: ${topic}`)));
   const planned = isPartners ? [] : planOn(d, cur.id);
+  if (planned.length) acts.push(to("See its campaign events", "campaign"));
   const leftOut = isPartners ? [] : d.leftOut.map((q) => ({ ...q, n: q.pieces.filter((t) => t.includes(cur.id)).length })).filter((q) => q.n);
   const panel = h("div", { class: "stack" },
     h("div", {}, h("h2", {}, root ? rootName : cur.label), h("p", { class: "note" }, topic ? `${topic} only` : root ? (isPartners ? d.partners.find((p) => p.id === m.partner)?.role ?? "" : d.services.find((s) => s.id === d.service)?.label) : cur.sub)),
@@ -833,7 +856,8 @@ function nodePanel(a, d, cur, root, rootName, redraw, go) {
     cur.made.length ? [h("h3", {}, "What makes up this mood"), h("div", { class: "made" }, cur.made.map((r) => [h("span", {}, r.label), h("strong", {}, r.txt), h("span", { class: "note" }, r.share)]))] : null,
     leftOut.map((q) => h("div", { class: "left-out" }, h("span", {}, `${q.n} ${q.n === 1 ? "piece" : "pieces"} about ${q.name} left out`), h("button", { class: "btn small ghost", type: "button", onclick: () => { m.include = [...m.include, q.id]; route(); } }, "Add them"))),
     planned.length ? [h("h3", {}, `Campaign events${topic ? ` on ${topic}` : ""}`), h("div", { class: "rows" }, planned.map((p) => h("a", { class: "row-link", href: `#campaign/${a.code}`, onclick: () => { App.cal.open = p.id; } }, h("strong", {}, p.title), h("span", { class: "note" }, `${p.channel}, ${fmtDate(p.date)}`))))] : null,
-    cur.facts.length ? h("div", { class: "rows" }, cur.facts.map((f) => h("div", { class: "fact" }, h("strong", {}, f.title), h("span", { class: "note" }, f.sub), f.tags ? h("div", { class: "tags" }, f.tags.map((t) => h("span", { class: "tag" }, t))) : null))) : null);
+    cur.facts.length ? h("div", { class: "rows" }, cur.facts.map((f) => h("div", { class: "fact" }, h("strong", {}, f.title), h("span", { class: "note" }, f.sub), f.tags ? h("div", { class: "tags" }, f.tags.map((t) => h("span", { class: "tag" }, t))) : null,
+      f.rate ? (d.canEdit ? chipRow(TONES.map((t) => [t, t]), (t) => t === f.tone, (t) => rateIt(a, f, t, () => loadMap(a).then(() => route()))) : h("span", { class: "note" }, f.tone ? `Rated ${f.tone.toLowerCase()}` : "Not rated yet")) : null))) : null);
   if (list.length) {
     add(panel, h("h3", {}, `Mentions, ${d.months.find((x) => x.id === d.month)?.label}`));
     if (cur.source) add(panel, chipRow([["all", "All"], ["Local", "Local"], ["National", "National"]], (x) => x === m.scope, (x) => { m.scope = x; redraw(); }));
@@ -841,6 +865,9 @@ function nodePanel(a, d, cur, root, rootName, redraw, go) {
     if (scoped.length > 12) add(panel, h("p", { class: "note" }, `Showing the latest 12 of ${scoped.length}.`));
   }
   return panel;
+}
+async function rateIt(a, f, tone, then) {
+  try { await API.call("/api/rate", { code: a.code, key: f.rate, tone: tone === f.tone ? "" : tone }); if (App.demo) toast("In the demonstration, nothing is saved."); else await then(); } catch (e) { toast(e.message); }
 }
 function mentionRow(a, d, p) {
   const about = d.partners.find((x) => x.id === p.about), planned = d.planned.filter((x) => x.topics.includes(p.topic)).length;
@@ -853,7 +880,7 @@ function mentionRow(a, d, p) {
 function mentionForm(a, d, cur, redraw, again) {
   const m = App.map, pool = sourcesUnder(cur), msg = h("div", {}), today = (d.today ?? "").slice(0, 10);
   const date = h("input", { type: "date", max: today, value: d.month === today.slice(0, 7) ? today : `${d.month}-28` });
-  const text = h("textarea", { rows: 3, maxlength: 200 }), reach = h("input", { inputmode: "numeric" }), source = h("select", {}, pool.map((s) => h("option", { value: s.id }, s.label)));
+  const text = h("textarea", { rows: 3 }), reach = h("input", { inputmode: "numeric" }), source = h("select", {}, pool.map((s) => h("option", { value: s.id }, s.label)));
   const choose = (list) => h("select", {}, list.map((t) => h("option", { value: t }, t)));
   const tone = choose(TONES), relevance = choose(RELEVANCE), prominence = choose(PROMINENCE), scope = h("select", {}, h("option", { value: "" }, "As the source"), ["Local", "National"].map((t) => h("option", { value: t }, t)));
   const topic = h("select", {}, h("option", { value: "" }, "Choose a topic"), d.topicList.map((t) => h("option", { value: t }, t))), about = h("select", {}, h("option", { value: "" }, "The authority"), d.partners.map((p) => h("option", { value: p.id }, p.name)));
@@ -865,22 +892,22 @@ function mentionForm(a, d, cur, redraw, again) {
   const save = once(async () => {
     await API.call("/api/coverage/assess", { code: a.code, service: App.filters.service, source: source.value, date: date.value, summary: text.value, topic: topic.value, relevance: relevance.value, tone: tone.value, prominence: prominence.value, functions: fns, reach: reach.value, scope: scope.value, about: about.value });
     m.form = null; toast(App.demo ? "In the demonstration, nothing is saved." : "Saved. The mood has been worked out again."); await again();
-  }, (e) => { clear(msg).append(failure(e)); });
+  }, (e) => { add(clear(msg), failure(e)); });
   return h("div", { class: "stack" }, h("h2", {}, "Add a mention"), h("p", { class: "note" }, "You find the piece outside Clarion and record it in your own words. Please don't paste the article."),
-    h("label", { class: "field" }, "Source", source), h("label", { class: "field" }, "Date", date), h("label", { class: "field" }, "What was said, in one line of your own words", text), h("label", { class: "field" }, "Tone", tone), h("label", { class: "field" }, "Relevance", relevance), h("label", { class: "field" }, "Prominence", prominence),
+    h("label", { class: "field" }, "Source", source), h("label", { class: "field" }, "Date", date), h("label", { class: "field" }, "What was said, in one line of your own words", text, h("span", { class: "hint" }, "Your own words. Please don't paste the article, and leave out residents' names.")), h("label", { class: "field" }, "Tone", tone), h("label", { class: "field" }, "Relevance", relevance), h("label", { class: "field" }, "Prominence", prominence),
     h("label", { class: "field" }, "Local or national", scope), h("label", { class: "field" }, "Reach, if different from the source's", reach), h("div", { class: "field" }, "Covers the whole service, or choose functions", covers), h("label", { class: "field" }, "Topic", topic), h("label", { class: "field" }, "About", about), msg,
     h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: save }, "Save"), h("button", { class: "btn ghost", type: "button", onclick: () => { m.form = null; redraw(); } }, "Cancel")));
 }
 
 function sourceForm(a, d, cur, redraw, again) {
   const m = App.map, msg = h("div", {}), types = cur.types.length ? cur.types : ["Other"];
-  const name = h("input", { maxlength: 100 }), type = h("select", {}, types.map((t) => h("option", { value: t }, t))), domain = h("input", { placeholder: "northbridgecourier.co.uk" }), platform = h("input", { maxlength: 40, placeholder: "YouTube or TikTok, say" }), reach = h("input", { inputmode: "numeric" });
+  const name = h("input", { maxlength: 100 }), type = h("select", {}, types.map((t) => h("option", { value: t }, t))), domain = h("input", { placeholder: "example.org" }), platform = h("input", { maxlength: 40, placeholder: "YouTube or TikTok, say" }), reach = h("input", { inputmode: "numeric" });
   const leaning = h("select", {}, LEANINGS.map((t) => h("option", { value: t }, t))), stance = h("select", {}, STANCES.map((t) => h("option", { value: t }, t)));
   const social = types.some((t) => /Social|Streaming/.test(t));
   const save = once(async () => {
     await API.call("/api/coverage/source", { code: a.code, name: name.value, type: type.value, domain: social ? "" : domain.value, platform: platform.value, reach: reach.value, leaning: leaning.value, stance: stance.value, campaign: [] });
     m.form = null; toast(App.demo ? "In the demonstration, nothing is saved." : `${name.value} added.`); await again();
-  }, (e) => { clear(msg).append(failure(e)); });
+  }, (e) => { add(clear(msg), failure(e)); });
   return h("div", { class: "stack" }, h("h2", {}, `Add a ${cur.add || "source"}`), h("label", { class: "field" }, "Name", name), types.length > 1 ? h("label", { class: "field" }, "Kind", type) : null,
     social ? [h("label", { class: "field" }, "Platform", platform), h("p", { class: "note" }, "Organisations, groups and public pages only, never individuals.")] : h("label", { class: "field" }, "Its website, for coverage checks", domain),
     h("label", { class: "field" }, "Reach, in people", reach, h("span", { class: "hint" }, "The Sources page can look a title up in ABC's register.")), h("label", { class: "field" }, "Political leaning: recorded, and can be filtered on", leaning), h("label", { class: "field" }, "Friendliness to the authority: changes the weighting", stance), msg,
@@ -898,13 +925,13 @@ function moodCard(a, d) {
 }
 function functionCard(d) {
   const used = d.functions.filter((f) => f.pieces || f.survey !== null).sort((x, y) => (x.mood ?? 999) - (y.mood ?? 999)), empty = d.functions.filter((f) => !f.pieces && f.survey === null).map((f) => f.name);
-  return h("section", { class: "card" }, h("h3", {}, "By function"), h("div", { class: "tbl-wrap plain" }, h("div", { class: "fn head" }, h("span", {}, "Function"), h("span", {}, "Media mood, from −100 to +100"), h("span", {}, "Mood"), h("span", {}, "Street survey")),
-    used.map((f) => h("div", { class: "fn" }, h("span", {}, f.name), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(f.mood)), h("span", {}, f.mood === null ? `${f.pieces} ${f.pieces === 1 ? "piece" : "pieces"}` : moodFmt(f.mood)), h("span", {}, f.survey === null ? "–" : `${fmt(f.survey)}% satisfied`)))),
+  return h("section", { class: "card" }, h("h3", {}, "By function"), h("div", { class: "tbl-wrap plain" }, h("div", { class: "fn head" }, h("span", {}, "Function"), h("span", {}, "Media mood, from −100 to +100"), h("span", {}, "Mood"), h("span", {}, "Before weighting"), h("span", {}, "Street survey")),
+    used.map((f) => h("div", { class: "fn" }, h("span", {}, f.name), h("span", { class: "fn-bar" }, h("i", { class: "fn-mid" }), barOf(f.mood)), h("span", {}, f.mood === null ? `${f.pieces} ${f.pieces === 1 ? "piece" : "pieces"}` : moodFmt(f.mood)), h("span", {}, f.raw === null || f.raw === undefined ? "–" : moodFmt(f.raw)), h("span", {}, f.survey === null ? "–" : `${fmt(f.survey)}% satisfied`)))),
     empty.length ? h("p", { class: "note" }, `Nothing yet for: ${empty.join(", ")}.`) : null);
 }
 function heatCard(a, d) {
-  return h("section", { class: "card" }, h("h3", {}, "Month by month"), h("div", { class: "heat" }, h("div", {}), d.heatMonths.map((m) => h("div", { class: "heat-h" }, m.id === d.today?.slice(0, 7) ? "So far" : m.label.split(" ")[0])),
-    d.heat.map((r) => [h("div", { class: "heat-l" }, r.label), r.cells.map((c) => h("a", { class: `heat-c lean-${c.lean}`, href: `#a/${a.code}`, "aria-label": `${r.label}, ${c.month}: ${c.txt}`, onclick: () => { App.filters.month = c.month; App.map.view = "authority"; App.map.path = r.id === "root" ? [] : [r.id]; } }, c.txt))])),
+  return h("section", { class: "card" }, h("h3", {}, "Month by month"), h("div", { class: "tbl-wrap plain" }, h("div", { class: "heat-grid" }, h("div", {}), d.heatMonths.map((m) => h("div", { class: "heat-h" }, m.id === d.today?.slice(0, 7) ? "So far" : m.label.split(" ")[0])),
+    d.heat.map((r) => [h("div", { class: "heat-l" }, r.label), r.cells.map((c) => h("a", { class: `heat-c lean-${c.lean}`, href: `#a/${a.code}`, title: c.tip || null, "aria-label": `${r.label}, ${c.month}: ${c.txt}`, onclick: () => { App.filters.month = c.month; App.map.view = "authority"; App.map.path = r.id === "root" ? [] : [r.id]; } }, c.txt))]))),
     h("p", { class: "note" }, "A dashed box means too little to read. Click any box to open that part of the map for that month."));
 }
 async function dashView(page, a) {
@@ -912,19 +939,30 @@ async function dashView(page, a) {
   page.append(body);
   const view = App.viewId;
   let d, map, att;
-  try { [d, map, att] = await Promise.all([API.call("/api/authority", { code: a.code }), loadMap(a, true), API.call("/api/attention", { code: a.code }).catch(() => ({ ready: false, needs: "" }))]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { [d, map, att] = await Promise.all([API.call("/api/authority", { code: a.code }), loadMap(a, true), API.call("/api/attention", { code: a.code }).catch(() => ({ ready: false, needs: "" }))]); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
-  const street = d.evidence.streets.find((x) => !x.selfOnly) ?? null, month = map.months.find((x) => x.id === map.month)?.label;
+  const month = map.months.find((x) => x.id === map.month)?.label, service = map.services.find((x) => x.id === map.service)?.label, roads = map.service === "highways";
+  const head = pageHead(`${a.name}: ${service}, ${month}`, "The figures behind the map, and what they mean.");
+  if (!roads) { add(clear(body), head, h("div", { class: "callout" }, `Nothing collected yet. ${service} needs its keywords and published figures first, and readings, enquiries and fault reports are about roads for now.`), h("div", { class: "grid g2 top-align" }, moodCard(a, map), heatCard(a, map)), functionCard(map)); return; }
+  const later = !map.street ? d.evidence.streets.find((x) => !x.selfOnly) ?? null : null, street = map.street ?? later, ofIt = later ? "Latest street survey" : "Street survey", kid = (id) => { const find = (n) => (n.id === id ? n : n.kids.map(find).find(Boolean)); return find(map.tree); }, enq = kid("enquiries")?.mood, faults = kid("faults")?.mood;
+  const middle = d.benchmark, survey = d.evidence.surveys[0];
   const tiles = [
-    street ? stat("Satisfied with roads and pavements", `${fmt(street.satisfied)}%`, `Street survey, ${fmt(street.responses)} replies. Indicative`) : stat("Street survey", "None yet", "Plan one under Surveys"),
+    street ? stat("Satisfied with roads and pavements", `${fmt(street.satisfied)}%`, `${ofIt}, ${fmt(street.responses)} replies. Indicative`) : stat("Street survey", "None yet", "Plan one under Surveys"),
+    street ? stat("Say roads have got worse", street.worse === null ? "–" : `${fmt(street.worse)}%`, `${ofIt}. Indicative`) : stat("DfT road maintenance rating", d.authority.rating.overall, `Overall, ${d.authority.rating.published}`),
+    stat("FHRG middle figure", middle?.satisfied === null || middle?.satisfied === undefined ? "Not yet" : `${fmt(middle.satisfied)}%`, middle ? "Satisfied, with no authority named" : "Needs five authorities with results"),
+    survey ? stat(survey.measure, `${survey.score} / ${survey.outOf}`, survey.source) : stat("Residents' survey", "None held", "Add one in Published evidence"),
     stat("Media pieces", fmt(map.pieces.length), `${fmt(map.pieces.filter((p) => p.tone === "Critical").length)} critical, ${fmt(map.pieces.filter((p) => p.tone === "Supportive").length)} supportive`),
-    d.evidence.surveys[0] ? stat(d.evidence.surveys[0].measure, `${d.evidence.surveys[0].score} / ${d.evidence.surveys[0].outOf}`, d.evidence.surveys[0].source) : stat("Residents' survey", "None held", "Add one on the Evidence page"),
-    att.ready ? stat("Early signs", fmt(att.earlySigns.length), "Felt by many, reported by few") : stat("DfT road maintenance rating", d.authority.rating.overall, `Overall, ${d.authority.rating.published}`),
+    stat("Enquiries and complaints", enq?.v === null && enq?.unit !== "contacts" ? "–" : enq?.tip?.split(" this month")[0] || enq?.txt || "–", enq?.tip?.split(", ")[1] || "Counts only"),
+    stat("Fault reports", faults?.tip?.split(" reports")[0] || faults?.txt || "–", "A sample from FixMyStreet"),
+    stat("Adults in the authority", d.adults ? fmt(d.adults) : "–", "Census 2021, aged 16 and over"),
   ];
-  clear(body).append(pageHead(`${a.name}: ${map.services.find((s) => s.id === map.service)?.label}, ${month}`, "The figures behind the map, and what they mean."), h("div", { class: "grid g2" }, moodCard(a, map), readingCard(a, d)), h("div", { class: "grid g4" }, tiles), h("div", { class: "grid g2" }, functionCard(map), heatCard(a, map)));
+  add(clear(body), head, h("div", { class: "grid g2" }, moodCard(a, map), readingCard(a, d)), h("div", { class: "grid g4" }, tiles), h("div", { class: "grid g2" }, functionCard(map), heatCard(a, map)));
   if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
   else add(body, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Shows what's loud, what's felt, and what nobody is reporting yet."))), h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, att.needs ? `This needs ${att.needs}.` : "This can't be worked out just now."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))));
-  add(body, h("div", { class: "row" }, h("a", { class: "btn small", href: `#evidence/${a.code}` }, "Published evidence and what's missing"), h("a", { class: "btn small", href: `#attention/${a.code}` }, "Attention and concern in full"), h("a", { class: "btn small", href: `#notes/${a.code}` }, "Impact notes")), compareCard(a, d, street), roleCard());
+  add(body, h("div", { class: "grid g2 top-align" },
+    h("section", { class: "card" }, h("h3", {}, "Published evidence"), h("div", { class: "rows" }, map.considerations.filter((x) => x.kind === "Published figures").map((x) => h("div", { class: "fact" }, h("strong", {}, x.title), h("span", { class: "note" }, x.sub)))), h("div", { class: "row" }, h("a", { class: "btn small", href: `#evidence/${a.code}` }, "All published evidence and officer notes"))),
+    gapsCard(d)),
+    h("div", { class: "row" }, h("a", { class: "btn small", href: `#attention/${a.code}` }, "Attention and concern in full"), h("a", { class: "btn small", href: `#briefings/${a.code}` }, "Open the briefings"), h("a", { class: "btn small", href: `#notes/${a.code}` }, "Impact notes")), compareCard(a, d, d.evidence.streets.find((x) => !x.selfOnly) ?? null), roleCard());
 }
 
 // ---------------------------------------------------------------- high-impact issues
@@ -937,7 +975,7 @@ async function issuesView(page, a) {
     if (view !== App.viewId) return;
     const status = (t) => camp.issues.find((x) => x.topic === t)?.status, canAct = d.canEdit && !d.election, month = d.months.find((x) => x.id === d.month)?.label;
     const peak = (k) => Math.max(1, ...d.topics.map((t) => Math.abs(t[k] || 0)));
-    const meters = (t) => h("div", { class: "meters" }, [["Concern", `${fmt(t.enquiries)} enquiries`, (100 * t.concern) / peak("concern")], ["Reach", `${fmt(t.reach)} people`, (100 * t.reach) / peak("reach")], ["Mood", t.mood === null ? "–" : moodFmt(t.mood), Math.abs(t.mood ?? 0)]].map(([label, value, pct]) => h("div", { class: "mtr" }, h("span", { class: "note" }, label), h("strong", {}, value), h("span", { class: "bar-t" }, h("span", { class: "bar-f", style: { width: `${pct}%` } })))));
+    const meters = (t) => h("div", { class: "meters" }, [["Concern", `${fmt(t.enquiries)} enquiries`, (100 * t.concern) / peak("concern")], ["Reach", `${fmt(t.reach)} people`, (100 * t.reach) / peak("reach")], ["Mood", t.mood === null ? "–" : `${moodFmt(t.mood)} (${moodFmt(t.raw)} before weighting)`, Math.abs(t.mood ?? 0)]].map(([label, value, pct]) => h("div", { class: "mtr" }, h("span", { class: "note" }, label), h("strong", {}, value), h("span", { class: "bar-t" }, h("span", { class: "bar-f", style: { width: `${pct}%` } })))));
     const set = (topic, fields) => once(async () => { await API.call("/api/issue/set", { code: a.code, service: App.filters.service, topic, ...fields }); await draw(); }, (e) => toast(e.message));
     const drop = (topic) => once(async () => { await API.call("/api/issue/drop", { code: a.code, service: App.filters.service, topic }); await draw(); }, (e) => toast(e.message));
     const proposed = d.topics.filter((t) => t.proposed && !status(t.topic)), aside = camp.issues.filter((x) => x.status === "aside"), confirmed = camp.issues.filter((x) => x.status === "confirmed");
@@ -945,7 +983,7 @@ async function issuesView(page, a) {
     const left = h("section", { class: "stack" }, h("h2", {}, "Proposed by Clarion"), proposed.length ? proposed.map((t) => h("article", { class: "card" }, h("div", { class: "row spread" }, h("h3", {}, t.topic), h("span", { class: "pill" }, "Proposed")), meters(t),
       h("p", { class: "note" }, `Ranks ${t.rankConcern} of ${d.topics.length} for concern, ${t.rankReach} for reach and ${t.rankMood} for mood. A calculation, not a judgement.`),
       canAct ? h("div", { class: "row" }, h("button", { class: "btn primary small", type: "button", onclick: set(t.topic, { status: "confirmed" }) }, "Confirm"), h("button", { class: "btn ghost small", type: "button", onclick: set(t.topic, { status: "aside" }) }, "Set aside")) : null)) : h("p", { class: "muted" }, "Nothing to propose for this month."),
-      canAct ? h("div", { class: "card" }, h("label", { class: "field" }, "Add your own issue", own), msg, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: once(async () => { if (!own.value.trim()) throw new Error("Say what the issue is."); await API.call("/api/issue/set", { code: a.code, service: App.filters.service, topic: own.value, status: "confirmed", own: true }); await draw(); }, (e) => clear(msg).append(failure(e))) }, "Add"))) : null,
+      canAct ? h("div", { class: "card" }, h("label", { class: "field" }, "Add your own issue", own), msg, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: once(async () => { if (!own.value.trim()) throw new Error("Say what the issue is."); await API.call("/api/issue/set", { code: a.code, service: App.filters.service, topic: own.value, status: "confirmed", own: true }); await draw(); }, (e) => add(clear(msg), failure(e))) }, "Add"))) : null,
       aside.map((x) => h("div", { class: "left-out" }, h("span", {}, `${x.topic}: set aside`), canAct ? h("button", { class: "btn small ghost", type: "button", onclick: drop(x.topic) }, "Bring back") : null)));
     const right = h("section", { class: "stack" }, h("h2", {}, "Confirmed"), d.election ? h("div", { class: "callout warn" }, "The election setting is on, so key messages are held back and nothing can be changed.") : null,
       confirmed.length ? confirmed.map((x) => {
@@ -955,9 +993,9 @@ async function issuesView(page, a) {
         return h("article", { class: "card" }, h("div", { class: "row spread" }, h("h3", {}, x.topic), h("span", { class: "pill" }, `${n} planned`)), t && t.mood !== null ? meters(t) : null, d.election ? null : h("label", { class: "field" }, "Key message", key), bear.length ? h("p", { class: "note" }, `Bear in mind: ${bear.map((b) => `${b.title} (${b.kind.toLowerCase()})`).join("; ")}`) : null,
           h("div", { class: "row" }, h("a", { class: "btn primary small", href: `#campaign/${a.code}`, onclick: () => { App.filters.topic = x.topic; } }, "Plan responses"), canAct ? h("button", { class: "btn ghost small", type: "button", onclick: drop(x.topic) }, "Step back") : null));
       }) : h("p", { class: "muted" }, "Nothing confirmed yet."));
-    clear(body).append(pageHead(`High-impact issues, ${month}`, "Clarion proposes these from concern, reach and mood. An officer confirms them, and can add their own."), h("div", { class: "grid g2" }, left, right));
+    add(clear(body), pageHead(`High-impact issues, ${month}`, "Clarion proposes these from concern, reach and mood. An officer confirms them, and can add their own."), h("div", { class: "grid g2" }, left, right));
   };
-  try { await draw(); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); }
+  try { await draw(); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); }
 }
 
 // ---------------------------------------------------------------- the campaign calendar
@@ -975,9 +1013,9 @@ async function campaignView(page, a) {
     const weeks = [0, 7, 14, 21, 28].map((n) => plusDays(cal.start, n)), canPlan = d.canEdit && !camp.election, byTopic = cal.by === "topic", topic = App.filters.topic !== "all" ? App.filters.topic : "";
     const chName = (id) => camp.channels.find((c) => c.id === id)?.name ?? "No channel";
     const confirmed = camp.issues.filter((x) => x.status === "confirmed").map((x) => x.topic), tied = [...new Set(camp.items.flatMap((i) => i.topics))];
-    const moods = Object.fromEntries(d.topics.map((t) => [t.topic, t.mood]));
+    const moods = Object.fromEntries(d.topics.map((t) => [t.topic, t]));
     const rows = byTopic
-      ? [...(topic ? [topic] : [...new Set([...confirmed, ...tied])]).map((t) => ({ label: t, sub: moods[t] === null || moods[t] === undefined ? "" : `Mood ${moodFmt(moods[t])}`, match: (i) => i.topics.includes(t), seed: { topics: [t] } })), ...(!topic && camp.items.some((i) => !i.topics.length) ? [{ label: "No topic yet", sub: "", match: (i) => !i.topics.length, seed: {} }] : [])]
+      ? [...(topic ? [topic] : [...new Set([...confirmed, ...tied])]).map((t) => ({ label: t, sub: moods[t]?.mood === null || moods[t]?.mood === undefined ? "" : `Mood ${moodFmt(moods[t].mood)}, ${moodFmt(moods[t].raw)} before weighting`, match: (i) => i.topics.includes(t), seed: { topics: [t] } })), ...(!topic && camp.items.some((i) => !i.topics.length) ? [{ label: "No topic yet", sub: "", match: (i) => !i.topics.length, seed: {} }] : [])]
       : camp.channels.map((c) => ({ label: c.name, sub: "", match: (i) => i.channel === c.id, seed: { channel: c.id } }));
     const shown = camp.items.filter((i) => !byTopic || cal.channel === "all" || i.channel === cal.channel);
     const addTo = (week, seed) => once(async () => { const { item } = await API.call("/api/campaign/item", { code: a.code, service: App.filters.service, title: "New response", date: plusDays(week, 1), channel: cal.channel !== "all" ? cal.channel : camp.channels[0]?.id ?? "", topics: [], origin: "Added on the calendar", ...seed }); cal.open = item.id; await draw(); }, (e) => toast(e.message));
@@ -1002,18 +1040,19 @@ async function campaignView(page, a) {
       if (bear.length) add(panel, h("h2", {}, "Bear in mind"), h("p", { class: "note" }, "Not counted in the mood, but these should inform a campaign."), h("div", { class: "rows" }, bear.map((b) => h("div", { class: "fact" }, h("strong", {}, b.title), h("span", { class: "note" }, b.sub), h("div", { class: "tags" }, h("span", { class: "tag" }, b.kind), b.topic ? h("span", { class: "tag" }, b.topic) : null, canPlan ? h("button", { class: "linkish", type: "button", onclick: () => planFrom(a, b.topic, `${b.kind}: ${b.title}`) }, "Plan around this") : null)))));
       const keys = camp.issues.filter((x) => x.key);
       if (keys.length) add(panel, h("h2", {}, "Key messages"), h("div", { class: "rows" }, keys.map((x) => h("div", { class: "fact" }, h("strong", {}, x.topic), h("span", { class: "note" }, x.key)))));
-      add(panel, h("a", { class: "btn small", href: `#setup/${a.code}` }, "Change the channels"));
+      add(panel, h("details", {}, h("summary", {}, "Change the channels"), listEditor(camp.channels, [["name", "Channel name"]], "Add a channel", async (rows) => (await API.call("/api/setup/save", { code: a.code, part: "channels", list: rows })).setup.channels, d.canEdit)));
     }
-    clear(body).append(main, panel);
+    add(clear(body), main, panel);
   };
-  try { await draw(); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); }
+  try { await draw(); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); }
 }
 
 // ---------------------------------------------------------------- set-up
+const CHANNEL_PLACES = [["", "Nowhere on the map"], ["press", "Press"], ["tv", "TV"], ["radio", "Radio"], ["socialm", "Social media"], ["video", "Video"], ["meetings", "Community meetings"], ["street", "Street surveys"]];
 function listEditor(rows, fields, addWords, save, canEdit, tagOf) {
   const box = h("div", { class: "rows" }), msg = h("div", {});
   const draw = () => {
-    clear(box).append(...rows.map((r, i) => h("div", { class: "er" }, fields.map(([key, label]) => { const el = h("input", { value: r[key] ?? "", "aria-label": label, disabled: !canEdit, maxlength: 80, onchange: () => { r[key] = el.value; saveNow(); } }); return el; }), tagOf ? h("span", { class: "tag" }, tagOf(r)) : null,
+    add(clear(box), ...rows.map((r, i) => h("div", { class: "er" }, fields.map(([key, label, options]) => { const el = options ? h("select", { "aria-label": `${label}: ${r[fields[0][0]]}`, disabled: !canEdit, onchange: () => { r[key] = el.value; saveNow(); } }, options.map(([v, w]) => h("option", { value: v }, w))) : h("input", { value: r[key] ?? "", "aria-label": label, disabled: !canEdit, maxlength: 80, onchange: () => { r[key] = el.value; saveNow(); } }); if (options) el.value = r[key] ?? ""; return el; }), tagOf ? h("span", { class: "tag" }, tagOf(r)) : null,
       canEdit ? h("button", { class: "btn small ghost", type: "button", "aria-label": `Take out ${r[fields[0][0]]}`, onclick: () => { rows.splice(i, 1); saveNow().then(draw); } }, "Take out") : null)));
     if (canEdit) { const name = h("input", { placeholder: addWords, "aria-label": addWords, maxlength: 80 }); box.append(h("div", { class: "er" }, name, h("button", { class: "btn small", type: "button", onclick: () => { if (!name.value.trim()) return; rows.push({ [fields[0][0]]: name.value }); saveNow().then(draw); } }, "Add"))); }
   };
@@ -1026,26 +1065,26 @@ async function setupView(page, a) {
   page.append(pageHead("Set-up", "Functions, key partners and campaign channels for this authority."), body);
   const view = App.viewId;
   let d;
-  try { d = await API.call("/api/setup/get", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { d = await API.call("/api/setup/get", { code: a.code }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
   const service = App.filters.service, label = d.services.find((s) => s.id === service)?.label, std = d.standard[service] ?? [], s = d.setup;
   const save = (part, extra = {}) => async (rows) => { const r = await API.call("/api/setup/save", { code: a.code, part, list: rows, ...extra }); return part === "functions" ? r.setup.functions[service] : r.setup[part]; };
   const fns = listEditor(s.functions[service] ?? [], [["name", "Function name"]], "Add a function", save("functions", { service }), d.canEdit, (f) => (!f.orig ? "Added here" : f.name === f.orig ? "Standard" : "Renamed"));
   const partners = listEditor(s.partners, [["name", "Partner's name"], ["role", "What they do"]], "Add a partner", save("partners"), d.canEdit);
-  const channels = listEditor(s.channels, [["name", "Channel name"]], "Add a channel", save("channels"), d.canEdit);
+  const channels = listEditor(s.channels, [["name", "Channel name"], ["node", "Shows on the map at", CHANNEL_PLACES]], "Add a channel", save("channels"), d.canEdit);
   const total = Object.values(d.weights).reduce((x, y) => x + y, 0) || 1;
   const names = { surveys: "Surveys", broadcast: "TV and radio", print: "Press and magazines", social: "Social and video", contact: "People getting in touch", events: "Events and context" };
   const weightMsg = saveNote(), weights = Object.keys(names).map((k) => { const el = h("input", { type: "number", min: 0, max: 100, step: 5, value: d.weights[k], disabled: !d.canWeigh, "aria-label": `Weight for ${names[k]}` }); return { k, el }; });
-  clear(body).append(h("div", { class: "grid g2 top-align" },
+  add(clear(body), h("div", { class: "grid g2 top-align" },
     h("section", { class: "card" }, h("h2", {}, `Functions for ${label}`), h("p", { class: "note" }, `${service === "highways" ? "FHRG's standard list is the Climate Toolkit's 13 highways functions." : std.length ? "FHRG sets a starting list." : "FHRG has no list for this service yet, so add your own."} Each authority's lead can rename, take out or add to it. A renamed function keeps its link to the Climate Toolkit.`), fns,
       d.canEdit && std.length ? h("button", { class: "btn small ghost", type: "button", onclick: once(async () => { await API.call("/api/setup/save", { code: a.code, part: "functions", service, list: std }); route(); }, (e) => toast(e.message)) }, "Go back to the standard list") : null),
     h("div", { class: "stack gap" },
       h("section", { class: "card" }, h("h2", {}, "How mood is worked out"), h("p", { class: "note" }, "Every part of the map has its own method, and each gives one figure from −100 to +100. These weights blend them into the mood in the middle. A change is only reported when two kinds of signal agree."),
         weights.map(({ k, el }) => h("label", { class: "wt" }, h("span", {}, names[k]), el, h("strong", {}, `${Math.round((100 * d.weights[k]) / total)}%`))), h("p", { class: "note" }, "Starting weights, a judgement to test in the pilot. Surveys carry the most because they set the level. FHRG sets these, so that mood means the same everywhere."),
         d.canWeigh ? [weightMsg, h("button", { class: "btn small", type: "button", onclick: once(async () => { const b = Object.fromEntries(weights.map(({ k, el }) => [k, Number(el.value)])); await API.call("/api/setup/weights", b); route(); }, (e) => said(weightMsg, e.message, "bad")) }, "Save the weights")] : null),
-      h("section", { class: "card" }, h("h2", {}, "Key partners"), h("p", { class: "note" }, "Optional. Useful where a partner is more visible than the authority. Ratings stick to what was said."), partners),
-      h("section", { class: "card" }, h("h2", {}, "Campaign channels"), channels),
-      h("section", { class: "card" }, h("h2", {}, "Switches"), h("div", { class: "fact" }, h("strong", {}, "Press from an NLA licence"), h("span", { class: "note" }, "Off until NLA confirms which licence covers it. Until then an officer posts and rates each piece.")), h("div", { class: "fact" }, h("strong", {}, "Works and weather"), h("span", { class: "note" }, "Only a lead of this authority can turn it on, and turning it off removes what's held."), h("a", { href: `#attention/${a.code}/works` }, "Works and weather")), h("div", { class: "fact" }, h("strong", {}, "Election setting"), h("span", { class: "note" }, "Only a lead of this authority can use it. It holds back campaign events and key messages, takes lines to take out of briefings, and pauses street surveys."), h("a", { href: `#briefings/${a.code}` }, "Councillor briefings"))),
+      h("section", { class: "card" }, h("h2", {}, "Key partners"), h("p", { class: "note" }, "Optional. Useful where a partner is more visible than the authority. Ratings stick to what was said. Taking a partner out puts pieces about it back into the authority's mood."), partners),
+      h("section", { class: "card" }, h("h2", {}, "Campaign channels"), h("p", { class: "note" }, "Events on a channel show on that part of the map."), channels),
+      h("section", { class: "card" }, h("h2", {}, "Switches"), h("div", { class: "fact" }, h("strong", {}, "Press from an NLA licence"), h("span", { class: "note" }, "Off until NLA confirms which licence covers it. Until then an officer posts and rates each piece.")), h("div", { class: "fact" }, h("strong", {}, "Works and weather"), h("span", { class: "note" }, "Only a lead of this authority can turn it on, and turning it off removes what's held."), h("a", { href: `#attention/${a.code}/works` }, "Works and weather")), h("div", { class: "fact" }, h("strong", {}, `Election setting: ${d.election ? "on" : "off"}`), h("span", { class: "note" }, "Only a lead of this authority can use it. It holds back campaign events and key messages, takes lines to take out of briefings, and pauses street surveys."), d.canApprove ? h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: once(async () => { await API.call("/api/briefing/election", { code: a.code, on: !d.election }); route(); }, (e) => toast(e.message)) }, d.election ? "Turn this off" : "Turn this on")) : null)),
       h("div", { class: "row" }, h("a", { class: "btn small", href: `#about/${a.code}` }, "Sources and method")))));
 }
 
@@ -1065,9 +1104,9 @@ async function evidenceView(page, a) {
   page.append(pageHead(`${a.name}: the evidence`, "Published data, what people are doing and raising, and what's missing."), body);
   const view = App.viewId;
   let d;
-  try { d = await API.call("/api/authority", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { d = await API.call("/api/authority", { code: a.code }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
-  clear(body).append(ratingCard(d), surveyCard(a, d), figuresCard(d), signalsCard(d), gapsCard(d));
+  add(clear(body), ratingCard(d), surveyCard(a, d), figuresCard(d), signalsCard(d), gapsCard(d));
   if (d.canEdit) body.append(notesCard(a, d));
 }
 
@@ -1109,10 +1148,10 @@ async function attentionView(page, a, part) {
   if (works) return worksPanel(body, a);
   const view = App.viewId;
   let att;
-  try { att = await API.call("/api/attention", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { att = await API.call("/api/attention", { code: a.code }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
   if (att.ready) add(clear(body), h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
-  else clear(body).append(h("section", { class: "card" }, h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, `This compares what's being said with what people tell you. It needs ${att.needs}.`), h("a", { class: "btn small", href: `#said/${a.code}` }, "Go to What's being said"))));
+  else add(clear(body), h("section", { class: "card" }, h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, `This compares what's being said with what people tell you. It needs ${att.needs}.`), h("a", { class: "btn small", href: `#said/${a.code}` }, "Go to What's being said"))));
 }
 // Works and weather, from the Climate Toolkit: weekly totals and weather events only
 function worksChart(f) {
@@ -1146,7 +1185,7 @@ const signedChange = (n) => (n === null ? "\u2013" : `${n > 0 ? "+" : ""}${fmt(n
 async function worksPanel(body, a) {
   const view = App.viewId;
   let w;
-  try { w = await API.call("/api/works/get", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { w = await API.call("/api/works/get", { code: a.code }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
   const m = saveNote();
   const change = async (path) => { try { await API.call(path, { code: a.code }); route(); } catch (e) { said(m, e.message, "err"); } };
@@ -1171,16 +1210,17 @@ async function worksPanel(body, a) {
 // What's being said: what Clarion reads by itself, and what officers assess. Clarion never reads the press.
 async function saidView(page, a, part) {
   const body = h("div", { class: "stack gap" }, loading("Loading…"));
-  page.append(pageHead(`${a.name}: what's being said`, "What's being reported and raised about roads here."), body);
+  page.append(pageHead(`${a.name}: sources and what's being said`, "Each source is graded for political leaning and friendliness to the authority."), body);
   const view = App.viewId;
   let d;
-  try { d = await API.call("/api/coverage/get", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { d = await API.call("/api/coverage/get", { code: a.code }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
   const parts = [["latest", "Latest"], ...(d.canEdit ? [["assess", "Search and assess"]] : []), ["sources", "Sources"], ["enquiries", "Enquiries and website"]];
-  const on = parts.some((x) => x[0] === part) ? part : "latest";
-  clear(body).append(h("div", { class: "tab-row no-print", role: "tablist" }, parts.map(([key, label]) => h("button", { type: "button", "aria-selected": key === on ? "true" : "false", onclick: () => { location.hash = `#said/${a.code}/${key}`; } }, label))));
+  const on = parts.some((x) => x[0] === part) ? part : "sources";
+  add(clear(body), h("div", { class: "tab-row no-print", role: "tablist" }, parts.map(([key, label]) => h("button", { type: "button", "aria-selected": key === on ? "true" : "false", onclick: () => { location.hash = `#said/${a.code}/${key}`; } }, label))));
   ({ latest: saidLatest, assess: saidAssess, sources: saidSources, enquiries: saidEnquiries })[on](body, a, d);
 }
+const CONTEXTS = [["all", "All"], ["TV", /Television/], ["Radio", /Radio/], ["Press", /Newspaper|Press/], ["Magazines", /Magazine|Trade/], ["Social and video", /Social|Streaming/], ["Community", /Community/], ["Other", /^Other$/]];
 const reachText = (n, unit, band) => (n !== null && n !== undefined ? `${fmt(n)} ${unit || ""}`.trim() : band || "");
 
 function saidLatest(top, a, d) {
@@ -1233,7 +1273,7 @@ function saidAssess(top, a, d) {
   const form = { source: d.sources[0].id, date: d.today, topic: d.topics[0] || "", reach: d.sources[0].reach ?? "", summary: "", relevance: "", tone: "", prominence: "", functions: [] };
   const sideBox = h("div", { class: "stack gap" });
   const srcOf = () => d.sources.find((x) => x.id === form.source);
-  const drawSide = () => { const x = srcOf(); clear(sideBox).append(audienceCard(d, x.type), weightCard(x, form.tone, form.topic, form.reach === null ? "" : form.reach)); };
+  const drawSide = () => { const x = srcOf(); add(clear(sideBox), audienceCard(d, x.type), weightCard(x, form.tone, form.topic, form.reach === null ? "" : form.reach)); };
 
   // 1. check for coverage
   const results = h("div", { class: "stack" }), m1 = saveNote();
@@ -1274,13 +1314,14 @@ function saidAssess(top, a, d) {
   }
   const choice = (label, key, list) => {
     const row = h("div", { class: "seg" });
-    const draw = () => clear(row).append(...list.map((v) => h("button", { type: "button", "aria-pressed": String(form[key] === v), onclick: () => { form[key] = v; draw(); drawSide(); } }, v)));
+    const draw = () => add(clear(row), ...list.map((v) => h("button", { type: "button", "aria-pressed": String(form[key] === v), onclick: () => { form[key] = v; draw(); drawSide(); } }, v)));
     draw();
     return { el: h("div", { class: "field" }, label, row), draw };
   };
   const rel = choice("How relevant is it to the topic?", "relevance", d.relevance), tone = choice("Tone towards the council", "tone", d.tones), prom = choice("How prominent was it?", "prominence", d.prominence);
   const plates = h("div", { class: "plates" });
-  const drawPlates = () => clear(plates).append(...d.functions.map(([id, name]) => h("button", { type: "button", "aria-pressed": String(form.functions.includes(id)), onclick: () => { form.functions = form.functions.includes(id) ? form.functions.filter((x) => x !== id) : [...form.functions, id]; drawPlates(); } }, name)));
+  const fnList = App.meta?.functions.length ? App.meta.functions.map((f) => [f.id, f.name]) : d.functions;
+  const drawPlates = () => add(clear(plates), ...fnList.map(([id, name]) => h("button", { type: "button", "aria-pressed": String(form.functions.includes(id)), onclick: () => { form.functions = form.functions.includes(id) ? form.functions.filter((x) => x !== id) : [...form.functions, id]; drawPlates(); } }, name)));
   drawPlates();
   let saving = false;
   async function saveIt(done) {
@@ -1288,7 +1329,7 @@ function saidAssess(top, a, d) {
     if (form.summary.trim().length > 200) { said(m2, "Keep it to one line in your own words: up to 200 letters. Please don't paste the article.", "err"); return; }
     saving = true;
     try {
-      await API.call("/api/coverage/assess", { code: a.code, ...form });
+      await API.call("/api/coverage/assess", { code: a.code, service: App.filters.service, ...form });
       if (done) { location.hash = `#said/${a.code}/latest`; return; }
       Object.assign(form, { summary: "", relevance: "", tone: "", prominence: "", functions: [] });
       summary.value = ""; sourceReach(); rel.draw(); tone.draw(); prom.draw(); drawPlates(); drawSide();
@@ -1309,12 +1350,20 @@ function saidSources(top, a, d) {
     h("tbody", {}, d.automatic.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.type), h("td", {}, x.last ? fmtDate(x.last) : x.note || "Nothing recent"))))))));
   const edit = (s) => drawForm(s);
   const stancePill = (x) => h("span", { class: x === "Usually critical" ? "pill serious" : x === "Usually supportive" ? "pill good" : "pill" }, x);
+  const picked = h("div", { class: "stack" }), sourcePanel = (x) => {
+    const list = d.rows.filter((r) => r.source === x.id), toneShare = (key) => { let up = 0, all = 0; for (const r of list) { const w = Number(r[key]) || 0; all += w; up += r.tone === "Critical" ? -w : r.tone === "Supportive" ? w : 0; } return all ? Math.round((100 * up) / all) : null; };
+    return h("div", { class: "grid g2 top-align" }, h("section", { class: "card" }, h("h3", {}, x.name), h("p", { class: "note" }, `${x.platform ? `${x.type}, ${x.platform}` : x.type}. ${x.leaning}. ${x.stance}.`), h("div", { class: "scorebox" }, h("div", {}, h("strong", {}, list.length >= 5 ? moodFmt(toneShare("adjusted") ?? 0) : "–"), h("span", { class: "note" }, "Mood")), h("div", {}, h("strong", {}, list.length >= 5 ? moodFmt(toneShare("reach") ?? 0) : "–"), h("span", { class: "note" }, "Before weighting")), h("div", {}, h("strong", {}, fmt(list.length)), h("span", { class: "note" }, "Pieces"))), list.length < 5 ? h("p", { class: "note" }, "A mood needs 5 pieces.") : null), audienceCard(d, x.type));
+  };
+  const lastCheck = (x) => { const k = (d.checks || {})[x.id]; return !k ? "Not checked yet" : k.found ? `Found${k.date ? `, ${fmtDate(k.date)}` : ""}` : `Nothing found, ${fmtDate(k.on)}`; };
+  const shownSources = () => { const test = CONTEXTS.find(([id]) => id === (App.srcFilter ?? "all"))?.[1]; return test instanceof RegExp ? d.sources.filter((x) => test.test(x.type)) : d.sources; };
   top.append(h("section", { class: "card" }, h("h2", {}, "Assessed by your officers"), h("p", { class: "note" }, "Clarion never reads these. It can check whether a keyword turns up for a publication with a web address, and your officer does the rest."),
-    d.sources.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Source"), h("th", {}, "Type"), h("th", {}, "Search"), h("th", { class: "r" }, "Reach"), h("th", {}, "Reach from"), h("th", {}, "Political leaning"), h("th", {}, "Usual stance on the council"), h("th", {}, "Campaigning on"), d.canEdit ? h("th", {}, "") : null)),
-      h("tbody", {}, d.sources.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.type), h("td", {}, x.domain || "No"), h("td", { class: "r" }, reachText(x.reach, x.reachUnit, x.reachBand) || (d.canEdit ? h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Add reach") : "")), h("td", {}, x.reachFrom), h("td", {}, x.leaning), h("td", {}, stancePill(x.stance)), h("td", {}, x.campaign.join(", ") || "None"),
+    filterBox("Filter by context", chipRow(CONTEXTS.map(([id]) => [id, id === "all" ? "All" : id]), (x) => x === (App.srcFilter ?? "all"), (x) => { App.srcFilter = x; route(); })),
+    d.sources.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Source"), h("th", {}, "Type"), h("th", {}, "Search"), h("th", {}, "Coverage check"), h("th", { class: "r" }, "Reach"), h("th", {}, "Reach from"), h("th", {}, "Political leaning"), h("th", {}, "Usual stance on the council"), h("th", {}, "Campaigning on"), d.canEdit ? h("th", {}, "") : null)),
+      h("tbody", {}, shownSources().map((x) => h("tr", {}, h("td", {}, h("button", { class: "linkish", type: "button", onclick: () => { add(clear(picked), sourcePanel(x)); picked.scrollIntoView?.({ block: "nearest" }); } }, x.name)), h("td", {}, x.platform ? `${x.type}, ${x.platform}` : x.type), h("td", {}, x.domain || "No"), h("td", {}, x.domain ? lastCheck(x) : "Can't be checked"), h("td", { class: "r" }, reachText(x.reach, x.reachUnit, x.reachBand) || (d.canEdit ? h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Add reach") : "")), h("td", {}, x.reachFrom), h("td", {}, x.leaning), h("td", {}, stancePill(x.stance)), h("td", {}, x.campaign.join(", ") || "None"),
         d.canEdit ? h("td", {}, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Change"), held.has(x.id) ? null : h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/coverage/unsource", { code: a.code, id: x.id }); route(); } catch (e) { toast(e.message); } } }, "Remove"))) : null))))) : h("div", { class: "empty" }, "No sources yet."),
     h("p", { class: "note" }, "Leaning and stance are your officers' judgement, and could be asked for under freedom of information. Once a source has 10 assessments, its record shows how often it's been critical, so the judgement can be checked.")));
   const record = d.sources.flatMap((x) => { const list = d.rows.filter((r) => r.source === x.id); return list.length >= 10 ? [h("li", {}, `${x.name}: ${fmt(list.filter((r) => r.tone === "Critical").length)} critical and ${fmt(list.filter((r) => r.tone === "Supportive").length)} supportive, of ${fmt(list.length)} pieces.`)] : []; });
+  top.append(picked);
   if (record.length) top.append(h("section", { class: "card" }, h("h3", {}, "Each source's record"), h("ul", {}, record)));
   const formBox = h("section", { class: "card" });
   function drawForm(was) {
@@ -1337,7 +1386,7 @@ function saidSources(top, a, d) {
     };
     const m = saveNote();
     const campaign = d.topics.map((t) => { const box = h("input", { type: "checkbox", value: t, checked: (f.campaign || []).includes(t) }); return { box, row: h("label", { class: "check" }, box, t) }; });
-    clear(formBox).append(h("h3", {}, was ? `Change ${was.name}` : "Add a source"),
+    add(clear(formBox), h("h3", {}, was ? `Change ${was.name}` : "Add a source"),
       h("div", { class: "form-grid" }, input("name", "Name", { maxlength: 100 }), select("type", "Type", d.types, null, unitFollows), input("domain", "Web address, if it has its own site", { maxlength: 120, placeholder: "northbridgecourier.example" }, "Clarion checks the whole site for keywords. Leave this blank for a page on Facebook or the BBC"),
         input("reach", "Reach, if you have a figure", { inputmode: "numeric" }, "An ABC certificate, station figures or members"), select("reachUnit", "Reach is counted in", d.reachUnits, null, () => { unitChosen = true; }), select("reachBand", "Or your estimate", d.reachBands, "Not needed"), input("reachFrom", "Where the reach comes from", { maxlength: 80, placeholder: "ABC certificate, June 2026" }),
         select("leaning", "Political leaning", d.leanings), select("stance", "Usual stance on the council", d.stances)),
@@ -1478,7 +1527,7 @@ function enquiryImport(a, e) {
         h("p", { class: "note" }, `Categories: ${list("categories").join(", ")}.`), list("areas").length ? h("p", { class: "note" }, `Wards or roads: ${list("areas").join(", ")}.`) : null, list("routes").length ? h("p", { class: "note" }, `Ways in: ${list("routes").join(", ")}.`) : null,
         h("p", { class: "note" }, "If you can see a person's name or address here, don't send this: choose a different column."), h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: (ev) => send(ev, made) }, "Send these counts")));
     };
-    clear(columns).append(h("h3", {}, "Match the columns"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Column in your file"), h("th", {}, "Clarion uses it as"))),
+    add(clear(columns), h("h3", {}, "Match the columns"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Column in your file"), h("th", {}, "Clarion uses it as"))),
       h("tbody", {}, cols.map((c) => { const box = c.locked ? null : h("select", { "aria-label": `Use for ${c.name}`, onchange: () => { c.use = box.value; clear(preview); } }, COLUMN_USES.map(([key, label]) => h("option", { value: key }, label))); if (box) box.value = c.use; return h("tr", {}, h("td", {}, c.name), h("td", {}, box || h("span", { class: "pill serious" }, "Ignored, never sent"))); })))),
     h("p", { class: "note" }, "Columns that look personal can't be used. Free text is left out too, as it often holds names."), m2, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: check }, `Check what will be sent from ${fmt(csv.rows.length)} row${csv.rows.length === 1 ? "" : "s"}`)), preview);
   }
@@ -1519,7 +1568,7 @@ async function saidEnquiries(top, a) {
   top.append(box);
   const view = App.viewId;
   let e;
-  try { e = await API.call("/api/enquiries/get", { code: a.code }); } catch (err) { if (view === App.viewId) clear(box).append(failure(err)); return; }
+  try { e = await API.call("/api/enquiries/get", { code: a.code }); } catch (err) { if (view === App.viewId) add(clear(box), failure(err)); return; }
   if (view !== App.viewId) return;
   add(clear(box), e.canEdit ? enquiryImport(a, e) : null, e.view.ready ? enquiryFigures(a, e) : comingCard(e.canEdit ? "Nothing brought in yet. Choose a CSV file above." : "Nothing brought in yet."), websiteCard(a, e),
     e.canEdit && e.imports.length ? h("section", { class: "card" }, h("h3", {}, "What's been brought in"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Brought in"), h("th", {}, "Months"), h("th", {}, "By"), h("th", {}, ""))),
@@ -1531,7 +1580,7 @@ function aboutView(page, a) {
   page.append(pageHead("Sources & method", "Where the evidence comes from, how it's read, and what to be careful about."));
   if (App.demo) page.append(sec("About this demonstration", h("p", {}, "Northbridge is fictional, and so is everything about it: its people, places, press coverage, ratings and figures. The survey replies come from a simulation, then go through the same calculations as a real survey."), h("p", {}, "Claude isn't used in the demonstration, and nothing is saved.")));
   page.append(sec("How mood is read", h("ul", {}, ["Mood is read from six kinds of signal: surveys, street surveys, short repeated questions, public actions such as fault reports and enquiries, representatives, and open talk in the press and on social media.", "Survey results set the level. The other signals can only suggest direction.", "A change is reported only when two different kinds of signal agree.", "What's loud isn't the same as what's widely felt, and perception isn't the same as condition."].map((x) => h("li", {}, x)))),
-    sec("The two pictures on the Summary", h("ul", {}, ["What shapes opinion gathers what Clarion holds. A circle is coloured only where there's a real direction: more critical than supportive pieces, as officers assessed them, or more people dissatisfied than satisfied. It shows what's there, not how much each one moves opinion. Some counts are the latest few, or a sample, and each circle says so.", "One resident uses one question from Ofcom's Local News and Media Survey: how people got local news in the last month or so. These are national patterns by age, so they're for comparing, and don't measure any authority. Everyone here weights them by local ages from Census 2021."].map((x) => h("li", {}, x)))),
+    sec("The map", h("ul", {}, ["Each part of the map has its own method, and each gives one mood from −100 to +100. These blend into the mood in the middle using weights set by FHRG, so mood means the same everywhere. Authorities are never ranked on it.", "Weather, council news, published figures and replies by link aren't in the mood. They're things to bear in mind for a campaign.", "Petitions and MPs' questions count only once an officer has rated their direction, and a petition only if it draws more than a fair share of its signatures from here.", "The public view uses one question from Ofcom's Local News and Media Survey: how people got local news in the last month or so. These are national patterns by age, so they're for comparing, and don't measure any authority. Everyone here weights them by local ages from Census 2021."].map((x) => h("li", {}, x)))),
     sec("What's being said", h("ul", {}, ["Clarion reads sources with no licensing issue by itself: GOV.UK, Parliament and FixMyStreet.", "It never reads press, broadcast or social sources. A coverage check is a simple web search that keeps only yes or no and the date, and no match doesn't mean no coverage.", "Officers find each piece for themselves and record their own assessment. Leaning and stance are their judgement.", "Audience figures are national patterns by age, overlaid on Census figures for the authority. They describe a kind of source, not one publication's readers, and hold no party data.", "Enquiries and complaints are counts only. An officer's browser reads the file, and the officer sees what will be sent. Columns that look personal can't be used, small groups are pooled, and areas with fewer than 10 contacts in a month aren't kept by name.", "Allowing for a source's stance halves or adds half to a piece's reach. These weights are a starting judgement to be tested in the pilot, and raw figures are always kept."].map((x) => h("li", {}, x)))),
     sec("Attention and concern", h("ul", {}, ["Attention is a topic's assessed pieces in the last four weeks, then their reach after allowing for the source.", "Concern is a topic's share of street survey comments and of enquiries, averaged over whichever are held. Street surveys count for a year, and enquiries for three months.", "Ranks are compared, because a press count and a survey share aren't on one scale.", "An early sign is in the upper half for concern and the lower half for attention. It's a pointer for officers to check, not a finding."].map((x) => h("li", {}, x)))),
     sec("Works and weather", h("ul", {}, ["An authority's lead can turn on the link to its Climate Toolkit records, and can turn it off again at any time, which removes what's held.", "Clarion keeps only weekly job totals by function and source, ward totals and weather events, with no street names or job details.", "Weather events use the Climate Toolkit's own rules for gales, heavy rain, cold, freeze and thaw, and heatwaves.", "These help explain a change in mood. Only jobs reported by the public can count as a kind of signal."].map((x) => h("li", {}, x)))),
@@ -1556,11 +1605,11 @@ async function adminView(page) {
   page.append(pageHead("All authorities: the position across the FHRG", "Figures and topic counts only. Residents' comments and officer notes aren't brought together here."), body);
   const view = App.viewId;
   let d;
-  try { d = await API.call("/api/admin/overview"); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { d = await API.call("/api/admin/overview"); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
   const t = d.totals, dir = Object.entries(d.directions).sort((x, y) => y[1] - x[1]);
   const csv = () => [["Authority", "Region", "Replies", "Satisfied %", "Say worse %", "Direction of mood", "Latest survey"], ...d.authorities.map((x) => [x.name, x.region, x.street?.responses ?? "", x.street?.satisfied ?? "", x.street?.worse ?? "", x.direction, x.street?.ran ?? ""])].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  clear(body).append(h("div", { class: "row no-print" }, h("button", { class: "btn", type: "button", onclick: () => download("clarion-all-authorities.csv", csv()) }, "Download the figures")),
+  add(clear(body), h("div", { class: "row no-print" }, h("button", { class: "btn", type: "button", onclick: () => download("clarion-all-authorities.csv", csv()) }, "Download the figures")),
     h("div", { class: "grid g4" }, stat("Authorities using Clarion", `${fmt(t.using)} of ${fmt(t.authorities)}`, `${fmt(t.withSurvey)} with street survey results`),
       stat("Satisfied with roads, middle figure", t.middle === null ? "–" : `${fmt(t.middle)}%`, t.middle === null ? "No results yet" : `Range ${fmt(t.lowest)}% to ${fmt(t.highest)}%. Indicative`),
       stat("Direction of mood", dir.length ? `${fmt(dir[0][1])} ${dir[0][0].toLowerCase()}` : "–", dir.length ? dir.slice(1).map(([k, v]) => `${fmt(v)} ${k.toLowerCase()}`).join(", ") || "All the readings so far" : "No readings yet"),
@@ -1574,8 +1623,8 @@ async function adminView(page) {
       h("section", { class: "card" }, h("h3", {}, "Early signs in more than one authority"), d.earlySigns.length ? h("ul", {}, d.earlySigns.map((x) => h("li", {}, `${x.topic}: ${fmt(x.authorities)} authorities`))) : h("p", { class: "muted" }, "None at the moment."), d.earlySignsMissing ? h("p", { class: "note" }, "Some authorities couldn't be read just now, so this may be incomplete.") : null, h("p", { class: "note" }, "Felt by many, reported by few. No authority is named here.")),
       h("section", { class: "card" }, h("h3", {}, "News that reached people"), h("div", { class: "empty" }, "This comes once impact notes can be compared across authorities."))),
     h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Core questions by authority"), h("p", {}, "In alphabetical order, not ranked. A difference may reflect local choices, geography or who was asked. For FHRG administrators only."))),
-      h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Authority"), h("th", { class: "r" }, "Replies"), h("th", { class: "r" }, "Satisfied"), h("th", { class: "r" }, "Say worse"), h("th", {}, "Direction of mood"), h("th", {}, "Latest survey"))),
-        h("tbody", {}, d.authorities.map((x) => h("tr", {}, h("td", {}, h("a", { href: `#a/${x.code}` }, x.name)), h("td", { class: "r" }, x.street ? fmt(x.street.responses) : "–"), h("td", { class: "r" }, x.street ? `${fmt(x.street.satisfied)}%` : "–"), h("td", { class: "r" }, x.street?.worse == null ? "–" : `${fmt(x.street.worse)}%`), h("td", {}, directionPill(x.direction)), h("td", {}, x.street ? fmtDate(x.street.ran) : "No survey yet"))))))),
+      h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Authority"), h("th", { class: "r" }, "Replies"), h("th", { class: "r" }, "Satisfied"), h("th", { class: "r" }, "Say worse"), h("th", { class: "r" }, "Mood"), h("th", { class: "r" }, "Pieces"), h("th", { class: "r" }, "Enquiries"), h("th", {}, "Direction of mood"), h("th", {}, "Latest survey"))),
+        h("tbody", {}, d.authorities.map((x) => h("tr", {}, h("td", {}, h("a", { href: `#a/${x.code}` }, x.name)), h("td", { class: "r" }, x.street ? fmt(x.street.responses) : "–"), h("td", { class: "r" }, x.street ? `${fmt(x.street.satisfied)}%` : "–"), h("td", { class: "r" }, x.street?.worse == null ? "–" : `${fmt(x.street.worse)}%`), h("td", { class: "r" }, x.mood || "–"), h("td", { class: "r" }, x.pieces === null ? "–" : fmt(x.pieces)), h("td", { class: "r" }, x.enquiries === null ? "–" : fmt(x.enquiries)), h("td", {}, directionPill(x.direction)), h("td", {}, x.street ? fmtDate(x.street.ran) : "No survey yet"))))))),
     abcCard(), h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Use and spend"), h("p", {}, "This month."))), h("div", { class: "grid g4" }, stat("Mood readings", fmt(d.use.readings)), stat("Impact notes", fmt(d.use.notes)), stat("Forecasts due a check", fmt(d.use.forecastsDue)), stat("Claude spend", `$${d.use.spend.toFixed(2)}`, `Limit $${d.use.cap}`))));
 }
 
@@ -1585,7 +1634,7 @@ function readingCard(a, d) {
   const msg = h("div", {});
   const head = () => h("div", { class: "card-head" }, h("div", {}, h("h2", {}, "Mood reading")), start);
   const showReading = (r) => {
-    clear(box).append(head());
+    add(clear(box), head());
     if (r && r.status === "ready") start.textContent = "Write a new reading";
     if (r && r.status === "ready") box.append(readingBody(r));
     else if (r && r.status === "failed") box.append(failure({ message: r.error || "That reading didn't finish." }));
@@ -1594,15 +1643,15 @@ function readingCard(a, d) {
   };
   const track = (job) => {
     start.disabled = true;
-    clear(msg).append(progress(job.stage));
+    add(clear(msg), progress(job.stage));
     follow(async () => (await API.call("/api/reading/get", { code: a.code, id: job.id })).reading, (r) => {
-      if (r.status === "working") { clear(msg).append(progress(r.stage)); return; }
+      if (r.status === "working") { add(clear(msg), progress(r.stage)); return; }
       start.disabled = false; clear(msg); showReading(r);
     });
   };
   start.addEventListener("click", async () => {
     start.disabled = true;
-    try { track((await API.call("/api/reading/start", { code: a.code })).reading); } catch (e) { start.disabled = false; clear(msg).append(failure(e)); }
+    try { track((await API.call("/api/reading/start", { code: a.code })).reading); } catch (e) { start.disabled = false; add(clear(msg), failure(e)); }
   });
   showReading(d.reading);
   if (d.working) track(d.working);
@@ -1736,16 +1785,16 @@ async function notesView(page, a) {
   const view = App.viewId;
   API.call("/api/announcements").then((r) => {
     if (view !== App.viewId) return;
-    clear(pick).append(h("option", { value: "" }, r.announcements.length ? "Choose…" : (r.note || "None found")), ...r.announcements.map((x) => h("option", { value: x.url }, `${x.title} (${fmtDate(x.date)})`)));
-  }).catch(() => { clear(pick).append(h("option", { value: "" }, "The list couldn't be loaded")); });
+    add(clear(pick), h("option", { value: "" }, r.announcements.length ? "Choose…" : (r.note || "None found")), ...r.announcements.map((x) => h("option", { value: x.url }, `${x.title} (${fmtDate(x.date)})`)));
+  }).catch(() => { add(clear(pick), h("option", { value: "" }, "The list couldn't be loaded")); });
   try {
     const { notes } = await API.call("/api/note/list", { code: a.code });
     if (view !== App.viewId) return;
-    clear(list).append(...(notes.length ? notes : []).map((n) => h("div", { class: "note-row" },
+    add(clear(list), ...(notes.length ? notes : []).map((n) => h("div", { class: "note-row" },
       h("a", { href: `#note/${a.code}/${n.id}` }, n.title), n.status === "working" ? h("span", { class: "pill" }, n.stage) : n.status === "failed" ? h("span", { class: "pill bad" }, "Stopped") : null,
       h("div", { class: "note" }, `${fmtDate(n.created)}, ${n.by}`), n.headline ? h("div", {}, n.headline) : null)));
     if (!notes.length) list.append(h("p", { class: "muted" }, "No notes yet."));
-  } catch (e) { if (view === App.viewId) clear(list).append(failure(e)); }
+  } catch (e) { if (view === App.viewId) add(clear(list), failure(e)); }
 }
 
 async function noteView(page, a, id) {
@@ -1753,15 +1802,28 @@ async function noteView(page, a, id) {
   page.append(body);
   const ask = async () => (await API.call("/api/note/get", { code: a.code, id })).note;
   const show = (n) => {
-    if (n.status === "working") { clear(body).append(h("h1", {}, n.change?.title || n.input.title || "Impact note"), progress(n.stage)); return; }
-    if (n.status === "failed") { clear(body).append(h("h1", {}, "Impact note"), failure({ message: n.error || "This note didn't finish." })); return; }
-    clear(body).append(noteBody(a, n));
+    if (n.status === "working") { add(clear(body), h("h1", {}, n.change?.title || n.input.title || "Impact note"), progress(n.stage)); return; }
+    if (n.status === "failed") { add(clear(body), h("h1", {}, "Impact note"), failure({ message: n.error || "This note didn't finish." })); return; }
+    add(clear(body), noteBody(a, n));
   };
   try {
     const n = await ask();
     show(n);
     if (n.status === "working") follow(ask, show);
-  } catch (e) { clear(body).append(failure(e)); }
+  } catch (e) { add(clear(body), failure(e)); }
+}
+// An officer's expected effect is what puts a note into Government and policy on the map. Clarion never sets it.
+const EFFECTS = [[-40, "Strongly negative"], [-20, "Negative"], [0, "Neutral"], [20, "Positive"], [40, "Strongly positive"]];
+function effectCard(a, n) {
+  const box = h("section", { class: "card no-print" }), topic = h("select", { "aria-label": "Topic" }, h("option", { value: "" }, "No topic"), [...(App.meta?.topicList ?? []), ...(n.topic && !(App.meta?.topicList ?? []).includes(n.topic) ? [n.topic] : [])].map((t) => h("option", { value: t }, t)));
+  topic.value = n.topic || "";
+  const msg = saveNote(), save = async (effect) => { try { const r = await API.call("/api/note/effect", { code: a.code, id: n.id, effect, topic: topic.value }); n.effect = r.note.effect ?? effect; n.topic = r.note.topic ?? topic.value; draw(); said(msg, App.demo ? "In the demonstration, nothing is saved." : "Saved."); } catch (e) { said(msg, e.message, "err"); } };
+  topic.addEventListener("change", () => { if (n.effect !== null && n.effect !== undefined) save(n.effect); });
+  const chips = h("div", {});
+  const draw = () => add(clear(chips), chipRow(EFFECTS.map(([v, w]) => [v, w]), (v) => v === n.effect, (v) => save(v === n.effect ? null : v)));
+  draw();
+  box.append(h("h2", {}, "Expected effect on mood"), h("p", { class: "note" }, "For an officer to confirm. Until then, this note doesn't count towards the map's Government and policy figure."), chips, h("label", { class: "field" }, "Topic", topic), msg);
+  return box;
 }
 function noteBody(a, n) {
   const c = n.change || {};
@@ -1772,6 +1834,7 @@ function noteBody(a, n) {
       h("button", { class: "btn no-print", type: "button", onclick: () => window.print() }, "Print or save as PDF")),
     h("div", { class: "callout" }, h("strong", {}, n.headline)),
     n.whyHere ? h("p", {}, n.whyHere) : null,
+    effectCard(a, n),
     h("section", { class: "card" }, h("h2", {}, "What changed"), h("p", {}, c.summary),
       c.amount ? h("p", {}, h("strong", {}, "Amount. "), c.amount) : null,
       c.deadlines.length ? h("div", { class: "prose" }, h("h3", {}, "Dates"), h("ul", {}, c.deadlines.map((d) => h("li", {}, `${d.date ? `${d.date}: ` : ""}${d.what}`)))) : null,
@@ -1807,13 +1870,27 @@ const once = (fn, fail, lock = {}) => async (ev) => {
   try { await fn(); } catch (e) { fail(e); }
   lock.busy = false; btn.disabled = false;
 };
+async function officersPanel(body, a) {
+  const view = App.viewId, ask = (extra) => API.call("/api/briefing/officers", { code: a.code, service: App.filters.service, month: App.filters.month, ...extra });
+  let d;
+  try { d = await ask({}); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
+  if (view !== App.viewId) return;
+  const b = d.briefing;
+  add(clear(body), h("div", { class: "row no-print" }, h("button", { class: "btn", type: "button", onclick: () => route() }, "Write it again"), h("button", { class: "btn", type: "button", onclick: once(async () => { const r = await ask({ word: true }); saveBlob(r.name, new Blob([Uint8Array.from(atob(r.file), (x) => x.charCodeAt(0))], { type: WORD_TYPE })); }, (e) => toast(e.message)) }, "Download as Word"), h("button", { class: "btn", type: "button", onclick: () => window.print() }, "Print or save as PDF")),
+    h("article", { class: "card" }, h("h2", {}, b.title), h("p", { class: "note" }, "For officers in this authority. It stays in Clarion unless you take it out. Put together from the figures Clarion holds, with its latest mood reading."),
+      b.parts.map((p) => [h("h3", {}, p.heading), p.paras.map((t) => h("p", {}, t)), p.bullets.length ? h("ul", {}, p.bullets.map((t) => h("li", {}, t))) : null])));
+}
 async function briefingsView(page, a) {
-  page.append(pageHead(`${a.name}: councillor briefings`, "A plain summary for cabinet members and scrutiny. Councillors don't need an account: an officer releases a briefing, then sends it through the council's own channels."));
+  const month = App.meta?.months.find((x) => x.id === App.filters.month)?.label;
+  page.append(pageHead(`Briefings${month ? `, ${month}` : ""}`, "One for officers, put together from what Clarion holds, and one for members, which Claude drafts from figures and topic counts and an officer edits."));
+  App.briefFor ??= "officers";
+  page.append(h("div", { class: "seg no-print", role: "group", "aria-label": "Who the briefing is for" }, [["officers", "For officers"], ["members", "For members"]].map(([id, words]) => h("button", { type: "button", "aria-pressed": String(App.briefFor === id), onclick: () => { App.briefFor = id; route(); } }, words))));
   const body = h("div", { class: "stack gap" }, loading("Loading briefings…"));
   page.append(body);
+  if (App.briefFor === "officers") return officersPanel(body, a);
   const view = App.viewId;
   let d;
-  try { d = await API.call("/api/briefing/list", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { d = await API.call("/api/briefing/list", { code: a.code }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
   const pill = (x) => (x.status === "working" ? h("span", { class: "pill" }, x.stage) : x.status === "failed" ? h("span", { class: "pill bad" }, "Stopped") : x.approvedBy ? h("span", { class: "pill ok" }, "Released") : h("span", { class: "pill warn" }, "Draft"));
   const newCard = () => {
@@ -1824,7 +1901,7 @@ async function briefingsView(page, a) {
   const electionCard = () => {
     const msg = h("div", {});
     return h("section", { class: "card" }, h("h2", {}, "Pre-election setting"),
-      h("p", {}, "Section 2 of the Local Government Act 1986 bars publicity that seems designed to affect support for a party. Your monitoring officer will say when to turn this on. It takes lines to take and suggested answers out of every briefing, new or old, and pauses street surveys, on paper as well as on tablets."),
+      h("p", {}, "Section 2 of the Local Government Act 1986 bars publicity that seems designed to affect support for a party. Your monitoring officer will say when to turn this on. It takes lines to take and suggested answers out of every briefing, new or old, holds back campaign events and key messages, and pauses street surveys, on paper as well as on tablets."),
       d.election.at ? h("p", { class: "note" }, `Turned ${d.election.on ? "on" : "off"} by ${d.election.by} on ${fmtDate(d.election.at)}.`) : null, msg,
       h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: once(async () => { clear(msg); d.election = (await API.call("/api/briefing/election", { code: a.code, on: !d.election.on })).election; draw(); }, (e) => msg.append(failure(e))) }, d.election.on ? "Turn this off" : "Turn this on")));
   };
@@ -1840,6 +1917,7 @@ async function briefingsView(page, a) {
 
 const removeDraft = (a, b, bad, lock) => (App.demo ? null : h("button", { class: "btn ghost", type: "button", onclick: once(async () => { clear(bad); await API.call("/api/briefing/remove", { code: a.code, id: b.id, updated: b.updated }); location.hash = `#briefings/${a.code}`; }, (e) => bad.append(failure(e)), lock) }, "Delete this draft"));
 async function briefingView(page, a, id) {
+  App.briefFor = "members";
   const body = h("div", { class: "stack gap" }, loading("Loading the briefing…"));
   page.append(body);
   let d;
@@ -1854,7 +1932,7 @@ async function briefingView(page, a, id) {
     const b = await ask();
     show(b);
     if (b.status === "working") follow(ask, show);
-  } catch (e) { clear(body).append(failure(e)); }
+  } catch (e) { add(clear(body), failure(e)); }
 }
 function saveBlob(name, blob) {
   const url = URL.createObjectURL(blob);
@@ -1952,27 +2030,28 @@ async function scanFile(file) {
 // Claude's help: start it, keep the person posted, then show what came back
 const waitNote = (job) => h("div", { class: "callout", role: "status" }, h("strong", {}, `${job.stage}…`), job.total ? ` ${fmt(job.done)} of ${fmt(job.total)} done.` : " Please keep this page open. It usually takes under a minute.");
 function watchHelp(a, id, job, box, show) {
-  clear(box).append(waitNote(job));
+  add(clear(box), waitNote(job));
   follow(async () => (await API.call("/api/survey/help", { code: a.code, id, job: job.id })).job, (j) => {
-    if (j.status === "working") { clear(box).append(waitNote(j)); return; }
+    if (j.status === "working") { add(clear(box), waitNote(j)); return; }
     clear(box);
     if (j.status === "failed") box.append(failure({ message: j.error || "That didn't finish." })); else show(j);
   });
 }
 async function askHelp(a, id, path, extra, box, show) {
-  clear(box).append(h("p", { class: "muted", role: "status" }, "Starting…"));
-  try { watchHelp(a, id, (await API.call(path, { code: a.code, id, ...extra })).job, box, show); } catch (e) { clear(box).append(failure(e)); }
+  add(clear(box), h("p", { class: "muted", role: "status" }, "Starting…"));
+  try { watchHelp(a, id, (await API.call(path, { code: a.code, id, ...extra })).job, box, show); } catch (e) { add(clear(box), failure(e)); }
 }
 
 async function surveysView(page, a) {
-  page.append(pageHead(`${a.name}: street surveys`, "Ask people directly, on paper or on a tablet, and compare what they say with what's being reported."));
+  page.append(pageHead(`${a.name}: surveys`, "Ask people directly, and tell them what they need to know. On paper, on a tablet or by a link."));
   const body = h("div", { class: "stack gap" }, loading("Loading surveys…"));
   page.append(body);
   const view = App.viewId;
   let d;
-  try { d = await API.call("/api/survey/list", { code: a.code }); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { d = await API.call("/api/survey/list", { code: a.code }); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); return; }
   if (view !== App.viewId) return;
-  add(clear(body), d.paused ? pausedNote() : null, h("section", { class: "card" }, h("h2", {}, "Surveys so far"), d.surveys.length ? d.surveys.map((s) => h("div", { class: "note-row" },
+  const mine = d.surveys.filter((s) => (s.service || "highways") === App.filters.service);
+  add(clear(body), d.paused ? pausedNote() : null, h("section", { class: "card" }, h("h2", {}, "Surveys so far"), mine.length ? mine.map((s) => h("div", { class: "note-row" },
     h("div", { class: "row" }, h("a", { href: `#survey/${a.code}/${s.id}` }, s.title), statusPill(s.status)),
     h("div", { class: "note" }, `${fmt(s.responses)} of ${fmt(s.target)} replies${s.byLink ? `, plus ${fmt(s.byLink)} by link` : ""}. Started ${fmtDate(s.created)} by ${s.by}.`))) : h("p", { class: "muted" }, "No surveys yet.")));
   if (d.canEdit) body.append(newSurveyCard(a));
@@ -1983,7 +2062,7 @@ function newSurveyCard(a) {
   const f = h("form", { class: "stack" }, h("label", { class: "field" }, "Title", title), h("label", { class: "field" }, "What you want to find out", purpose), msg, h("div", { class: "row" }, h("button", { class: "btn primary", type: "submit" }, "Start a survey")));
   f.addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    try { const r = await API.call("/api/survey/new", { code: a.code, title: title.value, purpose: purpose.value }); location.hash = `#survey/${a.code}/${r.survey.id}/setup`; } catch (e) { clear(msg).append(failure(e)); }
+    try { const r = await API.call("/api/survey/new", { code: a.code, service: App.filters.service, title: title.value, purpose: purpose.value }); location.hash = `#survey/${a.code}/${r.survey.id}/setup`; } catch (e) { add(clear(msg), failure(e)); }
   });
   return h("section", { class: "card" }, h("h2", {}, "New survey"), f);
 }
@@ -1993,16 +2072,18 @@ async function surveyView(page, a, id, part) {
   page.append(top);
   const view = App.viewId;
   let d;
-  try { d = await API.call("/api/survey/get", { code: a.code, id }); } catch (e) { if (view === App.viewId) clear(top).append(failure(e)); return; }
+  try { d = await API.call("/api/survey/get", { code: a.code, id }); } catch (e) { if (view === App.viewId) add(clear(top), failure(e)); return; }
   if (view !== App.viewId) return;
   const s = d.survey;
-  const parts = d.canEdit ? [["setup", "Set up"], ["collect", "Collect"], ["check", "Check"], ["results", "Results"]] : [["results", "Results"]];
+  if (!App.meta) await loadMap(a, true).catch(() => {});
+  d.fnList = App.meta?.functions ?? []; d.topicList = App.meta?.topicList ?? [];
+  const parts = d.canEdit ? [["setup", "Set up"], ["tell", "Tell people"], ["collect", "Collect"], ["check", "Check"], ["results", "Results"]] : [["results", "Results"]];
   const on = parts.some((x) => x[0] === part) ? part : !d.canEdit ? "results" : s.status === "draft" ? "setup" : s.status === "open" ? "collect" : "results";
   add(clear(top),
     h("div", { class: "page-head" }, h("div", {}, h("span", { class: "eyebrow" }, "Street survey"), h("h1", {}, s.title), h("div", { class: "row" }, statusPill(s.status), h("span", { class: "note" }, `${fmt(d.results.used)} of ${fmt(s.plan.target)} replies`)))),
     d.paused ? pausedNote() : null,
     parts.length > 1 ? h("div", { class: "tab-row no-print", role: "tablist" }, parts.map(([key, label]) => h("button", { type: "button", "aria-selected": key === on ? "true" : "false", onclick: () => { location.hash = `#survey/${a.code}/${id}/${key}`; } }, label))) : null);
-  ({ setup: setupPart, collect: collectPart, check: checkPart, results: resultsPart })[on](top, a, d);
+  ({ setup: setupPart, tell: tellPart, collect: collectPart, check: checkPart, results: resultsPart })[on](top, a, d);
 }
 
 // ----- set up
@@ -2021,16 +2102,19 @@ function setupPart(top, a, d) {
   // the questions
   let locals = s.locals.map((q) => ({ ...q }));
   const editor = h("div", { class: "stack" }), help = h("div", { class: "stack" }), m2 = saveNote();
-  const addBtn = h("button", { class: "btn small", type: "button", onclick: () => { locals.push({ text: "", kind: "choice", options: [] }); drawLocals(); } }, "Add a question");
+  const addBtn = h("button", { class: "btn small", type: "button", onclick: () => { locals.push({ text: "", kind: "choice", options: [], topic: App.filters.topic !== "all" ? App.filters.topic : "" }); drawLocals(); } }, "Add a question");
   function drawLocals() {
     addBtn.disabled = locals.length >= d.maxLocal;
-    clear(editor).append(...locals.map((q, i) => {
+    add(clear(editor), ...locals.map((q, i) => {
       const text = h("input", { value: q.text, maxlength: 200, "aria-label": `Local question ${i + 1}`, oninput: () => { q.text = text.value; } });
       const options = h("textarea", { rows: 3, placeholder: "One answer on each line", "aria-label": `Answers for local question ${i + 1}`, hidden: q.kind === "text", oninput: () => { q.options = options.value.split("\n").map((x) => x.trim()).filter(Boolean); } });
       options.value = q.options.join("\n");
       const kind = h("select", { "aria-label": `Kind of answer for local question ${i + 1}`, onchange: () => { q.kind = kind.value; options.hidden = q.kind === "text"; } }, h("option", { value: "choice" }, "Tick one answer"), h("option", { value: "text" }, "Written answer"));
       kind.value = q.kind;
-      return h("div", { class: "local field" }, h("div", { class: "row" }, h("strong", {}, `Local question ${i + 1}`), h("span", { class: "spacer" }), h("button", { class: "btn small ghost", type: "button", onclick: () => { locals.splice(i, 1); drawLocals(); } }, "Remove")), text, kind, options);
+      const fn = h("select", { "aria-label": `What local question ${i + 1} covers`, onchange: () => { q.fn = fn.value; } }, h("option", { value: "" }, "The whole service"), d.fnList.map((x) => h("option", { value: x.id }, x.name)));
+      const topic = h("select", { "aria-label": `Topic of local question ${i + 1}`, onchange: () => { q.topic = topic.value; } }, h("option", { value: "" }, "No topic"), [...d.topicList, ...(q.topic && !d.topicList.includes(q.topic) ? [q.topic] : [])].map((x) => h("option", { value: x }, x)));
+      fn.value = q.fn || ""; topic.value = q.topic || "";
+      return h("div", { class: "local field" }, h("div", { class: "row" }, h("strong", {}, `Local question ${i + 1}`), h("span", { class: "spacer" }), h("button", { class: "btn small ghost", type: "button", onclick: () => { locals.splice(i, 1); drawLocals(); } }, "Remove")), text, kind, options, h("div", { class: "form-grid" }, h("label", { class: "field" }, "Covers", fn), h("label", { class: "field" }, "Topic", topic)));
     }));
   }
   const suggestList = (j) => {
@@ -2038,7 +2122,7 @@ function setupPart(top, a, d) {
     add(help, h("h3", {}, "Suggested from what's being reported"), h("p", { class: "note" }, "Each suggestion shows what prompted it and what the answer would tell you. You decide what goes in."), list.length ? list.map((q) => h("div", { class: "local" },
       q.reason ? h("div", { class: "row" }, h("span", { class: "eyebrow" }, q.reason), q.topic ? h("strong", {}, q.topic) : null) : null, h("div", {}, q.text), q.options.length ? h("div", { class: "note" }, q.options.join(" / ")) : h("div", { class: "note" }, "A written answer"), q.why ? h("div", { class: "note" }, q.why) : null,
       (q.basedOn || []).length ? h("div", { class: "row" }, q.basedOn.map((x) => h("span", { class: "pill" }, x))) : null,
-      h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: (ev) => { if (locals.length >= d.maxLocal) return said(m2, `A survey can have up to ${d.maxLocal} local questions.`, "err"); locals.push({ text: q.text, kind: q.kind, options: q.options }); drawLocals(); ev.target.disabled = true; } }, "Add this question")))) : h("p", { class: "muted" }, "No suggestions came back."));
+      h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: (ev) => { if (locals.length >= d.maxLocal) return said(m2, `A survey can have up to ${d.maxLocal} local questions.`, "err"); locals.push({ text: q.text, kind: q.kind, options: q.options, topic: d.topicList.includes(q.topic) ? q.topic : "" }); drawLocals(); ev.target.disabled = true; } }, "Add this question")))) : h("p", { class: "muted" }, "No suggestions came back."));
   };
   const wordingList = (j) => {
     const list = j.result || [];
@@ -2127,6 +2211,21 @@ function siteWhy(pack, g, others) {
 const SITE_COLOURS = [["#264a6f", "#c9d6e4"], ["#1f7a6d", "#c2e3dd"], ["#8a5a00", "#f1dfb8"], ["#6d3f83", "#e2d2ea"], ["#a8431f", "#f4d3c6"], ["#4a5563", "#dadde2"]];
 const worldXY = (lng, lat) => { const s = Math.sin((lat * Math.PI) / 180); return [((lng + 180) / 360) * 256, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256]; };
 const MAP_RATIO = 520 / 640;
+function drawTiles(street, pieces, view, ratio, width) {
+  const zoom = Math.max(1, Math.min(18, Math.round(Math.log2(width / view.w))));
+  const size = 256 / 2 ** zoom, wanted = new Set(), place = (x, y) => [`${((x - view.x) / view.w) * 100}%`, `${((y - view.y) / (view.w * ratio)) * 100}%`];
+  for (let tx = Math.floor(view.x / size); tx * size < view.x + view.w && wanted.size < 80; tx++) {
+    for (let ty = Math.floor(view.y / size); ty * size < view.y + view.w * ratio && wanted.size < 80; ty++) {
+      if (tx < 0 || ty < 0 || tx >= 2 ** zoom || ty >= 2 ** zoom) continue;
+      const src = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`;
+      wanted.add(src);
+      if (!pieces.has(src)) { const img = h("img", { src, alt: "", referrerpolicy: "strict-origin-when-cross-origin" }); pieces.set(src, img); street.append(img); }
+      const [x, y] = place(tx * size, ty * size);
+      Object.assign(pieces.get(src).style, { left: x, top: y, width: `${(size / view.w) * 100 + 0.1}%`, height: `${(size / (view.w * ratio)) * 100 + 0.1}%` });
+    }
+  }
+  for (const [src, img] of pieces) if (!wanted.has(src)) { img.remove(); pieces.delete(src); }
+}
 function siteMap(pack) {
   const rings = pack.shapes.map((rs) => rs.map((ring) => ring.map(([x, y]) => worldXY(x, y))));
   const points = rings.flat(2).length ? rings.flat(2) : pack.hoods.map((m) => worldXY(m[0], m[1]));
@@ -2142,22 +2241,7 @@ function siteMap(pack) {
   const at = (x, y) => [`${((x - view.x) / view.w) * 100}%`, `${((y - view.y) / (view.w * MAP_RATIO)) * 100}%`];
   let places = [];
   const box = h("div", { class: "map-box" }, street, drawing, marks);
-  function drawStreet() {
-    if (!pack.tiles) return;
-    const zoom = Math.max(1, Math.min(18, Math.round(Math.log2((box.clientWidth || 640) / view.w))));
-    const size = 256 / 2 ** zoom, wanted = new Set();
-    for (let tx = Math.floor(view.x / size); tx * size < view.x + view.w && wanted.size < 80; tx++) {
-      for (let ty = Math.floor(view.y / size); ty * size < view.y + view.w * MAP_RATIO && wanted.size < 80; ty++) {
-        if (tx < 0 || ty < 0 || tx >= 2 ** zoom || ty >= 2 ** zoom) continue;
-        const src = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`;
-        wanted.add(src);
-        if (!pieces.has(src)) { const img = h("img", { src, alt: "", referrerpolicy: "strict-origin-when-cross-origin" }); pieces.set(src, img); street.append(img); }
-        const [x, y] = at(tx * size, ty * size);
-        Object.assign(pieces.get(src).style, { left: x, top: y, width: `${(size / view.w) * 100 + 0.1}%`, height: `${(size / (view.w * MAP_RATIO)) * 100 + 0.1}%` });
-      }
-    }
-    for (const [src, img] of pieces) if (!wanted.has(src)) { img.remove(); pieces.delete(src); }
-  }
+  function drawStreet() { if (pack.tiles) drawTiles(street, pieces, view, MAP_RATIO, box.clientWidth || 640); }
   function placeMarks() { for (const [el, x, y] of places) { const [px, py] = at(x, y); el.style.left = px; el.style.top = py; } }
   function look() { drawing.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.w * MAP_RATIO}`); placeMarks(); drawStreet(); }
   function zoomBy(factor) {
@@ -2204,7 +2288,8 @@ function planPart(top, a, d, save) {
   const st = { sure: s.plan.sure || 95, margin: s.plan.margin || 5, by: s.plan.by || "whole", perSite: s.plan.perSite || 30, perHour: s.plan.perHour || 8 };
   const target = h("input", { type: "number", min: 30, max: 5000, value: String(s.plan.target), oninput: () => { if (pack) drawSites(); drawSize(); } });
   const perHour = h("input", { type: "number", min: 1, max: 60, value: String(st.perHour), oninput: () => { st.perHour = Number(perHour.value) || 8; drawSize(); } });
-  let sites = s.plan.sites.map((x) => ({ ...x })), pack = null, map = null, picks = [], proposed = false;
+  let sites = s.plan.sites.map((x) => ({ ...x })), pack = null, map = null, picks = [], proposed = false, spotting = null;
+  const spotBox = h("div", { class: "stack" });
   const sameName = (x, y) => x.trim().toLowerCase() === y.trim().toLowerCase();
   const onMap = (x) => (pack && x.name ? pack.towns.findIndex((t) => sameName(t.name, x.name)) : -1);
   const siteCount = () => sites.filter((x) => x.name).length;
@@ -2233,7 +2318,7 @@ function planPart(top, a, d, save) {
       return h("tr", { class: on ? "selected" : null }, h("td", {}, h("strong", {}, l.name), l.suggested ? [" ", h("span", { class: "pill good" }, "Suggested")] : null), h("td", { class: "r" }, `${l.sure}%`), h("td", { class: "r" }, `±${l.margin}${l.by === "areas" ? " each" : ""}`), h("td", { class: "r" }, fmt(n)), h("td", {}, l.good), h("td", { class: "r" }, h("button", { class: "btn small", type: "button", onclick: () => useLevel(l.sure, l.margin, l.by) }, "Use this")));
     };
     const count = siteCount(), wanted = Math.ceil(replies / st.perSite);
-    clear(sizeBox).append(
+    add(clear(sizeBox), 
       h("div", { class: "seg-row" },
         seg("How sure", [[90, "90%"], [95, "95%"], [99, "99%"]], st.sure, (v) => useLevel(v, st.margin, st.by), "How often a sample would land within the margin"),
         seg("Margin", [[3, "±3"], [5, "±5"], [7, "±7"], [10, "±10"]], st.margin, (v) => useLevel(st.sure, v, st.by), "Points either side of a result"),
@@ -2276,7 +2361,7 @@ function planPart(top, a, d, save) {
       const bind = (key, label, placeholder) => { const el = h("input", { value: x[key] || "", maxlength: 80, placeholder, disabled: closed, oninput: () => { x[key] = el.value; } }); return h("label", { class: "field" }, label, el); };
       return h("div", { class: "site-entry" }, extra ? h("div", { class: "site-head" }, extra) : bind("name", "Site", "Market Square, Horsham"), h("div", { class: "site-row" }, bind("when", extra ? "Exact spot and day" : "When", extra ? "The market square on a Saturday" : "Saturday 10am to 2pm"), bind("interviewers", "Interviewers", "2"), closed ? null : h("button", { class: "btn small ghost", type: "button", onclick: () => removeSite(i) }, "Remove")));
     };
-    if (!pack) { clear(siteBox).append(...sites.map((x, i) => row(x, i))); return; }
+    if (!pack) { add(clear(siteBox), ...sites.map((x, i) => row(x, i))); return; }
     picks = [...new Set(sites.flatMap((x) => { const t = onMap(x); return t < 0 ? [] : [t]; }))];
     const work = picks.length ? siteWork(pack, picks) : { near: pack.hoods.map(() => 0), groups: [], mix: pack.auth };
     const left = pack.towns.map((town, t) => ({ town, t })).filter((o) => !picks.includes(o.t));
@@ -2288,11 +2373,11 @@ function planPart(top, a, d, save) {
       const here = sites.filter((y) => onMap(y) === g.t);
       for (const x of here) Object.assign(x, { share: Math.round(g.share * 1000) / 10, ages: siteAges(g.figures[0], g.figures[1], Math.ceil(peopleEach() / here.length)), lat: pack.towns[g.t].lat, lng: pack.towns[g.t].lng });
     });
-    clear(siteBox).append(...sites.map((x, i) => {
+    add(clear(siteBox), ...sites.map((x, i) => {
       const t = onMap(x), j = picks.indexOf(t);
       if (j < 0) return row(x, i);
       const g = work.groups[j], others = left.filter((o) => nearest(o) === j).map((o) => o.town.name);
-      return row(x, i, [h("span", { class: "site-num", style: { background: SITE_COLOURS[j % SITE_COLOURS.length][0] } }, String(j + 1)), h("div", {}, h("div", { class: "site-name" }, h("strong", {}, x.name), h("span", { class: "note" }, `stands for ${fmt(g.share * 100)}% of adults`)), h("p", { class: "note" }, siteWhy(pack, g, others)), h("p", { class: "note" }, `Ask ${x.ages[0]} aged 16 to 34, ${x.ages[1]} aged 35 to 64 and ${x.ages[2]} aged 65 or over.`))]);
+      return row(x, i, [h("span", { class: "site-num", style: { background: SITE_COLOURS[j % SITE_COLOURS.length][0] } }, String(j + 1)), h("div", {}, h("div", { class: "site-name" }, h("strong", {}, x.name), h("span", { class: "note" }, `stands for ${fmt(g.share * 100)}% of adults`)), h("p", { class: "note" }, siteWhy(pack, g, others)), h("p", { class: "note" }, `Ask ${x.ages[0]} aged 16 to 34, ${x.ages[1]} aged 35 to 64 and ${x.ages[2]} aged 65 or over.`), h("div", { class: "row" }, h("span", { class: "note" }, x.spotLat !== undefined ? x.where || "Pinpointed" : "General location only"), h("button", { class: "btn small", type: "button", "aria-pressed": String(spotting === x), onclick: () => { spotting = spotting === x ? null : x; drawSites(); } }, "Pinpoint")))]);
     }));
     const gapRow = (label, f) => {
       const gap = work.mix[f] - pack.auth[f], size = Math.abs(gap);
@@ -2300,11 +2385,14 @@ function planPart(top, a, d, save) {
     };
     clear(matchBox);
     if (picks.length) matchBox.append(h("h3", {}, `How well these sites match ${pack.name}`), h("p", { class: "note" }, "Each town's own make-up, weighted by the share of adults its site stands for. A wide gap isn't fatal: the age targets close the gap on age, and results are weighted afterwards."), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Measure"), h("th", { class: "r" }, pack.name), h("th", { class: "r" }, "These sites"), h("th", { class: "r" }, "Gap (points)"), h("th", {}, "Match"))), h("tbody", {}, pack.measures.map(gapRow)))));
-    clear(siteControls).append(
+    add(clear(siteControls), 
       seg("Sites", Object.keys(pack.proposals).map(Number).map((n) => [n, String(n)]), picks.length, (n) => { propose(n); aimFromSites(); drawSites(); drawSize(); }),
       st.by === "sites" ? seg("People at each site", [[30, "30"], [40, "40"], [50, "50"]], st.perSite, (n) => { st.perSite = n; aimFromSites(); drawSites(); drawSize(); }) : null,
       proposed ? null : h("button", { class: "btn small", type: "button", onclick: () => { propose(picks.length || 4); aimFromSites(); drawSites(); drawSize(); } }, "Go back to the proposed sites"));
-    clear(mapBox).append(map.el, h("p", { class: "note" }, "Colours show which site stands for each neighbourhood: the nearest one. Click a town to add it, or a numbered site to take it off."), left.length ? h("div", { class: "row" }, h("span", { class: "note" }, "Other towns:"), left.map((o) => h("button", { class: "btn small", type: "button", onclick: () => toggle(o.t) }, o.town.name))) : null);
+    if (spotting && !sites.includes(spotting)) spotting = null;
+    clear(spotBox);
+    if (spotting && spotting.lat !== undefined) spotBox.append(pinpoint(spotting, !!pack.tiles, closed, (typing) => { if (!typing) drawSites(); }));
+    add(clear(mapBox), map.el, h("p", { class: "note" }, "Colours show which site stands for each neighbourhood: the nearest one. Click a town to add it, or a numbered site to take it off."), left.length ? h("div", { class: "row" }, h("span", { class: "note" }, "Other towns:"), left.map((o) => h("button", { class: "btn small", type: "button", onclick: () => toggle(o.t) }, o.town.name))) : null);
   }
 
   const checks = d.accessChecks.map((c) => { const box = h("input", { type: "checkbox", checked: s.plan.checks.includes(c), value: c }); return { box, row: h("label", { class: "check" }, box, c) }; });
@@ -2314,7 +2402,7 @@ function planPart(top, a, d, save) {
   top.append(h("section", { class: "card" }, h("h2", {}, "How many people to ask"), h("p", { class: "note" }, "Choose how sure you need to be, and Clarion works out the replies you need."), sizeBox,
     h("div", { class: "form-grid" }, h("label", { class: "field" }, "How many replies you're aiming for", target), h("label", { class: "field" }, "Forms an hour", perHour, h("span", { class: "hint" }, "8 is a starting guess. Change it once you've tried one session."))),
     h("p", { class: "note" }, "A street sample isn't random, so a margin here is a guide: it's what a random sample of this size would give. Results stay labelled indicative.")));
-  top.append(h("section", { class: "card" }, h("h2", {}, "Survey sites"), siteNote, siteControls, mapBox, h("h3", {}, "Sites and times"), siteBox, siteHint, closed ? null : h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => { sites.push({ name: "", when: "", interviewers: "" }); proposed = false; drawSites(); } }, "Add a place that isn't on the map")), matchBox));
+  top.append(h("section", { class: "card" }, h("h2", {}, "Survey sites"), siteNote, siteControls, mapBox, spotBox, h("h3", {}, "Sites and times"), siteBox, siteHint, h("div", { class: "row no-print" }, h("a", { class: "btn small", href: `#plan/${a.code}/${s.id}` }, "Print the site plan")), closed ? null : h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => { sites.push({ name: "", when: "", interviewers: "" }); proposed = false; drawSites(); } }, "Add a place that isn't on the map")), matchBox));
   if (d.targets.length) top.append(h("section", { class: "card" }, h("h2", {}, "Who to reach"), h("p", { class: "note" }, "From Census 2021, so the people you speak to match the people who live here."), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Age"), h("th", { class: "r" }, "Women"), h("th", { class: "r" }, "Men"))), h("tbody", {}, d.targets.map((t) => h("tr", {}, h("td", {}, t.age), h("td", { class: "r" }, fmt(t.female)), h("td", { class: "r" }, fmt(t.male)))))))));
   top.append(h("section", { class: "card" }, h("h2", {}, "Before you go out"), h("div", { class: "stack" }, checks.map((x) => x.row)),
     m3, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => save({ plan: { target: Number(target.value), sites, checks: checks.filter((x) => x.box.checked).map((x) => x.box.value), sure: st.sure, margin: st.margin, by: st.by, perSite: st.perSite, perHour: st.perHour } }, m3) }, "Save the plan"))));
@@ -2329,7 +2417,102 @@ function planPart(top, a, d, save) {
   }).catch(() => { siteNote.textContent = "The map couldn't be loaded, so you can add sites by hand for now."; });
 }
 
-// ----- collect
+// ----- what the survey tells people
+function tellPart(top, a, d) {
+  const s = d.survey, draft = s.status === "draft", canAct = d.canEdit && draft && !d.paused;
+  const list = (s.tell || []).map((m) => ({ ...m, how: [...m.how] })), box = h("div", { class: "stack" }), from = h("div", { class: "stack" }), phone = h("div", { class: "phone" }), msg = saveNote();
+  let issues = [];
+  const save = async () => { try { await API.call("/api/survey/save", { code: a.code, id: s.id, tell: list }); s.tell = list; said(msg, App.demo ? "In the demonstration, nothing is saved." : "Saved."); } catch (e) { said(msg, e.message, "err"); } };
+  const preview = () => add(clear(phone), h("strong", {}, "Thank you for your time"), h("span", { class: "note" }, `Here's what ${s.collector} would like you to know.`), ...list.filter((m) => m.how.some((x) => x !== d.howTold[0] && x !== d.howTold[2])).map((m) => h("div", { class: "fact" }, h("strong", {}, m.topic || "General"), h("span", { class: "note" }, m.text))));
+  function draw() {
+    add(clear(box), ...list.map((m, i) => {
+      const text = h("textarea", { rows: 2, maxlength: 240, disabled: !canAct, "aria-label": `Message ${i + 1}`, oninput: () => { m.text = text.value; preview(); } });
+      text.value = m.text;
+      const aware = h("input", { type: "checkbox", checked: m.aware, disabled: !canAct, onchange: () => { m.aware = aware.checked; } });
+      return h("div", { class: "local field" }, h("div", { class: "row spread" }, h("strong", {}, m.topic || "General"), canAct ? h("button", { class: "btn small ghost", type: "button", "aria-label": `Take out message ${i + 1}`, onclick: () => { list.splice(i, 1); draw(); } }, "Take out") : null),
+        h("label", { class: "field" }, "The message", text),
+        h("div", { class: "field" }, "How it reaches people", chipRow(d.howTold.map((x) => [x, x]), (x) => m.how.includes(x), (x) => { if (!canAct) return; m.how = m.how.includes(x) ? m.how.filter((y) => y !== x) : [...m.how, x]; draw(); })),
+        h("label", { class: "check" }, aware, "Also ask \"Did you know?\" before telling them, to measure whether the message is landing"));
+    }));
+    if (!list.length) box.append(h("p", { class: "muted" }, "No messages on this survey."));
+    const left = issues.filter((x) => x.status === "confirmed" && !list.some((m) => m.topic === x.topic));
+    clear(from);
+    if (canAct && list.length < d.maxTold) from.append(h("h3", {}, "Add a message from"), h("div", { class: "chips" }, left.map((x) => h("button", { class: "chip", type: "button", onclick: () => { list.push({ topic: x.topic, text: x.key, how: [d.howTold[0]], aware: false }); draw(); } }, `Key message: ${x.topic}`)), h("button", { class: "chip", type: "button", onclick: () => { list.push({ topic: App.filters.topic !== "all" ? App.filters.topic : "", text: "", how: [d.howTold[0]], aware: false }); draw(); } }, "Something else")));
+    preview();
+  }
+  top.append(h("div", { class: "grid g2 top-align" },
+    h("section", { class: "card" }, h("h2", {}, "What to tell people"), h("p", { class: "note" }, "A survey is a chance to inform as well as to ask. Each message tied to a topic also appears on the campaign calendar. Stick to facts and how to get help."),
+      d.paused ? h("div", { class: "callout warn" }, "The election setting is on, so messages are held back.") : !draft ? h("p", { class: "note" }, "This survey is open or closed, so its messages can't change, as forms and tablets carry them.") : null,
+      box, from, canAct ? [msg, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: save }, "Save the messages"))] : null),
+    h("section", { class: "card" }, h("h2", {}, "What people see after the last question"), phone, h("p", { class: "note" }, "Tablets get these and the questions, and nothing else about the authority. A message to read out shows on the interviewer's tablet and on the site plan."))));
+  draw();
+  if (!d.paused) API.call("/api/campaign/get", { code: a.code, service: s.service || App.filters.service }).then((c) => { issues = c.issues; draw(); }).catch(() => {});
+}
+
+// Placing a site's exact spot, on a street map around its general location. The dashed circle is that location.
+const GENERAL_KM = 1.5;
+const NUDGE = 0.00045; // about 50 metres
+const fromWorld = (x, y) => [(x / 256) * 360 - 180, (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / 256))) * 180) / Math.PI];
+function spotMap(site, tiles, onPlace, still) {
+  const [cx, cy] = worldXY(site.lng, site.lat), ratio = 2 / 3, km = 256 / (40075 * Math.cos((site.lat * Math.PI) / 180));
+  const box = h("div", { class: "map-box spot-box" }), street = h("div", { class: "map-street" }), ring = h("i", { class: "spot-ring" }), mark = svg("svg", { class: "spot-pin", viewBox: "0 0 28 38", "aria-hidden": "true" }, svg("path", { d: "M14 1C7 1 2 6.5 2 13c0 9 12 24 12 24s12-15 12-24C26 6.5 21 1 14 1z" }), svg("circle", { cx: 14, cy: 13, r: 4.5, fill: "#fff" }));
+  let view = { x: cx - (GENERAL_KM * 2.5 * km), y: cy - (GENERAL_KM * 2.5 * km) * ratio, w: GENERAL_KM * 5 * km };
+  const pieces = new Map(), at = (x, y) => [((x - view.x) / view.w) * 100, ((y - view.y) / (view.w * ratio)) * 100];
+  function look() {
+    const [rx, ry] = at(cx, cy), across = ((2 * GENERAL_KM * km) / view.w) * 100;
+    Object.assign(ring.style, { left: `${rx}%`, top: `${ry}%`, width: `${across}%` });
+    if (site.spotLat !== undefined) { const [px, py] = at(...worldXY(site.spotLng, site.spotLat)); Object.assign(mark.style, { display: "block", left: `${px}%`, top: `${py}%` }); } else mark.style.display = "none";
+    if (tiles) drawTiles(street, pieces, view, ratio, box.clientWidth || 640);
+  }
+  box.append(street, ring, mark);
+  if (!still) {
+    let down = null;
+    box.addEventListener("pointerdown", (ev) => { if (!ev.target.closest("button, a")) down = [ev.clientX, ev.clientY, view.x, view.y, false]; });
+    box.addEventListener("pointermove", (ev) => { if (!down) return; const dx = ev.clientX - down[0], dy = ev.clientY - down[1]; if (Math.hypot(dx, dy) < 5 && !down[4]) return; down[4] = true; const scale = view.w / (box.clientWidth || 640); view = { ...view, x: down[2] - dx * scale, y: down[3] - dy * scale }; look(); });
+    box.addEventListener("pointerup", (ev) => { const was = down; down = null; if (!was || was[4] || !onPlace) return; const b = box.getBoundingClientRect(); onPlace(...fromWorld(view.x + ((ev.clientX - b.left) / (b.width || 1)) * view.w, view.y + ((ev.clientY - b.top) / (b.height || 1)) * (view.w * ratio))); });
+    box.addEventListener("pointerleave", () => { down = null; });
+    const zoomBy = (f) => { const w = Math.max(0.0008, Math.min(0.2, view.w * f)), mx = view.x + view.w / 2, my = view.y + (view.w * ratio) / 2; view = { x: mx - w / 2, y: my - (w * ratio) / 2, w }; look(); };
+    box.append(h("div", { class: "map-zoom" }, h("button", { type: "button", "aria-label": "Zoom in", onclick: () => zoomBy(0.5) }, "+"), h("button", { type: "button", "aria-label": "Zoom out", onclick: () => zoomBy(2) }, "−")));
+  }
+  if (tiles) box.append(h("div", { class: "map-credit" }, "© ", link("https://www.openstreetmap.org/copyright", "OpenStreetMap"), " contributors"));
+  setTimeout(look, 0); look();
+  return { el: box, look };
+}
+function pinpoint(site, tiles, closed, changed) {
+  const outside = () => site.spotLat !== undefined && distKm(site.lng, site.lat, site.spotLng, site.spotLat) > GENERAL_KM;
+  const box = h("div", { class: "stack" });
+  const place = (lng, lat) => { site.spotLng = +lng.toFixed(6); site.spotLat = +lat.toFixed(6); changed(); draw(); };
+  const nudge = (dx, dy) => place(site.spotLng + dx / Math.cos((site.lat * Math.PI) / 180), site.spotLat + dy);
+  const map = spotMap(site, tiles, closed ? null : place);
+  function draw() {
+    const pinned = site.spotLat !== undefined;
+    map.look();
+    const where = h("input", { value: site.where || "", maxlength: 120, disabled: closed, oninput: () => { site.where = where.value; changed(true); } });
+    add(clear(box), h("h3", {}, `Pinpoint the spot in ${site.name}`), map.el, tiles ? null : h("p", { class: "note" }, "The demonstration doesn't load a street map, so this shows only the general location."),
+      h("p", { class: "note" }, closed ? "A closed survey's spots are fixed." : pinned ? "Click the map again to move the pin. The dashed circle is the general location. Drag to move the map." : "The dashed circle is the general location. Click the map to place the pin on the exact spot. Drag to move the map."),
+      !pinned && !closed ? h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => place(site.lng, site.lat) }, "Put the pin in the middle")) : null,
+      pinned && !closed ? h("div", { class: "nudge" }, h("span", { class: "note" }, "Move the pin"), [["North", 0, NUDGE], ["South", 0, -NUDGE], ["West", -NUDGE, 0], ["East", NUDGE, 0]].map(([w, dx, dy]) => h("button", { class: "chip", type: "button", "aria-label": `Move the pin ${w.toLowerCase()}`, onclick: () => nudge(dx, dy) }, w)), h("button", { class: "btn small ghost", type: "button", onclick: () => { delete site.spotLat; delete site.spotLng; delete site.where; changed(); draw(); } }, "Take the pin off")) : null,
+      pinned ? [h("p", { class: "note" }, `Position: ${site.spotLat.toFixed(5)}, ${site.spotLng.toFixed(5)}`), h("label", { class: "field" }, "Where exactly, for the interviewers", where)] : null,
+      outside() ? h("div", { class: "callout warn" }, `That's outside the general location for ${site.name}, so its replies may not speak for the people this site stands for.`) : null);
+  }
+  draw();
+  return box;
+}
+
+// The plan interviewers take with them: each site's map, exact spot, date and time, and what to read out
+async function planView(page, a, id) {
+  const top = h("div", { class: "stack gap" }, loading("Preparing the site plan…"));
+  page.append(top);
+  const view = App.viewId;
+  let d, tiles = false;
+  try { [d, tiles] = await Promise.all([API.call("/api/survey/get", { code: a.code, id }), API.call("/api/survey/sites", { code: a.code }).then((r) => !!r.tiles).catch(() => false)]); } catch (e) { if (view === App.viewId) add(clear(top), failure(e)); return; }
+  if (view !== App.viewId) return;
+  const s = d.survey, sites = s.plan.sites, read = d.paused ? [] : (s.tell || []).filter((m) => m.how.includes(d.howTold[0]));
+  add(clear(top), h("div", { class: "page-head no-print" }, h("div", {}, h("h1", {}, "Site plan"), h("p", {}, s.title)), h("div", { class: "row" }, h("a", { class: "btn", href: `#survey/${a.code}/${s.id}/setup` }, "Back"), h("button", { class: "btn primary", type: "button", onclick: () => window.print() }, "Print"))),
+    read.length ? h("section", { class: "card" }, h("h2", {}, "Read this to each person at the end"), read.map((m) => h("p", {}, m.text))) : null,
+    sites.length ? sites.map((x, i) => h("section", { class: "card plan-site" }, h("h2", {}, `${i + 1}. ${x.name}`), x.where ? h("p", {}, h("strong", {}, x.where)) : h("p", { class: "note" }, "General location only."), x.when ? h("p", {}, x.when) : null, x.interviewers ? h("p", {}, `Interviewers: ${x.interviewers}`) : null, x.ages ? h("p", { class: "note" }, `Ask ${x.ages[0]} aged 16 to 34, ${x.ages[1]} aged 35 to 64 and ${x.ages[2]} aged 65 or over.`) : null, x.lat !== undefined ? spotMap(x, tiles, null, true).el : null)) : h("p", { class: "muted" }, "No sites chosen yet."));
+}
+
 function collectPart(top, a, d) {
   const s = d.survey;
   const setStatus = async (status, msg) => { try { await API.call("/api/survey/status", { code: a.code, id: s.id, status }); route(); } catch (e) { said(msg, e.message, "err"); } };
@@ -2380,7 +2563,7 @@ function selfCard(a, d) {
       h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: png }, "Save the QR code")),
       h("label", { class: "field" }, "Wording you could use in an email", letter),
       h("p", { class: "note" }, "Send it from your own email system. Each device can reply once, but the link can be passed on, and it closes with the survey."));
-  }).catch((e) => { clear(box).append(failure(e)); });
+  }).catch((e) => { add(clear(box), failure(e)); });
   return card;
 }
 function entryCard(a, d) {
@@ -2442,8 +2625,8 @@ function scanCard(a, d) {
   return h("section", { class: "card" }, h("details", {}, h("summary", {}, "Upload scanned forms"),
     h("div", { class: "stack" }, h("p", { class: "note" }, "Photos or a PDF, up to 20 forms at a time. Include both sides of each form together. Clarion reads them, you check every one, and the scans aren't kept. Keep this page open until you've saved them."), h("label", { class: "field" }, "Choose files", file),
       h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
-        if (!file.files.length) return clear(box).append(failure({ message: "Choose a file first." }));
-        try { askHelp(a, s.id, "/api/survey/scan", { files: await Promise.all([...file.files].map(scanFile)) }, box, showForms); } catch (e) { clear(box).append(failure(e)); }
+        if (!file.files.length) return add(clear(box), failure({ message: "Choose a file first." }));
+        try { askHelp(a, s.id, "/api/survey/scan", { files: await Promise.all([...file.files].map(scanFile)) }, box, showForms); } catch (e) { add(clear(box), failure(e)); }
       } }, "Read the forms")), box)));
 }
 function csvCard(a, d) {
@@ -2511,9 +2694,10 @@ function resultsPart(top, a, d) {
   const good = pct(["Very satisfied", "Fairly satisfied"]), bad = pct(["Fairly dissatisfied", "Very dissatisfied"]);
   top.append(h("div", { class: "callout" }, h("strong", {}, "Indicative only. "), `${d.selfOnly ? "Everyone here chose to reply, so this is weaker than a street sample." : "A street sample isn't random."} ${r.weighted ? "Results are weighted to the local population's age and sex from Census 2021." : d.census ? "Results aren't weighted to age and sex yet, because there aren't enough replies giving them." : "Results aren't weighted to age and sex, because the Census figures couldn't be read just now."}${r.bySite ? " Each site counts, as far as it can, for the share of adults it stands for." : ""} Groups under 30 people aren't shown.`),
     h("div", { class: "stats" }, stat("Replies", fmt(r.used), `Aim: ${fmt(s.plan.target)}${r.excluded ? `. ${fmt(r.excluded)} left out` : ""}`), stat("Satisfied", good === null ? "–" : `${fmt(good)}%`, "Very or fairly"), stat("Dissatisfied", bad === null ? "–" : `${fmt(bad)}%`, "Very or fairly")));
-  const answersOf = (from, wrap) => {
+  const answersOf = (from, wrap, action) => {
     for (const q of from.questions) {
-      wrap.append(h("h3", {}, q.text));
+      const act = action?.(q);
+      wrap.append(act ? h("div", { class: "row spread" }, h("h3", {}, q.text), act) : h("h3", {}, q.text));
       if (q.held) { wrap.append(h("p", { class: "note" }, `${fmt(q.answered)} replies so far. Results appear at 30.`)); continue; }
       wrap.append(h("div", { class: "tbl-wrap" }, h("table", { class: "tbl answers" }, h("thead", {}, h("tr", {}, h("th", {}, "Answer"), h("th", { class: "r" }, "Share"), h("th", { class: "r" }, "Replies"), h("th", { "aria-hidden": "true" }))),
         h("tbody", {}, q.options.map((o) => h("tr", {}, h("td", {}, o.label), h("td", { class: "r" }, `${fmt(o.pct)}%`), h("td", { class: "r" }, fmt(o.count)), h("td", { "aria-hidden": "true" }, h("div", { class: "meter" }, h("span", { style: { width: `${Math.min(100, o.pct)}%` } })))))))),
@@ -2521,7 +2705,13 @@ function resultsPart(top, a, d) {
     }
     return wrap;
   };
-  top.append(answersOf(r, h("section", { class: "card" }, h("h2", {}, "Answers"))));
+  const canPlan = d.canEdit && !d.paused, told = s.tell || [];
+  const planIt = (topic, words) => h("button", { class: "btn small", type: "button", onclick: () => planFrom(a, topic, `Survey result: ${words}`, s.id) }, "Plan a response");
+  if (told.length) top.append(h("section", { class: "card" }, h("h2", {}, "What people were told"), h("div", { class: "rows" }, told.map((m) => {
+    const q = r.questions.find((x) => x.id === `k${m.id}`), knew = q && !q.held ? q.options.find((o) => o.label === "Yes")?.pct : undefined;
+    return h("div", { class: "fact" }, h("strong", {}, m.topic || "General"), h("span", { class: "note" }, m.text), h("span", { class: "note" }, m.how.join(", ")), q ? h("span", {}, knew === undefined ? `Did you know? ${fmt(q.answered)} replies so far. Results appear at 30.` : `${fmt(knew)}% already knew, before being told. ${fmt(q.answered)} replies.`) : null);
+  })), d.paused ? null : null));
+  top.append(answersOf(r, h("section", { class: "card" }, h("div", { class: "row spread" }, h("h2", {}, "Answers"), canPlan ? planIt("", s.title) : null)), canPlan ? (q) => { const topic = d.questions.find((x) => x.id === q.id)?.topic; return topic ? planIt(topic, `${q.text.slice(0, 80)}`) : null; } : null));
   if (d.self) top.append(selfResults(d, answersOf));
   const shown = r.groups.filter((g) => g.answered >= 30);
   const groups = [...new Set(shown.map((g) => g.group))];
@@ -2560,12 +2750,12 @@ async function printView(page, a, id, from, to) {
   page.append(top);
   const view = App.viewId;
   let d;
-  try { d = await API.call("/api/survey/get", { code: a.code, id }); } catch (e) { if (view === App.viewId) clear(top).append(failure(e)); return; }
+  try { d = await API.call("/api/survey/get", { code: a.code, id }); } catch (e) { if (view === App.viewId) add(clear(top), failure(e)); return; }
   if (view !== App.viewId) return;
   if (d.paused) return add(clear(top), pausedNote());
   const s = d.survey;
   const first = Number.isInteger(from) && from > 0 ? from : 1, last = Number.isInteger(to) && to >= first ? Math.min(to, first + 999) : first;
-  clear(top).append(h("div", { class: "page-head no-print" }, h("div", {}, h("h1", {}, "Forms to print"), h("p", {}, `Forms ${first} to ${last}, for ${s.title}. Print double-sided on A4.`)),
+  add(clear(top), h("div", { class: "page-head no-print" }, h("div", {}, h("h1", {}, "Forms to print"), h("p", {}, `Forms ${first} to ${last}, for ${s.title}. Print double-sided on A4.`)),
     h("div", { class: "row" }, h("a", { class: "btn", href: `#survey/${a.code}/${s.id}/collect` }, "Back"), h("button", { class: "btn primary", type: "button", onclick: () => window.print() }, "Print"))));
   const sheets = h("div", { class: "sheets" });
   for (let n = first; n <= last; n++) sheets.append(paperForm(s, d.questions, n));
@@ -2584,7 +2774,8 @@ function paperForm(s, questions, n) {
     h("div", { class: "sheet-back" }, h("div", { class: "sheet-head" }, h("h3", {}, "About you"), h("div", { class: "sheet-no" }, `Form ${n}`, h("div", { class: "sheet-note" }, `Survey ${surveyRef(s)}`))),
       h("p", { class: "sheet-note" }, "This helps check that we've heard from a fair mix of people."),
       about.map((q) => block(q, questions.indexOf(q))),
-      h("p", { class: "sheet-note" }, "Thank you for taking part.")));
+      h("p", { class: "sheet-note" }, "Thank you for taking part."),
+      (s.tell || []).filter((m) => m.how.includes("Printed on the form")).map((m) => h("p", { class: "sheet-note" }, m.text))));
 }
 
 boot();

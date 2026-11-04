@@ -74,15 +74,18 @@ ok(planned.length === 4 && planned.every((x) => places.includes(x.name) && x.sha
 // ---- the demonstration in the browser
 const before = store.size, spendCalls = claude.calls.length;
 let dom = await open("/demo"), d = dom.window.document, w = dom.window;
-await see(d, /Northbridge: how people feel about their roads/);
+await until(() => d.querySelector(".stage"), "the map");
+w.location.hash = "#dash/NORTHBRIDGE";
+await see(d, /Northbridge: Highways, October 2026/);
+await see(d, /Early signs/);
 let main = text(d.querySelector(".main"));
 ok(/Demonstration\. Northbridge is fictional/.test(main) && d.querySelector(".demo-banner"), "the demonstration opens with no sign-in, under a banner");
-ok(/Worsening/.test(main) && /412 street survey replies/.test(main) && /Early signs/.test(main), "the summary shows mood, the survey and early signs");
+ok(/Worsening/.test(main) && /Street survey, 412 replies/.test(main) && /Early signs/.test(main), "the dashboard shows mood, the survey and early signs");
 ok(d.querySelector(".quad") && d.querySelectorAll(".q-dot").length === 8 && d.querySelectorAll(".q-dot.early").length === 2, "the comparison chart places eight topics, two of them early signs");
-ok(/Pavements/.test(text(d.querySelector(".quiet-row"))) && /for concern, 7th in the media/.test(main), "early signs are explained in ranks");
+ok(/Pavements/.test(text(d.querySelector(".quiet-row"))) && /for concern, \d+th in the media/.test(main), "early signs are explained in ranks");
 ok(/What's driving it/.test(main), "and there's a table of the same topics");
-ok(/Demonstration: made-up data/.test(text(d.querySelector(".rail"))) && !button(d, "Sign out"), "the rail says so, with no way to sign out");
-w.location.hash = "#said/NORTHBRIDGE";
+ok(/Demonstration: made-up data/.test(text(d.querySelector(".top"))) && !button(d, "Sign out"), "the header says so, with no way to sign out");
+w.location.hash = "#said/NORTHBRIDGE/latest";
 await see(d, /Latest assessments/);
 ok(/Front-page item on the Relief Road closure/.test(text(d.querySelector(".main"))), "What's being said shows made-up assessments");
 w.location.hash = "#said/NORTHBRIDGE/assess";
@@ -146,17 +149,17 @@ await see(d, /Core questions/);
 button(d, "Suggest questions").click();
 await see(d, /How would you rate the condition of the pavements/);
 ok(/fault reports are rising/.test(text(d.querySelector(".main"))), "suggested questions are prepared, with no call to Claude");
-w.location.hash = "#a/NORTHBRIDGE";
+w.location.hash = "#dash/NORTHBRIDGE";
 await see(d, /Write a new reading/);
 button(d, "Write a new reading").click();
 await see(d, /nothing is saved and Claude isn't used here/);
 ok(store.size === before && claude.calls.length === spendCalls, "nothing is saved and Claude isn't called");
-ok(asked.every((u) => /\/demo\/data\.json|\/api\/config/.test(u)), "the demonstration asks the server for nothing else");
+ok(asked.every((u) => /\/demo\/(data\.json|map|officers)|\/api\/config/.test(u)), "the demonstration asks the server for nothing else");
 ok(!files(`${R}authorities/NORTHBRIDGE`).length, "and there's no Northbridge in storage");
 
 // a signed-in member who opens the demonstration
 dom = await open("/demo", member); d = dom.window.document; w = dom.window;
-await see(d, /Northbridge: how people feel about their roads/);
+await see(d, /Northbridge: the map of mood/);
 ok(d.querySelector(".demo-banner") && !/West Sussex/.test(text(d.getElementById("app"))), "a signed-in member gets the demonstration, not their own data");
 ok(w.localStorage.getItem("clarion_token") === member, "and stays signed in");
 
@@ -203,7 +206,7 @@ ok(!text2.includes(access), "and no tablet code");
 dom = await open("/", boss); d = dom.window.document; w = dom.window;
 await see(d, /Core questions by authority/);
 main = text(d.querySelector(".main"));
-ok(/FHRG administration/.test(text(d.querySelector(".rail"))) && d.querySelector('.nav button[aria-current="page"]').textContent === "All authorities", "a site administrator lands on all authorities");
+ok(/FHRG administrators/.test(text(d.querySelector(".top"))) && d.querySelector(".picker select").value === "", "a site administrator lands on all authorities");
 await see(d, /No titles held yet/);
 ok(/ABC circulation figures/.test(text(d.querySelector(".main"))), "an administrator can paste in ABC's list");
 d.querySelector('textarea[aria-label="ABC\'s table"]').value = "Jan - Dec 2025\tTest Herald\tOwner\tRegional Publication\t1234\tCirculation (average per issue)";
@@ -217,7 +220,7 @@ await until(() => w.downloaded, "the download");
 ok((await w.downloaded.text()).includes("West Sussex"), "the figures can be downloaded");
 d.querySelector(`a[href="#a/${WSX}"]`).click();
 w.location.hash = `#a/${WSX}`;
-await see(d, /West Sussex: how people feel about their roads/);
+await see(d, /West Sussex: the map of mood/);
 ok(/West Sussex/.test(text(d.querySelector(".brand-sub"))) && button(d, "All authorities"), "an authority's row opens its own view, with a way back");
 
 const later = (await api("/api/survey/new", { code: WSX, title: "Winter roads" }, lead)).survey.id;
@@ -225,15 +228,16 @@ const laterCode = (await api("/api/survey/status", { code: WSX, id: later, statu
 await api("/api/s/submit", { access: laterCode, forms: Array.from({ length: 35 }, (_, i) => ({ client: `w${i}`, site: "Square", secs: 200, answers: { c1: "Very satisfied", c2: "Better" } })) });
 ok((await api("/api/admin/overview", {}, boss)).authorities.find((x) => x.name === "West Sussex").street.title === "Winter roads", "an authority's latest survey is the one shown");
 
-dom = await open("/#all", member); d = dom.window.document;
-await see(d, /West Sussex: how people feel about their roads/);
-ok(!button(d, "All authorities") && !d.querySelector('select[aria-label="Open an authority"]'), "a member can't reach all authorities, even by its address");
+dom = await open("/#all", member); d = dom.window.document; w = dom.window;
+await see(d, /West Sussex: the map of mood/);
+ok(!button(d, "All authorities") && ![...d.querySelectorAll(".picker")].some((x) => /Authority/.test(x.textContent)), "a member can't reach all authorities, even by its address");
 const both = await api("/api/admin/overview", {}, boss);
 ok(both.totals.replies === 75 && both.totals.surveys === 2, "replies are counted from every survey with results, not only the latest");
 await api("/api/survey/new", { code: "E08000034", title: "Just a draft" }, kirk);
 ok((await api("/api/admin/overview", {}, boss)).totals.using === 1, "and a draft nobody has opened doesn't count as using Clarion");
-await see(d, /35 street survey replies/);
-ok(true, "and their summary leads with their latest survey");
+w.location.hash = `#dash/${WSX}`;
+await see(d, /street survey, 35 replies/);
+ok(true, "and their dashboard shows their latest survey");
 
 // ---- what an authority sees of the others
 ok(t.middleFigure(Array.from({ length: 4 }, () => ({ satisfied: 30, worse: 40 }))) === null, "fewer than five authorities gives no FHRG figure");

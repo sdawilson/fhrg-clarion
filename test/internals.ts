@@ -26,3 +26,8 @@ export { qrCode } from "../src/qr";
 export { networkOf } from "../src/accounts";
 export { areaRows, interviewedOnly, summarise as summariseStreet } from "../src/surveys";
 export { channelsFrom } from "../src/coverage";
+export { buildMap, defaultMonth, fmtMood, leanOf, mediaOf, monthsFor, moodWord, readFilters, shiftMonth } from "../src/mood";
+export { demoMap, demoOfficers } from "../src/demo";
+export { officersBriefing } from "../src/officers";
+export { publicSelf, publicSurvey, readTell, allQuestions, pointOf } from "../src/surveys";
+export { readChannels, readFunctions, readPartners, serviceId, standardFunctions } from "../src/setup";

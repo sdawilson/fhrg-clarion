@@ -24,7 +24,7 @@ import { newJobId } from "./jobs";
 import { refQuery } from "./library";
 import type { Pilot } from "./pilots";
 import type { Where } from "./postcodes";
-import { DEFAULT_SERVICE } from "./setup";
+import { DEFAULT_SERVICE, serviceId } from "./setup";
 import { storageDelete, storageJson, storageList, storagePut, savePretty } from "./storage";
 import { FriendlyError, cached, cleanLong, cleanText, londonToday, pickEnum, round, withLock } from "./util";
 
@@ -71,14 +71,19 @@ export const ACCESS_CHECKS = [
 ];
 
 // A site picked on the map also holds the share of adults it stands for and its age targets (16 to 34, 35 to 64, 65+)
-export type Site = { name: string; when: string; interviewers: string; share?: number; ages?: number[]; lat?: number; lng?: number };
+export type Site = { name: string; when: string; interviewers: string; share?: number; ages?: number[]; lat?: number; lng?: number; spotLat?: number; spotLng?: number; where?: string };
+// What a survey tells people. Each message can be tied to a topic, and can also ask "Did you know?" before it's given
+export const HOW_TOLD = ["Read out by the interviewer", "On the tablet after the last question", "Printed on the form", "On the page after replying by link"];
+export const MAX_TOLD = 3;
+const TOLD_CHARS = 240;
+export type Message = { id: string; topic: string; text: string; how: string[]; aware: boolean };
 export type Plan = {
   target: number; sites: Site[]; checks: string[];
   sure?: number; margin?: number; by?: "sites" | "whole" | "areas"; perSite?: number; perHour?: number;
 };
 export type Survey = {
   id: string; code: string; title: string; purpose: string; status: "draft" | "open" | "closed"; access: string; collector: string;
-  locals: Question[]; plan: Plan; service?: string;
+  locals: Question[]; plan: Plan; service?: string; tell?: Message[];
   created: string; by: string; updated: string; openedBy: string; openedOn: string; closedOn: string; printedTo: number;
   self?: string; selfOn?: boolean; // the link for people to fill it in themselves, which is a different code from interviewers'
 };
@@ -92,7 +97,9 @@ const answersPath = (c: Config, code: string, id: string) => `${c.root}authoriti
 export const sortPath = (c: Config, code: string, id: string) => `${c.root}authorities/${code}/survey-sorts/${id}.json`;
 const accessPath = (c: Config, access: string) => `${c.root}system/survey-codes/${access}.json`;
 
-export const allQuestions = (s: Pick<Survey, "locals">): Question[] => [...CORE, ...s.locals, ...ABOUT];
+// "Did you know?" comes before the message is given, so it measures what people already knew. Its answers aren't a satisfaction scale, so they never reach mood
+const awareness = (s: Partial<Pick<Survey, "tell">>): Question[] => (s.tell ?? []).filter((m) => m.aware).map((m) => ({ id: `k${m.id}`, part: "local", kind: "choice", text: `Did you know? ${m.text}`, options: ["Yes", "No"], ...(m.topic ? { topic: m.topic } : {}) }));
+export const allQuestions = (s: Pick<Survey, "locals"> & Partial<Pick<Survey, "tell">>): Question[] => [...CORE, ...s.locals, ...awareness(s), ...ABOUT];
 
 export async function loadSurvey(c: Config, code: string, id: string): Promise<Survey | null> {
   return await storageJson<Survey | null>(c, surveyPath(c, code, id), null);
@@ -113,7 +120,7 @@ export async function createSurvey(c: Config, me: Member, p: Pilot, b: Record<st
   const now = new Date().toISOString();
   const s: Survey = {
     id: newJobId(), code: p.code, title, purpose: cleanLong(b.purpose, 2000), status: "draft", access: "", collector: `${p.name} ${p.kind === "County council" ? "County Council" : "Council"}`,
-    locals: [], plan: { target: DEFAULT_TARGET, sites: [], checks: [], sure: 90, margin: 10, by: "sites", perSite: DEFAULT_PER_SITE, perHour: DEFAULT_PER_HOUR }, created: now, by: me.name, updated: now, openedBy: "", openedOn: "", closedOn: "", printedTo: 0,
+    service: serviceId(b.service), locals: [], plan: { target: DEFAULT_TARGET, sites: [], checks: [], sure: 90, margin: 10, by: "sites", perSite: DEFAULT_PER_SITE, perHour: DEFAULT_PER_HOUR }, created: now, by: me.name, updated: now, openedBy: "", openedOn: "", closedOn: "", printedTo: 0,
   };
   await savePretty(c, surveyPath(c, p.code, s.id), s);
   return s;
@@ -128,7 +135,19 @@ export function readLocals(v: unknown): Question[] {
     const kind = q?.kind === "text" ? "text" : "choice";
     const options = kind === "text" ? [] : (Array.isArray(q?.options) ? q.options : []).map((o: unknown) => cleanText(o, 80)).filter(Boolean).slice(0, 8);
     if (kind === "choice" && options.length < 2) throw new FriendlyError(`Local question ${i + 1} needs at least two answers to choose from.`);
-    return { id: `l${i + 1}`, part: "local" as const, kind, text, options };
+    const fn = cleanText(q?.fn, 40), topic = cleanText(q?.topic, 80);
+    return { id: `l${i + 1}`, part: "local" as const, kind, text, options, ...(fn ? { fn } : {}), ...(topic ? { topic } : {}) };
+  });
+}
+
+export function readTell(v: unknown): Message[] {
+  const list = Array.isArray(v) ? v : [];
+  if (list.length > MAX_TOLD) throw new FriendlyError(`A survey can carry up to ${MAX_TOLD} messages.`);
+  return list.map((m: any, i: number) => {
+    const text = cleanText(m?.text, TOLD_CHARS);
+    if (!text) throw new FriendlyError(`Message ${i + 1} has no wording.`);
+    const how = HOW_TOLD.filter((x) => Array.isArray(m?.how) && m.how.includes(x));
+    return { id: String(i + 1), topic: cleanText(m?.topic, 80), text, how: how.length ? how : [HOW_TOLD[0]], aware: m?.aware === true };
   });
 }
 
@@ -141,9 +160,12 @@ function readSite(x: any): Site {
   const site: Site = { name: cleanText(x?.name, 80), when: cleanText(x?.when, 80), interviewers: cleanText(x?.interviewers, 80) };
   const share = inRange(x?.share, 0, 100), lat = inRange(x?.lat, 49, 61.5), lng = inRange(x?.lng, -9, 2.5);
   const ages = Array.isArray(x?.ages) ? x.ages.map((n: unknown) => inRange(n, 0, MAX_ANSWERS)).filter((n: number | undefined) => Number.isInteger(n)) : [];
+  const spotLat = inRange(x?.spotLat, 49, 61.5), spotLng = inRange(x?.spotLng, -9, 2.5), where = cleanText(x?.where, 120);
   if (share !== undefined) site.share = share;
   if (ages.length === 3) site.ages = ages;
   if (lat !== undefined && lng !== undefined) { site.lat = lat; site.lng = lng; }
+  if (spotLat !== undefined && spotLng !== undefined) { site.spotLat = spotLat; site.spotLng = spotLng; }
+  if (where) site.where = where;
   return site;
 }
 
@@ -175,7 +197,8 @@ export async function saveSurvey(c: Config, s: Survey, b: Record<string, any>): 
       if (typeof b.title === "string") now.title = cleanText(b.title, 120) || now.title;
       if (typeof b.purpose === "string") now.purpose = cleanLong(b.purpose, 2000);
       if (b.locals !== undefined) now.locals = readLocals(b.locals);
-    } else if (b.locals !== undefined || typeof b.title === "string") throw new FriendlyError("This survey is open or closed, so its questions can't change.");
+      if (b.tell !== undefined) now.tell = readTell(b.tell);
+    } else if (b.locals !== undefined || b.tell !== undefined || typeof b.title === "string") throw new FriendlyError("This survey is open or closed, so its questions and messages can't change.");
     now.updated = new Date().toISOString();
     await savePretty(c, surveyPath(c, s.code, s.id), now);
     return now;
@@ -275,8 +298,10 @@ export async function surveyByAccess(c: Config, access: string): Promise<Survey 
 export const surveyBySelf = surveyByAccess; // the two kinds of code are different lengths, so one can't stand for the other
 
 // All that a tablet is given: never the officer's purpose, the authority's plan or anyone's answers
-export const publicSurvey = (s: Survey) => ({ title: s.title, collector: s.collector, sites: s.plan.sites.map((x) => x.name), questions: allQuestions(s) });
-export const publicSelf = (s: Survey) => ({ title: s.title, collector: s.collector, questions: allQuestions(s) });
+const asked = (s: Survey) => allQuestions(s).map(({ id, text, kind, options, part }) => ({ id, text, kind, options, part }));
+const toldBy = (s: Survey, how: string) => (s.tell ?? []).filter((m) => m.how.includes(how)).map((m) => m.text);
+export const publicSurvey = (s: Survey) => ({ title: s.title, collector: s.collector, sites: s.plan.sites.map((x) => x.name), questions: asked(s), readOut: toldBy(s, HOW_TOLD[0]), told: toldBy(s, HOW_TOLD[1]) });
+export const publicSelf = (s: Survey) => ({ title: s.title, collector: s.collector, questions: asked(s), told: toldBy(s, HOW_TOLD[3]) });
 
 // ----- answers
 
@@ -679,10 +704,10 @@ export function pointOf(s: Survey, all: Answer[], census: Census | null): Street
     if (!sat.length || !dis.length) return [];
     return [{ id: q.id, text: q.text, fn: q.fn ?? "", topic: q.topic ?? "", sat: Math.round(sat.reduce((a, o) => a + o.pct, 0)), dis: Math.round(dis.reduce((a, o) => a + o.pct, 0)) }];
   });
-  const linkAll = replied.filter((r) => r.answers.c1), linkSat = linkAll.filter((r) => SATISFIED.has(r.answers.c1)).length;
+  const here = kept.filter(counted), linkAll = here.filter((r) => r.answers.c1), linkSat = linkAll.filter((r) => SATISFIED.has(r.answers.c1)).length; // replies from elsewhere aren't in any figure
   return {
     ...summary, service: s.service ?? DEFAULT_SERVICE, questions, groups: results.groups.filter((g) => g.group !== "Site").map((g) => ({ group: g.group, label: g.label, n: g.answered, sat: g.satisfied, dis: g.dissatisfied })),
-    byLink: { n: summary.selfOnly ? 0 : replied.length, sat: linkAll.length >= MIN_GROUP ? round((linkSat / linkAll.length) * 100) : null },
+    byLink: { n: summary.selfOnly ? 0 : here.length, sat: linkAll.length >= MIN_GROUP ? round((linkSat / linkAll.length) * 100) : null },
   };
 }
 export async function streetPoints(c: Config, code: string): Promise<StreetPoint[]> {
@@ -726,7 +751,7 @@ export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edi
   const numbers = rows.map((r) => Number(r.form)).filter(Number.isInteger);
   const whereCount = (w: Where) => replied.filter((r) => (r.where ?? "unknown") === w).length;
   return {
-    survey: edit ? s : { ...s, access: "", self: "", selfOn: false }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS,
+    survey: edit ? s : { ...s, access: "", self: "", selfOn: false }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS, howTold: HOW_TOLD, maxTold: MAX_TOLD,
     template: edit ? templateCsv(s) : "",
     census: census ? { adults: census.adults } : null, areas, targets: ageSexTargets(census, s.plan.target),
     results: { ...headline, total: rows.length, bySource }, selfOnly, topics: topicCounts(shown), comments: own ? shown : [], ownComments: own, waiting: waitingComments(s, used),
