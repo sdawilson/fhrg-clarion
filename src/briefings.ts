@@ -97,7 +97,7 @@ function position(p: Pilot, e: Evidence): Record<string, unknown> {
   return {
     authority: p.name, kind: p.kind, strategic_authority: p.strategicAuthority || "none", funding_route: p.fundingRoute, dft_rating: p.rating,
     survey_results: surveysUsed(e), survey_note: p.surveyNote,
-    street_surveys: streetsUsed(e).map(({ ran, responses, weighted, satisfied, dissatisfied, better, worse, blameCouncil, topics, note }) => ({ ran, responses, weighted, satisfied, dissatisfied, better, worse, blameCouncil, topics, note })),
+    street_surveys: streetsUsed(e).map(({ ran, responses, weighted, satisfied, dissatisfied, better, worse, blameCouncil, topics, note }) => ({ ran, responses, weighted, satisfied, dissatisfied, better, worse, blameCouncil, topics, note })), // a note says if people chose to reply
     published_figures: e.figures, fault_reports: s.fixMyStreet.ok ? s.fixMyStreet.data : null,
     road_petitions: { count: petitions.length, signatures_here: petitions.reduce((sum, x) => sum + x.local, 0), above_a_fair_share_here: petitions.filter((x) => x.localShare > x.fairShare).length },
     mps_written_questions_about_roads: s.questions.ok ? s.questions.data?.length ?? 0 : null,
@@ -113,7 +113,7 @@ function sourcesFrom(e: Evidence, reading: { created: string } | null, uploaded:
     `Evidence read on ${longDate(today)}.`,
     ...(reading ? [`Clarion mood reading of ${longDate(reading.created)}`] : []),
     ...new Set(surveysUsed(e).map((x) => `${x.source}, ${x.year}`)),
-    ...streetsUsed(e).map((x) => `Street survey "${x.title}", ${x.responses} replies (indicative)`),
+    ...streetsUsed(e).map((x) => (x.selfOnly ? `Survey "${x.title}", ${x.responses} people who chose to reply (indicative)` : `Street survey "${x.title}", ${x.responses} replies (indicative)`)),
     ...(pieces ? [`${pieces} press and media pieces assessed by officers in the last four weeks`] : []),
     ...(e.contacts?.length ? ["The authority's enquiries and complaints, latest month"] : []),
     ...(s.fixMyStreet.ok && s.fixMyStreet.data?.to ? [`FixMyStreet public reports, to ${longDate(s.fixMyStreet.data.to)}`] : []),

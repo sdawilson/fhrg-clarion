@@ -21,3 +21,6 @@ export { buildPack } from "../src/demo";
 export { ageTargets, packFrom, propose, standFor, townsFrom, MEASURES } from "../src/sites";
 export { audienceFor, bandRates, cleanDomain, pieceWeight, readAssessment, readKeywords, readSource, summarise as summariseCoverage } from "../src/coverage";
 export { wordFile } from "../src/docx";
+export { outcodeOf, whereIs } from "../src/postcodes";
+export { qrCode } from "../src/qr";
+export { areaRows, summarise as summariseStreet } from "../src/surveys";

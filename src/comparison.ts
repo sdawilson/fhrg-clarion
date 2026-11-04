@@ -72,6 +72,6 @@ export async function ownSignals(c: Config, p: Pilot): Promise<{ said: Said[]; c
 
 export async function loadComparison(c: Config, p: Pilot) {
   const [{ said, contacts }, streets] = await Promise.all([ownSignals(c, p), streetSummaries(c, p.code)]);
-  const latest = streets.find((s) => Date.now() - Date.parse(s.ran) < SURVEY_DAYS * DAY_MS && s.topics.length); // a newer one may not have had its comments sorted yet
+  const latest = streets.find((s) => !s.selfOnly && Date.now() - Date.parse(s.ran) < SURVEY_DAYS * DAY_MS && s.topics.length); // a newer one may not have had its comments sorted yet
   return compare(said, latest?.topics ?? [], contacts);
 }

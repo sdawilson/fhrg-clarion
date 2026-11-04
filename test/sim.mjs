@@ -285,10 +285,18 @@ function publicSource(url) {
     return reply(200, { results: all.slice(skip, skip + take), totalResults: all.length });
   }
   if (host === "www.gov.uk") return reply(200, GOVUK);
+  if (host === "api.postcodes.io") {
+    if (postcodesDown.on) throw new TypeError("fetch failed");
+    postcodesDown.asked.push(url);
+    const area = OUTCODES[url.split("/").pop()];
+    return area ? reply(200, { status: 200, result: { outcode: url.split("/").pop(), ...area } }) : reply(404, { status: 404, error: "Outcode not found" });
+  }
   return null;
 }
 
 export const hooks = { fetch: null };
+export const postcodesDown = { on: false, asked: [] };
+const OUTCODES = { RH12: { admin_district: ["Horsham", "Mole Valley"], admin_county: ["Surrey", "West Sussex"] }, BN11: { admin_district: ["Worthing"], admin_county: ["West Sussex"] }, HD1: { admin_district: ["Kirklees"], admin_county: [] }, M1: { admin_district: ["Manchester"], admin_county: [null] } };
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === "string" ? input : input.url;

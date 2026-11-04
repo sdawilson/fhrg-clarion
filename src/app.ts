@@ -7,6 +7,7 @@
 //   GET  /sso#t=<pass>             members arriving from the FHRG website
 //   GET  /s  /s/<access code>      the tablet page for a street survey (public/survey.html); no account needed
 //   GET  /s/sw.js                  lets that page reopen without a signal
+//   GET  /r/<link code>            the same page, for someone filling a survey in themselves; no account needed
 //   GET  /demo                     the same page, opening the Northbridge demonstration
 //   GET  /demo/data.json           the demonstration's made-up data (public; see demo.ts)
 //   POST /api/config               website address and whether the demonstration is on (public)
@@ -73,6 +74,10 @@
 // nothing but the questions and a way to add answers.
 //   POST /api/s/get                {access}
 //   POST /api/s/submit             {access, forms}
+//   POST /api/r/get                {access}
+//   POST /api/r/submit             {access, client, secs, answers, postcode}: one person's reply
+//   POST /api/survey/self          {code, id, on}: turns the self-completion link on or off
+//   POST /api/survey/qr            {code, id, origin}: that link, and its QR code
 
 import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member } from "./accounts";
 import { findTitles, saveTitles, titlesHeld } from "./abc";
@@ -93,12 +98,14 @@ import { validId } from "./jobs";
 import { getNote, listNotes, readInput, startNote } from "./notes";
 import { canEdit, canSee, isMember, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
+import { areaOf, outcodeOf, whereIs } from "./postcodes";
+import { qrCode } from "./qr";
 import { announcements, fixMyStreetUrl, loadSignals } from "./signals";
 import { loadSites } from "./sites";
 import { MAX_SCAN_CHARS, getHelp, sharedTopics, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
-  addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, createSurvey, formNumber, listSurveys, loadAnswers,
-  loadCensus, loadSurvey, openSurvey, publicSurvey, readCsv, saveSurvey, surveyByAccess, surveyPage, textQuestionIds, validAccess, type Survey,
+  addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, countArea, createSurvey, formNumber, listSurveys, loadAnswers, loadAreas,
+  loadCensus, loadSurvey, openSurvey, publicSelf, publicSurvey, readCsv, saveSurvey, setSelf, surveyByAccess, surveyBySelf, surveyPage, textQuestionIds, validAccess, validSelf, type Survey,
 } from "./surveys";
 import { FriendlyError, briefly, tryAgainNow, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
 
@@ -387,10 +394,10 @@ async function handleSurveyList(c: Config, request: Request): Promise<Response> 
 async function handleSurveyGet(c: Config, request: Request): Promise<Response> {
   const { me, p, s } = await reader(c, request);
   const edit = canEdit(me, p);
-  const [rows, census, sorting, election] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id), loadElection(c, p.code)]);
+  const [rows, census, sorting, election, tally] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id), loadElection(c, p.code), loadAreas(c, p.code, s.id)]);
   return json({
     paused: election.on,
-    ...surveyPage(s, rows, census, edit, isMember(me, p), p.constituencies.length),
+    ...surveyPage(s, rows, census, edit, isMember(me, p), p.constituencies.length, tally),
     sorting: sorting?.status === "working" ? sorting : null, dropped: edit && sorting?.status === "ready" ? sorting.result?.dropped ?? 0 : 0,
   });
 }
@@ -470,7 +477,7 @@ async function handleSurveyExport(c: Config, request: Request): Promise<Response
 
 // Public routes: a wrong code costs a storage read, so wrong guesses are limited
 const WINDOW_MS = 10 * 60 * 1000;
-const MAX_WRONG = 30, MAX_FORMS = 1500;
+const MAX_WRONG = 30, MAX_FORMS = 1500, MAX_SELF_PER_ADDRESS = 20, MAX_SELF_REPLIES = 600;
 const tallies = new Map<string, { from: number; n: number }>();
 function countOf(key: string): { from: number; n: number } {
   const now = Date.now();
@@ -495,6 +502,43 @@ async function surveyFromCode(c: Config, request: Request, value: unknown, forms
   if (s.status !== "open") throw new FriendlyError("This survey isn't open.", 409);
   await notPaused(c, s.code);
   return s;
+}
+
+// The self-completion link. It's meant to travel, so nothing about it is secret, and the limits are on how fast replies
+// can arrive: a campaign can't fill a survey in a few minutes, and most of a shared office can still reply
+async function surveyFromSelf(c: Config, request: Request, value: unknown, replying = false): Promise<Survey> {
+  const wrong = countOf(`wrong|${clientIp(request)}`);
+  if (wrong.n >= MAX_WRONG) throw new FriendlyError("Too many tries. Please wait a few minutes.", 429);
+  const link = String(value ?? "").toUpperCase();
+  const s = validSelf(link) ? await surveyBySelf(c, link) : null;
+  if (!s || s.self !== link) { wrong.n++; throw new FriendlyError("This link isn't right. Check it with whoever sent it.", 404); }
+  if (replying) {
+    const person = countOf(`self|${clientIp(request)}`), all = countOf(`selfall|${link}`);
+    if (person.n >= MAX_SELF_PER_ADDRESS || all.n >= MAX_SELF_REPLIES) throw new FriendlyError("A lot of replies are arriving at once. Please try again in a few minutes.", 429);
+    person.n++; all.n++;
+  }
+  if (s.status !== "open" || !s.selfOn) throw new FriendlyError("This survey has closed.", 409);
+  await notPaused(c, s.code);
+  return s;
+}
+
+async function handleSelfSubmit(c: Config, request: Request): Promise<Response> {
+  const b = await readJsonBody(request, 20_000);
+  const s = await surveyFromSelf(c, request, b.access, true);
+  const outcode = outcodeOf(b.postcode), p = pilotByCode(s.code);
+  const where = p && outcode ? whereIs(p, await areaOf(c, outcode)) : "unknown";
+  const r = await addAnswers(c, s, [{ client: b.client, secs: b.secs, answers: b.answers, where }], "self");
+  if (!r.done.length) throw new FriendlyError(r.problems[0] ?? "That reply couldn't be saved.", 409);
+  if (r.added && outcode && where !== "unknown") await countArea(c, s, outcode);
+  return json({ ok: true });
+}
+
+async function handleSurveyQr(c: Config, request: Request): Promise<Response> {
+  const { b, s } = await surveyEditor(c, request);
+  if (!s.self) throw new FriendlyError("Turn on the link first.", 404);
+  if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(String(b.origin))) throw new FriendlyError("That address isn't right.");
+  const url = `${b.origin}/r/${s.self}`;
+  return json({ url, rows: qrCode(url) });
 }
 
 async function handlePublicGet(c: Config, request: Request): Promise<Response> {
@@ -530,7 +574,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         return new Response(await demoPack(), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-cache", "x-content-type-options": "nosniff" } });
       }
       if (path === "/s/sw.js") return new Response(SURVEY_WORKER, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "x-content-type-options": "nosniff" } });
-      if (path === "/s" || /^\/s\/[a-z0-9]{1,12}$/i.test(path)) return serveSurveyPage();
+      if (path === "/s" || /^\/s\/[a-z0-9]{1,12}$/i.test(path) || /^\/r\/[a-z0-9]{12}$/i.test(path)) return serveSurveyPage();
       if (path === "/" || path === "/index.html" || /^\/[a-z0-9][a-z0-9-]{0,48}$/i.test(path)) return servePage(c);
     }
     if (request.method === "POST") {
@@ -597,6 +641,10 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/survey/export": return await handleSurveyExport(c, request);
         case "/api/s/get": return await handlePublicGet(c, request);
         case "/api/s/submit": return await handlePublicSubmit(c, request);
+        case "/api/r/get": { const b = await readJsonBody(request, 1000); return json({ survey: publicSelf(await surveyFromSelf(c, request, b.access)) }); }
+        case "/api/r/submit": return await handleSelfSubmit(c, request);
+        case "/api/survey/self": { const { b, s } = await surveyEditor(c, request); if (b.on === true) await notPaused(c, s.code); return json({ survey: await setSelf(c, s, b.on === true) }); }
+        case "/api/survey/qr": return await handleSurveyQr(c, request);
       }
     }
     return json({ error: "Not found." }, 404);

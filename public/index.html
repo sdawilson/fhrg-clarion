@@ -250,6 +250,7 @@ tr.selected td { background: var(--surface-2); }
 .map-zoom { position: absolute; top: 8px; left: 8px; display: grid; gap: 2px; }
 .map-zoom button { width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; }
 .map-credit { position: absolute; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.85); padding: 1px 6px; font-size: 0.72rem; }
+.qr { width: 220px; height: 220px; display: block; }
 .link-box { padding: 10px 12px; border: 1.5px solid var(--line-2); border-radius: var(--radius-sm); background: var(--bg); overflow-wrap: anywhere; font-weight: 700; }
 .entry-row { display: grid; gap: 4px 12px; grid-template-columns: minmax(0, 3fr) 5rem minmax(0, 2fr); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .entry-row.wide { grid-template-columns: minmax(0, 1fr); }
@@ -405,6 +406,8 @@ const Demo = {
       case "/api/briefing/election": Demo.election = { on: b.on, by: "Demo viewer", at: new Date().toISOString() }; return { election: Demo.election };
       case "/api/note/get": return { note: P.note };
       case "/api/reading/get": return { reading: P.authority.reading };
+      case "/api/survey/self": Demo.survey(b.id).survey.selfOn = b.on === true; return { survey: Demo.survey(b.id).survey };
+      case "/api/survey/qr": return P.qr;
       case "/api/survey/list": return { ...P.surveyList, paused: Demo.election.on };
       case "/api/survey/get": return { ...Demo.survey(b.id), sorting: null, dropped: 0, paused: Demo.election.on };
       case "/api/survey/save": return { survey: Demo.survey(b.id).survey };
@@ -1076,6 +1079,7 @@ function aboutView(page, a) {
     sec("Attention and concern", h("ul", {}, ["Attention is a topic's assessed pieces in the last four weeks, then their reach after allowing for the source.", "Concern is a topic's share of street survey comments and of enquiries, averaged over whichever are held. Street surveys count for a year, and enquiries for three months.", "Ranks are compared, because a press count and a survey share aren't on one scale.", "An early sign is in the upper half for concern and the lower half for attention. It's a pointer for officers to check, not a finding."].map((x) => h("li", {}, x)))),
     sec("Works and weather", h("ul", {}, ["An authority's lead can turn on the link to its Climate Toolkit records, and can turn it off again at any time, which removes what's held.", "Clarion keeps only weekly job totals by function and source, ward totals and weather events, with no street names or job details.", "Weather events use the Climate Toolkit's own rules for gales, heavy rain, cold, freeze and thaw, and heatwaves.", "These help explain a change in mood. Only jobs reported by the public can count as a kind of signal."].map((x) => h("li", {}, x)))),
     sec("Councillor briefings", h("ul", {}, ["Clarion drafts a briefing from figures and topic counts. An officer edits it, and a named officer of the authority releases it, which records their name and fixes that version.", "Only a released briefing can be taken out of Clarion, as Word or PDF, and sent through the council's own channels. Councillors don't need an account.", "Officers' notes, and anyone's words, aren't used. Petitions and MPs' questions go in as counts, so no MP is named. The list of sources is written by Clarion, not by the AI.", "During a pre-election period, an authority's lead turns on a setting that takes lines to take and suggested answers out of every briefing, and pauses street surveys, on paper as well as on tablets."].map((x) => h("li", {}, x)))),
+    sec("Filling in a survey online", h("ul", {}, ["An officer can turn on a link and QR code for people to fill in a survey themselves, and send it from their own email system. Clarion never sees the list.", "These people choose to reply, so they may not be typical. Their answers are shown beside interviewers' and aren't added to them. They become the main figures only if no interviewers took part, and such a survey isn't one of the kinds of signal in a mood reading, the FHRG middle figure, or attention and concern.", "The first half of a postcode is optional. Clarion keeps only whether someone lives in the authority, and a separate count for each area, with fewer than 10 pooled. An area is checked with postcodes.io, which is sent the first half only.", "A postcode area can cross a boundary, so someone counted as living here may be a near neighbour. Each device can reply once, but the link can be passed on."].map((x) => h("li", {}, x)))),
     sec("Street surveys", h("ul", {}, ["A street sample isn't random, so every result is labelled indicative.", "Results are weighted to the local population's age and sex from Census 2021.", "Proposed survey sites are a calculation on Census and deprivation figures, not an opinion, and town size stands in for footfall. Each site's replies count, as far as they can, for the share of adults it stands for.", "Groups under 30 people aren't reported.", "Written comments stay hidden until Claude has taken out names. Only the authority's own members can read them, and they're never used in a mood reading or impact note."].map((x) => h("li", {}, x)))),
     sec("Comparing authorities", h("ul", {}, ["An authority sees only one FHRG middle figure, with nobody named, once five authorities have results.", "FHRG administrators see figures and topic counts for each authority, in alphabetical order and never ranked. A difference may be a local choice, or reflect geography, funding or who was asked."].map((x) => h("li", {}, x)))));
 }
@@ -1892,8 +1896,35 @@ function collectPart(top, a, d) {
   else if (s.status === "closed") open.append(h("p", {}, "The survey is closed, so the tablet link has stopped working. You can still add paper forms."), m2, h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => setStatus("open", m2) }, "Open it again")));
   top.append(open);
   if (s.status === "draft") return;
-  top.append(h("section", { class: "card" }, h("h2", {}, "Answers so far"), h("div", { class: "stats" }, [["On tablets", "tablet"], ["Typed in", "paper"], ["From scans", "scan"], ["From files", "csv"]].map(([label, key]) => h("div", { class: "stat" }, h("span", { class: "label" }, label), h("span", { class: "value" }, fmt(d.results.bySource[key] || 0)))))));
+  top.append(selfCard(a, d));
+  top.append(h("section", { class: "card" }, h("h2", {}, "Answers so far"), h("div", { class: "stats" }, [["On tablets", "tablet"], ["Typed in", "paper"], ["From scans", "scan"], ["From files", "csv"], ["Filled in by people themselves", "self"]].map(([label, key]) => h("div", { class: "stat" }, h("span", { class: "label" }, label), h("span", { class: "value" }, fmt(d.results.bySource[key] || 0)))))));
   if (!d.paused) top.append(entryCard(a, d), scanCard(a, d), csvCard(a, d));
+}
+function selfCard(a, d) {
+  const s = d.survey, msg = saveNote(), lock = {};
+  const card = h("section", { class: "card stack" }, h("h2", {}, "A link for people to fill in themselves"));
+  const turn = (on, words) => h("button", { class: on ? "btn primary" : "btn ghost", type: "button", onclick: once(async () => { said(msg, ""); await API.call("/api/survey/self", { code: a.code, id: s.id, on }); route(); }, (e) => said(msg, e.message, "err"), lock) }, words);
+  if (!s.selfOn) return add(card, h("p", {}, "People can fill this in on their own phone or computer, from a link or QR code. Send the link to an email list from your own system: Clarion never sees the list."),
+    h("p", { class: "note" }, "These people choose to reply, so their answers are shown apart from interviewers'. Each device can reply once, but the link can be passed on, so a campaign could share it. It closes with the survey."), msg, d.paused || s.status !== "open" ? null : h("div", { class: "row" }, turn(true, "Turn on the link")));
+  const box = h("div", { class: "stack" }, loading("Making the QR code…"));
+  add(card, s.status === "open" && !d.paused ? null : h("p", { class: "note" }, "The link isn't taking replies just now, because the survey is closed or paused."), box, msg, h("div", { class: "row" }, turn(false, "Turn off the link")));
+  API.call("/api/survey/qr", { code: a.code, id: s.id, origin: location.origin }).then((r) => {
+    const n = r.rows.length, border = 4, size = n + border * 2;
+    const path = r.rows.flatMap((row, y) => [...row].map((c, x) => (c === "1" ? `M${x + border} ${y + border}h1v1h-1z` : ""))).join("");
+    const png = () => {
+      const canvas = h("canvas", { width: size * 12, height: size * 12 }), x = canvas.getContext("2d");
+      x.fillStyle = "#fff"; x.fillRect(0, 0, canvas.width, canvas.height);
+      x.fillStyle = "#000"; r.rows.forEach((row, y) => [...row].forEach((c, i) => { if (c === "1") x.fillRect((i + border) * 12, (y + border) * 12, 12, 12); }));
+      canvas.toBlob((blob) => saveBlob("survey-qr-code.png", blob), "image/png");
+    };
+    const letter = h("textarea", { rows: 4, readonly: true, "aria-label": "Suggested wording for an email" });
+    letter.value = `We'd like to hear what you think about the roads and pavements where you live. Our short survey takes a few minutes, and you don't need to give your name.\n\n${r.url || "[your link]"}`;
+    add(clear(box), r.url ? h("div", { class: "link-box" }, r.url) : h("p", { class: "note" }, "In the demonstration there's no real link, and the QR code leads nowhere."), svg("svg", { class: "qr", viewBox: `0 0 ${size} ${size}`, role: "img", "aria-label": "QR code for this link", "shape-rendering": "crispEdges" }, svg("rect", { width: size, height: size, fill: "#fff" }), svg("path", { d: path, fill: "#000" })),
+      h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: png }, "Save the QR code")),
+      h("label", { class: "field" }, "Wording you could use in an email", letter),
+      h("p", { class: "note" }, "Send it from your own email system. Each device can reply once, but the link can be passed on, and it closes with the survey."));
+  }).catch((e) => { clear(box).append(failure(e)); });
+  return card;
 }
 function entryCard(a, d) {
   const s = d.survey;
@@ -2013,17 +2044,20 @@ function resultsPart(top, a, d) {
   const pct = (labels) => (q1 && !q1.held ? q1.options.filter((o) => labels.includes(o.label)).reduce((n, o) => n + o.pct, 0) : null);
   const stat = (label, value, detail) => h("div", { class: "stat" }, h("span", { class: "label" }, label), h("span", { class: "value" }, value), detail ? h("span", { class: "detail" }, detail) : null);
   const good = pct(["Very satisfied", "Fairly satisfied"]), bad = pct(["Fairly dissatisfied", "Very dissatisfied"]);
-  top.append(h("div", { class: "callout" }, h("strong", {}, "Indicative only. "), `A street sample isn't random. ${r.weighted ? "Results are weighted to the local population's age and sex from Census 2021." : d.census ? "Results aren't weighted to age and sex yet, because there aren't enough replies giving them." : "Results aren't weighted to age and sex, because the Census figures couldn't be read just now."}${r.bySite ? " Each site counts, as far as it can, for the share of adults it stands for." : ""} Groups under 30 people aren't shown.`),
+  top.append(h("div", { class: "callout" }, h("strong", {}, "Indicative only. "), `${d.selfOnly ? "Everyone here chose to reply, so this is weaker than a street sample." : "A street sample isn't random."} ${r.weighted ? "Results are weighted to the local population's age and sex from Census 2021." : d.census ? "Results aren't weighted to age and sex yet, because there aren't enough replies giving them." : "Results aren't weighted to age and sex, because the Census figures couldn't be read just now."}${r.bySite ? " Each site counts, as far as it can, for the share of adults it stands for." : ""} Groups under 30 people aren't shown.`),
     h("div", { class: "stats" }, stat("Replies", fmt(r.used), `Aim: ${fmt(s.plan.target)}${r.excluded ? `. ${fmt(r.excluded)} left out` : ""}`), stat("Satisfied", good === null ? "–" : `${fmt(good)}%`, "Very or fairly"), stat("Dissatisfied", bad === null ? "–" : `${fmt(bad)}%`, "Very or fairly")));
-  const wrap = h("section", { class: "card" }, h("h2", {}, "Answers"));
-  for (const q of r.questions) {
-    wrap.append(h("h3", {}, q.text));
-    if (q.held) { wrap.append(h("p", { class: "note" }, `${fmt(q.answered)} replies so far. Results appear at 30.`)); continue; }
-    wrap.append(h("div", { class: "tbl-wrap" }, h("table", { class: "tbl answers" }, h("thead", {}, h("tr", {}, h("th", {}, "Answer"), h("th", { class: "r" }, "Share"), h("th", { class: "r" }, "Replies"), h("th", { "aria-hidden": "true" }))),
-      h("tbody", {}, q.options.map((o) => h("tr", {}, h("td", {}, o.label), h("td", { class: "r" }, `${fmt(o.pct)}%`), h("td", { class: "r" }, fmt(o.count)), h("td", { "aria-hidden": "true" }, h("div", { class: "meter" }, h("span", { style: { width: `${Math.min(100, o.pct)}%` } })))))))),
-      q.range !== null ? h("p", { class: "note" }, `${fmt(q.answered)} replies. If this were a random sample, the likely range would be about plus or minus ${fmt(q.range)} points.`) : null);
-  }
-  top.append(wrap);
+  const answersOf = (from, wrap) => {
+    for (const q of from.questions) {
+      wrap.append(h("h3", {}, q.text));
+      if (q.held) { wrap.append(h("p", { class: "note" }, `${fmt(q.answered)} replies so far. Results appear at 30.`)); continue; }
+      wrap.append(h("div", { class: "tbl-wrap" }, h("table", { class: "tbl answers" }, h("thead", {}, h("tr", {}, h("th", {}, "Answer"), h("th", { class: "r" }, "Share"), h("th", { class: "r" }, "Replies"), h("th", { "aria-hidden": "true" }))),
+        h("tbody", {}, q.options.map((o) => h("tr", {}, h("td", {}, o.label), h("td", { class: "r" }, `${fmt(o.pct)}%`), h("td", { class: "r" }, fmt(o.count)), h("td", { "aria-hidden": "true" }, h("div", { class: "meter" }, h("span", { style: { width: `${Math.min(100, o.pct)}%` } })))))))),
+        q.range !== null ? h("p", { class: "note" }, `${fmt(q.answered)} replies. If this were a random sample, the likely range would be about plus or minus ${fmt(q.range)} points.`) : null);
+    }
+    return wrap;
+  };
+  top.append(answersOf(r, h("section", { class: "card" }, h("h2", {}, "Answers"))));
+  if (d.self) top.append(selfResults(d, answersOf));
   const shown = r.groups.filter((g) => g.answered >= 30);
   const groups = [...new Set(shown.map((g) => g.group))];
   if (groups.length) top.append(h("section", { class: "card" }, h("h2", {}, "Who's satisfied"), h("p", { class: "note" }, "Satisfaction with road and pavement condition, for each group with at least 30 replies."),
@@ -2037,6 +2071,22 @@ function resultsPart(top, a, d) {
   if (!d.ownComments && d.topics.length) c.append(h("p", { class: "note" }, "Topic counts only. The comments themselves stay with the authority."));
   top.append(c);
   if (d.canEdit) { const msg = saveNote(); top.append(h("div", { class: "row no-print" }, h("button", { class: "btn", type: "button", onclick: async () => { try { const r2 = await API.call("/api/survey/export", { code: a.code, id: s.id }); download(r2.name, r2.csv); } catch (e) { said(msg, e.message, "err"); } } }, "Download the answers"), msg)); }
+}
+
+// People who filled it in themselves, beside the interviewers' figures rather than mixed in with them
+function selfResults(d, answersOf) {
+  const x = d.self, r = x.results;
+  const share = (from, id, labels) => { const q = from?.questions.find((y) => y.id === id); return q && !q.held ? `${fmt(q.options.filter((o) => labels.includes(o.label)).reduce((n, o) => n + o.pct, 0))}%` : "–"; };
+  const row = (label, id, labels) => h("tr", {}, h("td", {}, label), h("td", { class: "r" }, share(d.results, id, labels)), h("td", { class: "r" }, share(r, id, labels)));
+  return add(h("section", { class: "card stack" }, h("h2", {}, "People who filled it in themselves"),
+    h("p", { class: "note" }, "These people chose to reply, so they may not be typical. They aren't in the figures above unless no interviewers took part."),
+    r ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Measure"), h("th", { class: "r" }, "Interviewers"), h("th", { class: "r" }, "Filled in themselves"))),
+      h("tbody", {}, h("tr", {}, h("td", {}, "Replies"), h("td", { class: "r" }, fmt(d.results.used)), h("td", { class: "r" }, fmt(r.used))), row("Satisfied", "c1", ["Very satisfied", "Fairly satisfied"]), row("Dissatisfied", "c1", ["Fairly dissatisfied", "Very dissatisfied"]), row("Say it's got worse", "c2", ["Worse"]), row("Say it's got better", "c2", ["Better"])))) : null,
+    h("p", {}, `${fmt(x.here)} said they live in the area and ${fmt(x.notSaid)} didn't say, so ${x.notSaid === 1 ? "that reply is" : "those replies are"} counted. ${fmt(x.elsewhere)} live${x.elsewhere === 1 ? "s" : ""} elsewhere and ${x.elsewhere === 1 ? "isn't" : "aren't"} in these figures.`),
+    x.areas.named.length || x.areas.pooled ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Postcode area"), h("th", { class: "r" }, "Replies"))),
+      h("tbody", {}, x.areas.named.map((y) => h("tr", {}, h("td", {}, y.area), h("td", { class: "r" }, fmt(y.count)))), x.areas.pooled ? h("tr", {}, h("td", {}, "Other areas, each under 10"), h("td", { class: "r" }, fmt(x.areas.pooled))) : null))) : null,
+    x.topics.length ? [h("h3", {}, "What they said"), x.topics.map((t) => (d.ownComments ? h("details", {}, h("summary", {}, `${t.topic} (${fmt(t.count)})`), x.comments.filter((y) => y.topic === t.topic).map((y) => h("div", { class: "comment" }, y.text))) : h("p", {}, `${t.topic}: ${fmt(t.count)}`)))] : null,
+    r ? h("details", {}, h("summary", {}, "All their answers"), answersOf(r, h("div", { class: "stack" }))) : null));
 }
 
 // ----- forms to print

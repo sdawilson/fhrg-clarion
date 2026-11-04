@@ -54,7 +54,7 @@ ok(!/West Sussex|Lincolnshire|Kirklees|E1000|E0800/.test(packText), "and holds n
 ok(!/https?:/.test(packText), "and no links, so nothing points at a made-up site");
 ok(!/\b(Jane|Smith)\b/.test(packText) && /\[removed\]/.test(packText), "and no names in its comments");
 const page = Object.values(pack.surveys).find((x) => x.results.total > 0);
-ok(page.results.total === 412 && page.results.weighted && page.results.questions.find((q) => q.id === "c1").range > 0, "412 made-up replies go through the real calculations, with weighting");
+ok(page.results.used === 412 && page.results.total === 532 && page.self.results.used < 120 && page.results.weighted && page.results.questions.find((q) => q.id === "c1").range > 0, "412 made-up replies go through the real calculations, with weighting");
 ok(page.results.groups.every((g) => g.answered >= 30 || g.satisfied === null), "and groups under 30 aren't reported");
 ok(pack.attention.topics.length === 8 && pack.attention.earlySigns.map((x) => x.topic).sort().join() === "Flooding on minor roads,Pavements", "topics are placed by rank, which finds the early signs");
 ok(pack.coverage.summary.pieces === pack.coverage.summary.topics.reduce((n, x) => n + x.pieces, 0) && pack.coverage.summary.pieces > 5, "the coverage figures add up");

@@ -73,6 +73,6 @@ export function middleFigure(latest: Pick<StreetSummary, "satisfied" | "worse">[
 }
 
 export const benchmark = (c: Config) => cached("benchmark", 10 * 60 * 1000, async () => {
-  const latest = (await Promise.all(PILOTS.map((p) => streetSummaries(c, p.code)))).map((x) => x.find((y) => y.current)).filter((x): x is StreetSummary => !!x);
+  const latest = (await Promise.all(PILOTS.map((p) => streetSummaries(c, p.code)))).map((x) => x.find((y) => y.current && !y.selfOnly)).filter((x): x is StreetSummary => !!x);
   return middleFigure(latest);
 });

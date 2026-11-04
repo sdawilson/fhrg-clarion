@@ -11,6 +11,7 @@ import { ELECTION_NOTE, longDate, wordCopy, type Briefing } from "./briefings";
 import { compare } from "./comparison";
 import { mondayOf, worksFigures, type Week } from "./works";
 import { enquiriesView, type Month } from "./enquiries";
+import { qrCode } from "./qr";
 import { packFrom, standFor, type SitesPack } from "./sites";
 import { ABOUT, ACCESS_CHECKS, CORE, answersCsv, cellKey, summarise, surveyPage, type Answer, type Census, type Question, type Site, type Survey } from "./surveys";
 import { cached } from "./util";
@@ -234,6 +235,14 @@ function replies(): Answer[] {
     if (n % 11 === 0 && comment) { answers.c3 = comment[1]; topics.c3 = comment[0]; clean.c3 = true; checked.c3 = n % 110 === 0; }
     out.push({ n, form: tablet ? `T${n}` : String(n), via: tablet ? "tablet" : "paper", site: SITES[Math.floor(r.next() * SITES.length)].name, at: "2026-10-20T10:00:00.000Z", secs: tablet ? 120 + Math.floor(r.next() * 180) : null, answers, topics, clean, checked });
   }
+  // people who chose to fill it in themselves are a little crosser than the people interviewers stopped
+  for (let n = 413; n <= 532; n++) {
+    const answers: Record<string, string> = {
+      c1: said("c1", [3, 16, 15, 30, 33, 3]), c2: said("c2", [8, 24, 62, 6]), c4: said("c4", [62, 12, 8, 10, 8]), l1: said("l1", [18, 34, 44, 4]), l2: said("l2", [6, 31, 38, 20, 5]),
+      a1: r.pick(AGE_SHARES.map((x) => x[0]), [4, 8, 12, 18, 24, 22, 12]), a2: said("a2", [46, 52, 2]), a3: said("a3", [74, 8, 12, 4, 2]), a4: said("a4", [14, 82, 4]),
+    };
+    out.push({ n, form: `R${n}`, via: "self", where: r.pick(["here", "elsewhere", "unknown"], [80, 7, 13]) as Answer["where"], site: "", at: "2026-10-21T19:00:00.000Z", secs: 150 + Math.floor(r.next() * 200), answers, topics: {}, clean: {}, checked: {} });
+  }
   return out;
 }
 
@@ -246,10 +255,10 @@ export function buildPack() {
   const rows = replies();
   const autumn = survey({
     id: "20261001090000000-de000001", title: "Autumn roads survey", purpose: "How people feel about the state of the roads, and whether the Relief Road closure and the extra pothole money have reached them.",
-    status: "closed", locals: LOCALS, openedBy: "Demo officer", openedOn: "2026-10-03", closedOn: "2026-10-24", printedTo: 450,
+    status: "closed", locals: LOCALS, openedBy: "Demo officer", openedOn: "2026-10-03", closedOn: "2026-10-24", printedTo: 450, self: "NBDEMQLINKAB", selfOn: true,
   });
   const winter = survey({ id: "20261028090000000-de000002", title: "Winter roads survey", purpose: "Whether people have noticed more pothole repairs, and how much pavements and flooding matter to them." });
-  const pages = { [autumn.id]: surveyPage(autumn, rows, census, true, true, 4), [winter.id]: surveyPage(winter, [], census, true, true, 4) };
+  const pages = { [autumn.id]: surveyPage(autumn, rows, census, true, true, 4, { NB1: 31, NB2: 26, NB3: 17, NB4: 11, NB5: 6, NB6: 3 }), [winter.id]: surveyPage(winter, [], census, true, true, 4) };
   const street = summarise(autumn, rows, census);
   const counted = new Map<string, number>();
   for (const [topic] of COMMENTS) counted.set(topic, (counted.get(topic) || 0) + 1);
@@ -311,7 +320,7 @@ export function buildPack() {
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
     coverage: demoCoverage(census), enquiries, works: demoWorks(street?.satisfied ?? null), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
-    attention: comparison,
+    attention: comparison, qr: { url: "", rows: qrCode("Northbridge is a demonstration, so this code leads nowhere.") },
     ...demoBriefing(street?.satisfied ?? null, street?.responses ?? 0, today),
   };
 }
