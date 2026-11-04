@@ -53,15 +53,17 @@ ok(/being trialled/.test(text(d.querySelector(".main"))), "a member outside the 
 
 // ---- a pilot's summary
 dom = await open(lead); d = dom.window.document; let w = dom.window;
-await until(() => [...d.querySelectorAll("h2")].some((x) => x.textContent === "Mood reading"), "the summary");
+await until(() => d.querySelector(".stage"), "the map");
+ok(d.querySelector("h1").textContent === "West Sussex: the map of mood", "a lead goes straight to their authority's map");
+w.location.hash = "#dash/E10000032";
+await until(() => [...d.querySelectorAll("h2")].some((x) => x.textContent === "Mood reading"), "the dashboard");
 let page = text(d.querySelector(".main"));
-ok(d.querySelector("h1").textContent === "West Sussex: how people feel about their roads", "a lead goes straight to their authority");
-ok(/Condition of highways/.test(page) && /24 \/ 100/.test(page) && /Amber/.test(page), "the summary leads with survey results and the DfT rating");
+ok(/Condition of highways/.test(page) && /24 \/ 100/.test(page) && /Amber/.test(page), "the dashboard shows survey results and the DfT rating");
 ok(/This needs assessed press and media pieces/.test(page), "and says what the comparison is waiting for");
 ok(/Not enough authorities have results yet/.test(page), "and no FHRG figure appears yet");
 ok(!d.querySelector(".demo-banner"), "there's no demonstration banner for a member");
-ok([...d.querySelectorAll(".nav button")].map((b) => b.textContent).join() === "Summary,What's being said,Attention and concern,Impact notes,Councillor briefings,Street surveys,Evidence,Sources & method", "the rail lists the sections");
-ok(d.querySelector(".brand-logo img") && /West Sussex County Council/.test(text(d.querySelector(".brand-sub"))), "with the FHRG logo and the member's authority");
+ok([...d.querySelectorAll(".tabs button")].map((b) => b.textContent).join() === "1Map,2Surveys,3Dashboard,4High-impact issues,5Campaign calendar,6Briefings,Sources,Set-up", "the tabs list the sections, numbered in the order of the work");
+ok(d.querySelector(".brand-logo img") && /West Sussex/.test(text(d.querySelector(".brand-sub"))), "with the FHRG logo and the member's authority");
 
 // write the first reading
 w.eval("App.pollMs = 20");
@@ -88,8 +90,10 @@ ok([...d.querySelectorAll("summary")].some((x) => /Add a survey result/.test(x.t
 
 // ---- what's being said, and the comparison that's still to come
 w.location.hash = "#said/E10000032";
+await until(() => /Assessed by your officers/.test(text(d.querySelector(".main"))), "the Sources page");
+w.location.hash = "#said/E10000032/latest";
 await until(() => /Nothing assessed yet/.test(text(d.querySelector(".main"))), "the What's being said page");
-ok(d.querySelector('.nav button[aria-current="page"]').textContent === "What's being said", "the rail shows where you are");
+ok(d.querySelector('.tabs button[aria-current="page"]').textContent === "Sources", "the tabs show where you are");
 w.location.hash = "#attention/E10000032";
 await until(() => /It needs assessed press and media pieces/.test(text(d.querySelector(".main"))), "the comparison page");
 w.location.hash = "#about/E10000032";
@@ -106,7 +110,7 @@ await until(() => d.querySelector("textarea[placeholder]") && [...d.querySelecto
 ok(![...d.querySelectorAll("select option")].some((o) => /organisational charts/.test(o.textContent)), "the announcement list leaves out what isn't about roads");
 ok(/No notes yet/.test(text(d.querySelector(".main"))), "no notes so far");
 ok(/doesn't use the web when you paste text/.test(text(d.querySelector(".main"))), "the page explains that pasted text stays away from the web");
-d.querySelector("select").value = "https://www.gov.uk/government/news/record";
+d.querySelector(".main select").value = "https://www.gov.uk/government/news/record";
 d.querySelector(".card form").dispatchEvent(new w.Event("submit", { cancelable: true, bubbles: true }));
 await until(() => [...d.querySelectorAll("h2")].some((x) => x.textContent === "Likely impacts here"), "the finished note");
 const nt = text(d.querySelector(".main"));
@@ -126,10 +130,10 @@ ok(d.querySelector(".note-row a").getAttribute("href").startsWith("#note/E100000
 
 // ---- several authorities
 dom = await open(boss); d = dom.window.document;
-await until(() => d.querySelector('select[aria-label="Open an authority"]'), "the side rail");
+await until(() => d.querySelector(".picker select"), "the authority pull-down");
 ok(/All authorities: the position across the FHRG/.test(text(d.querySelector(".main"))), "a site administrator starts with all authorities");
-ok(d.querySelectorAll('select[aria-label="Open an authority"] option').length === 4, "and can open any of them");
-ok(/of \$40/.test(text(d.querySelector(".rail"))), "and sees the month's spend");
+ok(d.querySelectorAll(".picker select option").length === 4, "and can open any of them");
+ok(/of \$40/.test(text(d.querySelector(".top"))), "and sees the month's spend");
 
 console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
 process.exit(failures ? 1 : 0);

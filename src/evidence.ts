@@ -7,7 +7,7 @@ import { loadFigures, type Figures } from "./library";
 import type { Pilot, SurveyResult } from "./pilots";
 import { loadSignals, type Signals } from "./signals";
 import { savePretty, storageJson } from "./storage";
-import { streetSummaries, type StreetSummary } from "./surveys";
+import { interviewedOnly, streetSummaries, type StreetSummary } from "./surveys";
 import { FriendlyError, cached, cleanLong, cleanText, forget, withLock } from "./util";
 
 const FIGURES_MS = 6 * 60 * 60 * 1000;
@@ -68,7 +68,7 @@ export async function loadEvidence(c: Config, p: Pilot, facts: Facts): Promise<E
   // read fresh each time, because answers arrive through the day
   const streets = await streetSummaries(c, p.code).catch((e) => { console.log(`[warn] street surveys: ${(e as Error).message}`); return [] as StreetSummary[]; });
   const { said, contacts, publicJobs } = await ownSignals(c, p).catch((e) => { console.log(`[warn] own signals: ${(e as Error).message}`); return { said: [] as Said[], contacts: [] as Contacts[], publicJobs: 0 }; });
-  return { figures, signals, surveys, streets, said, contacts, publicJobs, gaps: findGaps(p, surveys, signals, figures, streets.length > 0, contacts.length > 0), gathered: new Date().toISOString() };
+  return { figures, signals, surveys, streets, said, contacts, publicJobs, gaps: findGaps(p, surveys, signals, figures, interviewedOnly(streets).length > 0, contacts.length > 0), gathered: new Date().toISOString() };
 }
 
 // Enough to count as a kind of signal. One piece, or a few contacts, can't be half of a change in mood. A starting judgement
@@ -82,7 +82,7 @@ export function kindsHeld(e: Evidence): string[] {
   const s = e.signals, pieces = (e.said ?? []).reduce((sum, x) => sum + x.pieces, 0), contacts = (e.contacts ?? []).reduce((sum, x) => sum + x.enquiries + x.complaints, 0);
   return [
     ...(e.surveys.length ? ["survey"] : []),
-    ...(e.streets?.some((x) => x.current) ? ["street survey"] : []),
+    ...(interviewedOnly(e.streets ?? []).some((x) => x.current) ? ["street survey"] : []),
     ...((s.fixMyStreet.ok && s.fixMyStreet.data?.reports) || contacts >= MIN_CONTACTS || (e.publicJobs ?? 0) >= MIN_CONTACTS ? ["actions"] : []),
     ...((s.petitions.ok && s.petitions.data?.some((p) => p.localShare > p.fairShare)) || (s.questions.ok && s.questions.data?.length) ? ["representatives"] : []),
     ...(pieces >= MIN_PIECES ? ["open talk"] : []),
@@ -97,7 +97,8 @@ export function briefing(p: Pilot, e: Evidence, facts: Facts): Record<string, un
     dft_rating: p.rating, reporting_route: p.reportingRoute,
     constituencies_shared_with_others: p.constituencies.filter((x) => x.shared).map((x) => `${x.name}: ${x.shared}`),
     survey_results: e.surveys, survey_note: p.surveyNote,
-    ...(e.streets.length ? { street_surveys: e.streets.map(({ id: _id, ...rest }) => rest) } : {}),
+    // a survey people only chose to answer isn't evidence for a reading or a note, so it doesn't reach them
+    ...(interviewedOnly(e.streets).length ? { street_surveys: interviewedOnly(e.streets).map(({ id: _id, ...rest }) => rest) } : {}),
     published_figures: e.figures,
     public_signals: { fix_my_street: e.signals.fixMyStreet.data, petitions: e.signals.petitions.data, mps_written_questions: e.signals.questions.data },
     ...(e.said?.length ? { assessed_press_and_media_last_four_weeks: e.said } : {}),

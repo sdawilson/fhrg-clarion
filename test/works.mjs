@@ -102,6 +102,20 @@ ok(asked.length === 0, "nothing is read until it's turned on");
 ok((await api("/api/works/on", { code: WSX }, lead)).status === 200, "the authority's lead can");
 await until(() => asked.some((x) => x.url.endsWith("era5.json")), "the records to be read");
 await until(async () => (await api("/api/works/get", { code: WSX }, member)).figures, "the figures");
+// a survey with no interviewers isn't marked on the chart as a survey
+{
+  const made = (await api("/api/survey/new", { code: WSX, title: "Marks", purpose: "x" }, lead)).survey;
+  await api("/api/survey/status", { code: WSX, id: made.id, status: "open" }, lead);
+  const surveyFile = files("").find((k) => k.endsWith(`/surveys/${made.id}.json`));
+  putText(surveyFile, JSON.stringify({ ...JSON.parse(getText(surveyFile)), openedOn: dayAgo(21) }));
+  const rows = (via) => Array.from({ length: 35 }, (_, i) => ({ n: i + 1, form: `F${i + 1}`, via, where: via === "self" ? "here" : undefined, site: "", at: new Date().toISOString(), secs: 100, answers: { c1: "Fairly satisfied" }, topics: {}, clean: {}, checked: {} }));
+  const answers = surveyFile.replace("/surveys/", "/survey-answers/");
+  putText(answers, JSON.stringify(rows("self")));
+  ok(!(await api("/api/works/get", { code: WSX }, member)).figures.marks.some((m) => /^Survey/.test(m.label)), "a survey with no interviewers isn't marked on the chart");
+  putText(answers, JSON.stringify(rows("tablet")));
+  ok((await api("/api/works/get", { code: WSX }, member)).figures.marks.some((m) => /^Survey: /.test(m.label)), "one with interviewers is");
+  putText(answers, "[]");
+}
 r = await api("/api/works/get", { code: WSX }, member);
 ok(asked.every((x) => x.url.startsWith(`${FOLDER}30/`) && x.key === "toolkit-read-only" && x.method === "GET"), "only that authority's folder is read, with the read-only password, and nothing is changed");
 ok(asked.every((x) => x.redirect === "error"), "a redirect is refused, so the password can't be handed on");

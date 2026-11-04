@@ -23,6 +23,8 @@ import type { Config } from "./config";
 import { newJobId } from "./jobs";
 import { refQuery } from "./library";
 import type { Pilot } from "./pilots";
+import type { Where } from "./postcodes";
+import { DEFAULT_SERVICE, serviceId } from "./setup";
 import { storageDelete, storageJson, storageList, storagePut, savePretty } from "./storage";
 import { FriendlyError, cached, cleanLong, cleanText, londonToday, pickEnum, round, withLock } from "./util";
 
@@ -30,6 +32,9 @@ export const MAX_LOCAL = 5;
 export const MIN_GROUP = 30;
 export const WEIGHT_CAP = 5;
 const MAX_ANSWERS = 5000;
+const MAX_SELF = 3000; // replies by link. A link can be passed around, so these have their own limit, and interviewers keep theirs
+const MAX_SELF_HELD = 4000; // and including any left out, which an officer can delete
+const MIN_AREA = 10; // fewer replies from a postcode area than this are pooled
 const MAX_SITES = 40;
 const DEFAULT_TARGET = 120; // four sites of 30
 const DEFAULT_PER_SITE = 30;
@@ -38,7 +43,7 @@ const QUICK_SECS = 30;
 const CURRENT_DAYS = 365; // an older survey is still evidence, but it no longer counts towards a change in mood
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type Question = { id: string; text: string; kind: "choice" | "text"; options: string[]; part: "core" | "local" | "about" };
+export type Question = { id: string; text: string; kind: "choice" | "text"; options: string[]; part: "core" | "local" | "about"; fn?: string; topic?: string }; // fn and topic: what a local question covers, or the whole service
 
 // The fixed core, so that results compare across time and authorities
 export const CORE: Question[] = [
@@ -66,18 +71,24 @@ export const ACCESS_CHECKS = [
 ];
 
 // A site picked on the map also holds the share of adults it stands for and its age targets (16 to 34, 35 to 64, 65+)
-export type Site = { name: string; when: string; interviewers: string; share?: number; ages?: number[]; lat?: number; lng?: number };
+export type Site = { name: string; when: string; interviewers: string; share?: number; ages?: number[]; lat?: number; lng?: number; spotLat?: number; spotLng?: number; where?: string };
+// What a survey tells people. Each message can be tied to a topic, and can also ask "Did you know?" before it's given
+export const HOW_TOLD = ["Read out by the interviewer", "On the tablet after the last question", "Printed on the form", "On the page after replying by link"];
+export const MAX_TOLD = 3;
+const TOLD_CHARS = 240;
+export type Message = { id: string; topic: string; text: string; how: string[]; aware: boolean };
 export type Plan = {
   target: number; sites: Site[]; checks: string[];
   sure?: number; margin?: number; by?: "sites" | "whole" | "areas"; perSite?: number; perHour?: number;
 };
 export type Survey = {
   id: string; code: string; title: string; purpose: string; status: "draft" | "open" | "closed"; access: string; collector: string;
-  locals: Question[]; plan: Plan;
+  locals: Question[]; plan: Plan; service?: string; tell?: Message[];
   created: string; by: string; updated: string; openedBy: string; openedOn: string; closedOn: string; printedTo: number;
+  self?: string; selfOn?: boolean; // the link for people to fill it in themselves, which is a different code from interviewers'
 };
 export type Answer = {
-  n: number; form: string; via: "tablet" | "paper" | "scan" | "csv"; site: string; at: string; secs: number | null; client?: string;
+  n: number; form: string; via: "tablet" | "paper" | "scan" | "csv" | "self"; where?: Where; dayLeft?: boolean; site: string; at: string; secs: number | null; client?: string;
   answers: Record<string, string>; topics: Record<string, string>; clean: Record<string, boolean>; checked: Record<string, boolean>; excluded?: boolean;
 };
 
@@ -86,7 +97,9 @@ const answersPath = (c: Config, code: string, id: string) => `${c.root}authoriti
 export const sortPath = (c: Config, code: string, id: string) => `${c.root}authorities/${code}/survey-sorts/${id}.json`;
 const accessPath = (c: Config, access: string) => `${c.root}system/survey-codes/${access}.json`;
 
-export const allQuestions = (s: Pick<Survey, "locals">): Question[] => [...CORE, ...s.locals, ...ABOUT];
+// "Did you know?" comes before the message is given, so it measures what people already knew. Its answers aren't a satisfaction scale, so they never reach mood
+const awareness = (s: Partial<Pick<Survey, "tell">>): Question[] => (s.tell ?? []).filter((m) => m.aware).map((m) => ({ id: `k${m.id}`, part: "local", kind: "choice", text: `Did you know? ${m.text}`, options: ["Yes", "No"], ...(m.topic ? { topic: m.topic } : {}) }));
+export const allQuestions = (s: Pick<Survey, "locals"> & Partial<Pick<Survey, "tell">>): Question[] => [...CORE, ...s.locals, ...awareness(s), ...ABOUT];
 
 export async function loadSurvey(c: Config, code: string, id: string): Promise<Survey | null> {
   return await storageJson<Survey | null>(c, surveyPath(c, code, id), null);
@@ -107,7 +120,7 @@ export async function createSurvey(c: Config, me: Member, p: Pilot, b: Record<st
   const now = new Date().toISOString();
   const s: Survey = {
     id: newJobId(), code: p.code, title, purpose: cleanLong(b.purpose, 2000), status: "draft", access: "", collector: `${p.name} ${p.kind === "County council" ? "County Council" : "Council"}`,
-    locals: [], plan: { target: DEFAULT_TARGET, sites: [], checks: [], sure: 90, margin: 10, by: "sites", perSite: DEFAULT_PER_SITE, perHour: DEFAULT_PER_HOUR }, created: now, by: me.name, updated: now, openedBy: "", openedOn: "", closedOn: "", printedTo: 0,
+    service: serviceId(b.service), locals: [], plan: { target: DEFAULT_TARGET, sites: [], checks: [], sure: 90, margin: 10, by: "sites", perSite: DEFAULT_PER_SITE, perHour: DEFAULT_PER_HOUR }, created: now, by: me.name, updated: now, openedBy: "", openedOn: "", closedOn: "", printedTo: 0,
   };
   await savePretty(c, surveyPath(c, p.code, s.id), s);
   return s;
@@ -122,7 +135,20 @@ export function readLocals(v: unknown): Question[] {
     const kind = q?.kind === "text" ? "text" : "choice";
     const options = kind === "text" ? [] : (Array.isArray(q?.options) ? q.options : []).map((o: unknown) => cleanText(o, 80)).filter(Boolean).slice(0, 8);
     if (kind === "choice" && options.length < 2) throw new FriendlyError(`Local question ${i + 1} needs at least two answers to choose from.`);
-    return { id: `l${i + 1}`, part: "local" as const, kind, text, options };
+    const fn = cleanText(q?.fn, 40), topic = cleanText(q?.topic, 80);
+    return { id: `l${i + 1}`, part: "local" as const, kind, text, options, ...(fn ? { fn } : {}), ...(topic ? { topic } : {}) };
+  });
+}
+
+export function readTell(v: unknown): Message[] {
+  const list = Array.isArray(v) ? v : [];
+  if (list.length > MAX_TOLD) throw new FriendlyError(`A survey can carry up to ${MAX_TOLD} messages.`);
+  return list.map((m: any, i: number) => {
+    if (String(m?.text ?? "").trim().length > TOLD_CHARS) throw new FriendlyError(`Message ${i + 1} is too long: keep it to ${TOLD_CHARS} letters, so people read all of it.`);
+    const text = cleanText(m?.text, TOLD_CHARS);
+    if (!text) throw new FriendlyError(`Message ${i + 1} has no wording.`);
+    const how = HOW_TOLD.filter((x) => Array.isArray(m?.how) && m.how.includes(x));
+    return { id: String(i + 1), topic: cleanText(m?.topic, 80), text, how: how.length ? how : [HOW_TOLD[0]], aware: m?.aware === true };
   });
 }
 
@@ -135,9 +161,12 @@ function readSite(x: any): Site {
   const site: Site = { name: cleanText(x?.name, 80), when: cleanText(x?.when, 80), interviewers: cleanText(x?.interviewers, 80) };
   const share = inRange(x?.share, 0, 100), lat = inRange(x?.lat, 49, 61.5), lng = inRange(x?.lng, -9, 2.5);
   const ages = Array.isArray(x?.ages) ? x.ages.map((n: unknown) => inRange(n, 0, MAX_ANSWERS)).filter((n: number | undefined) => Number.isInteger(n)) : [];
+  const spotLat = inRange(x?.spotLat, 49, 61.5), spotLng = inRange(x?.spotLng, -9, 2.5), where = cleanText(x?.where, 120);
   if (share !== undefined) site.share = share;
   if (ages.length === 3) site.ages = ages;
   if (lat !== undefined && lng !== undefined) { site.lat = lat; site.lng = lng; }
+  if (spotLat !== undefined && spotLng !== undefined) { site.spotLat = spotLat; site.spotLng = spotLng; }
+  if (where) site.where = where;
   return site;
 }
 
@@ -169,7 +198,8 @@ export async function saveSurvey(c: Config, s: Survey, b: Record<string, any>): 
       if (typeof b.title === "string") now.title = cleanText(b.title, 120) || now.title;
       if (typeof b.purpose === "string") now.purpose = cleanLong(b.purpose, 2000);
       if (b.locals !== undefined) now.locals = readLocals(b.locals);
-    } else if (b.locals !== undefined || typeof b.title === "string") throw new FriendlyError("This survey is open or closed, so its questions can't change.");
+      if (b.tell !== undefined) now.tell = readTell(b.tell);
+    } else if (b.locals !== undefined || b.tell !== undefined || typeof b.title === "string") throw new FriendlyError("This survey is open or closed, so its questions and messages can't change.");
     now.updated = new Date().toISOString();
     await savePretty(c, surveyPath(c, s.code, s.id), now);
     return now;
@@ -183,6 +213,12 @@ function newAccess(): string {
   return [...bytes].map((b) => ACCESS_LETTERS[b % ACCESS_LETTERS.length]).join("");
 }
 export const validAccess = (v: unknown): v is string => typeof v === "string" && /^[A-HJKMNP-Z2-9]{8}$/.test(v);
+// Nobody reads this one aloud, and it goes much further, so it's long enough not to be guessed
+function newSelf(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return [...bytes].map((b) => ACCESS_LETTERS[b % ACCESS_LETTERS.length]).join("");
+}
+export const validSelf = (v: unknown): v is string => typeof v === "string" && /^[A-HJKMNP-Z2-9]{12}$/.test(v);
 
 export async function openSurvey(c: Config, me: Member, s: Survey): Promise<Survey> {
   return await withLock(surveyPath(c, s.code, s.id), async () => {
@@ -216,9 +252,43 @@ export async function backToDraft(c: Config, s: Survey): Promise<Survey> {
     if ((await loadAnswers(c, s.code, s.id)).length) throw new FriendlyError("This survey has answers, so it can't go back to a draft.");
     const now = (await loadSurvey(c, s.code, s.id)) as Survey;
     if (now.access) await storageDelete(c, accessPath(c, now.access));
-    now.status = "draft"; now.access = ""; now.updated = new Date().toISOString();
+    if (now.self) await storageDelete(c, accessPath(c, now.self));
+    now.status = "draft"; now.access = ""; now.self = ""; now.selfOn = false; now.updated = new Date().toISOString();
     await savePretty(c, surveyPath(c, s.code, s.id), now);
     return now;
+  });
+}
+
+// The link keeps its code when it's turned off, so one that's already been sent works again if it's turned back on
+export async function setSelf(c: Config, s: Survey, on: boolean): Promise<Survey> {
+  return await withLock(surveyPath(c, s.code, s.id), async () => {
+    const now = (await loadSurvey(c, s.code, s.id)) as Survey;
+    if (now.status === "draft") throw new FriendlyError("Open the survey before turning on its link.");
+    if (on && !now.self) {
+      now.self = newSelf();
+      await savePretty(c, accessPath(c, now.self), { code: now.code, id: now.id });
+    }
+    now.selfOn = on; // `updated` stays as it is, because it decides how long a survey counts as current
+    await savePretty(c, surveyPath(c, s.code, s.id), now);
+    return now;
+  });
+}
+
+// A flood arrives on one or two days, so that's the handle for leaving it out. Days are British ones. Only what a day's
+// action left out can be put back or deleted with it, so a form an officer left out by hand stays as it is.
+const britishDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" });
+const dayOf = (iso: string) => britishDay.format(new Date(iso));
+export async function changeDay(c: Config, s: Survey, day: unknown, action: unknown): Promise<void> {
+  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !["leave", "back", "delete"].includes(String(action))) throw new FriendlyError("That isn't a day.");
+  await changeAnswers(c, s, (all) => {
+    const live = new Set(all.filter((a) => !a.excluded).map((a) => a.form));
+    for (let i = all.length - 1; i >= 0; i--) {
+      const a = all[i];
+      if (a.via !== "self" || dayOf(a.at) !== day) continue;
+      if (action === "leave" && !a.excluded) { a.excluded = true; a.dayLeft = true; }
+      if (action === "back" && a.dayLeft && !live.has(a.form)) { a.excluded = false; delete a.dayLeft; live.add(a.form); }
+      if (action === "delete" && a.dayLeft) all.splice(i, 1);
+    }
   });
 }
 
@@ -226,9 +296,13 @@ export async function surveyByAccess(c: Config, access: string): Promise<Survey 
   const where = await storageJson<{ code?: string; id?: string } | null>(c, accessPath(c, access), null);
   return where?.code && where.id ? await loadSurvey(c, where.code, where.id) : null;
 }
+export const surveyBySelf = surveyByAccess; // the two kinds of code are different lengths, so one can't stand for the other
 
 // All that a tablet is given: never the officer's purpose, the authority's plan or anyone's answers
-export const publicSurvey = (s: Survey) => ({ title: s.title, collector: s.collector, sites: s.plan.sites.map((x) => x.name), questions: allQuestions(s) });
+const asked = (s: Survey) => allQuestions(s).map(({ id, text, kind, options, part }) => ({ id, text, kind, options, part }));
+const toldBy = (s: Survey, how: string) => (s.tell ?? []).filter((m) => m.how.includes(how)).map((m) => m.text);
+export const publicSurvey = (s: Survey) => ({ title: s.title, collector: s.collector, sites: s.plan.sites.map((x) => x.name), questions: asked(s), readOut: toldBy(s, HOW_TOLD[0]), told: toldBy(s, HOW_TOLD[1]) });
+export const publicSelf = (s: Survey) => ({ title: s.title, collector: s.collector, questions: asked(s), told: toldBy(s, HOW_TOLD[3]) });
 
 // ----- answers
 
@@ -252,7 +326,7 @@ export function readAnswers(s: Pick<Survey, "locals">, raw: unknown): { answers:
 // Form 0012, form 12 and "Form 12" are the same form
 export const formNumber = (v: unknown) => cleanText(v, 30).replace(/^(?:form|no\.?|number)\s*/i, "").replace(/^0+(?=\d)/, "").slice(0, 20).toUpperCase();
 
-export type Incoming = { form?: unknown; site?: unknown; answers?: unknown; secs?: unknown; client?: unknown };
+export type Incoming = { form?: unknown; site?: unknown; answers?: unknown; secs?: unknown; client?: unknown; where?: Where };
 
 // One writer at a time, so forms arriving together all count. A tablet can safely send the same form twice:
 // each carries its own id, and one that has already arrived is skipped. `done` lists the ids Clarion has dealt
@@ -264,21 +338,26 @@ export async function addAnswers(c: Config, s: Survey, items: Incoming[], via: A
     // a form left out can be entered again, which is how a mistake on one gets put right
     const forms = new Set(all.filter((a) => !a.excluded).map((a) => a.form)), clients = new Set(all.map((a) => a.client).filter(Boolean));
     let next = all.reduce((most, a) => Math.max(most, a.n), 0) + 1, added = 0, skipped = 0;
+    let linked = all.filter((a) => a.via === "self").length, linkedInUse = all.filter((a) => a.via === "self" && !a.excluded).length;
     const problems: string[] = [], done: string[] = [];
     for (const item of items) {
       const client = cleanText(item?.client, 60);
       if (client && clients.has(client)) { skipped++; done.push(client); continue; }
-      if (all.length >= MAX_ANSWERS) { problems.push(`This survey has reached its limit of ${MAX_ANSWERS} answers.`); break; }
-      while (via === "tablet" && forms.has(`T${next}`)) next++;
-      const form = via === "tablet" ? `T${next}` : formNumber(item?.form); // a tablet can't take a paper form's number
+      if (via !== "self" && all.length - linked >= MAX_ANSWERS) { problems.push(`This survey has reached its limit of ${MAX_ANSWERS} answers.`); break; }
+      if (via === "self" && (linkedInUse >= MAX_SELF || linked >= MAX_SELF_HELD)) { problems.push("This survey has all the replies it can take."); break; }
+      const prefix = via === "tablet" ? "T" : via === "self" ? "R" : ""; // neither can take a paper form's number
+      while (prefix && forms.has(`${prefix}${next}`)) next++;
+      const form = prefix ? `${prefix}${next}` : formNumber(item?.form);
       if (!form) { problems.push("A form has no number."); continue; }
       if (forms.has(form)) { problems.push(`Form ${form} has already been entered.`); continue; }
       const read = readAnswers(s, item?.answers);
+      if (item?.where === "elsewhere") for (const id of textQuestionIds(s)) delete read.answers[id]; // nobody would ever check these for names, so they aren't kept
       problems.push(...read.problems.map((x) => `Form ${form}: ${x}`));
       if (!Object.keys(read.answers).length) { problems.push(`Form ${form} has no answers.`); if (client) done.push(client); continue; }
       const secs = Number(item?.secs);
-      all.push({ n: next++, form, via, site: cleanText(item?.site, 80), at: new Date().toISOString(), secs: item?.secs !== undefined && item.secs !== null && Number.isFinite(secs) && secs >= 0 ? Math.round(secs) : null, ...(client ? { client } : {}), answers: read.answers, topics: {}, clean: {}, checked: {} });
+      all.push({ n: next++, form, via, ...(via === "self" ? { where: item?.where ?? "unknown" } : {}), site: cleanText(item?.site, 80), at: new Date().toISOString(), secs: item?.secs !== undefined && item.secs !== null && Number.isFinite(secs) && secs >= 0 ? Math.round(secs) : null, ...(client ? { client } : {}), answers: read.answers, topics: {}, clean: {}, checked: {} });
       forms.add(form);
+      if (via === "self") { linked++; linkedInUse++; }
       if (client) { clients.add(client); done.push(client); }
       added++;
     }
@@ -341,6 +420,25 @@ export function readCsv(text: string): Incoming[] {
     const at = (name: string) => r[names.indexOf(name)] ?? "";
     return { form: at("form"), site: names.includes("site") ? at("site") : "", answers: Object.fromEntries(names.map((name, i) => [name, r[i]]).filter(([name]) => name !== "form" && name !== "site")) };
   });
+}
+
+// ----- postcode areas, from self-completed replies
+
+// Counts only, kept apart from the answers, so nobody's area can be matched to what they said
+export type AreaTally = Record<string, number>;
+const areasPath = (c: Config, code: string, id: string) => `${c.root}authorities/${code}/survey-areas/${id}.json`;
+export const loadAreas = (c: Config, code: string, id: string) => storageJson<AreaTally>(c, areasPath(c, code, id), {});
+export async function countArea(c: Config, s: Survey, outcode: string): Promise<void> {
+  const path = areasPath(c, s.code, s.id);
+  await withLock(path, async () => {
+    const tally = await loadAreas(c, s.code, s.id);
+    tally[outcode] = (tally[outcode] || 0) + 1;
+    await storagePut(c, path, JSON.stringify(Object.fromEntries(Object.entries(tally).sort(([a], [b]) => a.localeCompare(b))))); // in no order that follows the replies
+  });
+}
+export function areaRows(tally: AreaTally): { named: { area: string; count: number }[]; pooled: number } {
+  const all = Object.entries(tally).map(([area, count]) => ({ area, count }));
+  return { named: all.filter((x) => x.count >= MIN_AREA).sort((a, b) => b.count - a.count || a.area.localeCompare(b.area)), pooled: all.filter((x) => x.count < MIN_AREA).reduce((sum, x) => sum + x.count, 0) };
 }
 
 // ----- targets and weights, from Census 2021
@@ -440,6 +538,14 @@ export const likelyRange = (pct: number, n: number) => (n ? round(1.96 * Math.sq
 // Uneven weights mean a sample tells you less than its size suggests
 const effectiveSize = (w: number[]) => { const sum = w.reduce((a, b) => a + b, 0), squares = w.reduce((a, b) => a + b * b, 0); return squares ? (sum * sum) / squares : 0; };
 
+// People who filled it in themselves chose to reply, so they're counted apart from interviewers' replies. Sites don't
+// apply to them, and replies from outside the authority are counted but aren't in the figures.
+const fromSelf = (r: Answer) => r.via === "self";
+const counted = (r: Answer) => fromSelf(r) && r.where !== "elsewhere";
+const noSites = <T extends Pick<Survey, "plan">>(s: T): T => ({ ...s, plan: { ...s.plan, sites: [] } });
+/** Surveys with interviewers. A survey people only chose to answer isn't a street survey, and a link is too easily moved to count as one. */
+export const interviewedOnly = (list: StreetSummary[]) => list.filter((x) => !x.selfOnly);
+
 export function surveyResults(s: Pick<Survey, "locals" | "plan">, rows: Answer[], census: Census | null): Results {
   const used = rows.filter((r) => !r.excluded);
   const { weights, weighted, bySite } = weightsFor(used, census, s.plan.sites);
@@ -515,10 +621,10 @@ export const templateCsv = (s: Pick<Survey, "locals">) => `${csvLine(["form", "s
 // authority's own members.
 export function answersCsv(s: Pick<Survey, "locals"> & Partial<Pick<Survey, "plan">>, rows: Answer[], census: Census | null, withComments: boolean): string {
   const used = rows.filter((r) => !r.excluded);
-  const { weights } = weightsFor(used, census, s.plan?.sites);
+  const weights = new Map([...weightsFor(used.filter((r) => !fromSelf(r)), census, s.plan?.sites).weights, ...weightsFor(used.filter(counted), census).weights]);
   const qs = allQuestions(s);
-  const line = (r: Answer) => csvLine([r.form, r.site, r.via, round(weights.get(r.n) ?? 1, 3), ...qs.map((q) => (q.kind === "text" && (!withComments || !r.clean?.[q.id]) ? "" : r.answers[q.id] ?? ""))]);
-  return `${[csvLine(["form", "site", "entered_by", "weight", ...qs.map((q) => q.id)]), ...used.map(line)].join("\n")}\n`;
+  const line = (r: Answer) => csvLine([r.form, r.site, r.via, round(weights.get(r.n) ?? 1, 3), r.where ?? "", ...qs.map((q) => (q.kind === "text" && (!withComments || !r.clean?.[q.id]) ? "" : r.answers[q.id] ?? ""))]);
+  return `${[csvLine(["form", "site", "entered_by", "weight", "lives", ...qs.map((q) => q.id)]), ...used.map(line)].join("\n")}\n`;
 }
 
 // ----- written comments
@@ -557,7 +663,7 @@ export function topicCounts(all: Comment[]): { topic: string; count: number }[] 
 
 export type StreetSummary = {
   title: string; id: string; status: string; ran: string; current: boolean; responses: number; weighted: boolean; satisfied: number | null; dissatisfied: number | null; better: number | null; worse: number | null;
-  blameCouncil: number | null; topics: { topic: string; count: number }[]; note: string;
+  blameCouncil: number | null; topics: { topic: string; count: number }[]; note: string; selfOnly: boolean;
 };
 
 const pctOf = (r: Results, id: string, labels: string[]) => {
@@ -568,20 +674,54 @@ const pctOf = (r: Results, id: string, labels: string[]) => {
 // A survey with enough answers to the main question to report. Figures and topic counts only: residents' words
 // stay on the survey's own page.
 export function summarise(s: Survey, all: Answer[], census: Census | null): StreetSummary | null {
-  const rows = all.filter((r) => !r.excluded);
-  const results = surveyResults(s, rows, census);
+  const kept = all.filter((r) => !r.excluded), interviewed = kept.filter((r) => !fromSelf(r)), selfOnly = !interviewed.length;
+  const rows = selfOnly ? kept.filter(counted) : interviewed;
+  const results = surveyResults(selfOnly ? noSites(s) : s, rows, census);
   const satisfied = pctOf(results, "c1", [...SATISFIED]);
   if (satisfied === null) return null;
   return {
     title: s.title, id: s.id, status: s.status, ran: s.openedOn, current: Date.now() - Date.parse(s.updated) < CURRENT_DAYS * DAY_MS, responses: results.used, weighted: results.weighted,
     satisfied, dissatisfied: pctOf(results, "c1", [...DISSATISFIED]), better: pctOf(results, "c2", ["Better"]), worse: pctOf(results, "c2", ["Worse"]), blameCouncil: pctOf(results, "c4", ["The local council"]),
     topics: topicCounts(cleanComments(s, rows)),
-    note: "A street sample, not a random one, so this is indicative only.",
+    note: selfOnly ? "People who chose to reply, not a random sample, so this is indicative only, and weaker than a street sample." : "A street sample, not a random one, so this is indicative only.",
+    selfOnly,
   };
 }
 
-export async function streetSummaries(c: Config, code: string): Promise<StreetSummary[]> {
+// The same, with the figures the map needs. Figures only: questions by what they cover, groups of 30 or more, and how
+// many chose to reply by link, which is shown beside the survey and never added to it.
+export type StreetPoint = StreetSummary & {
+  service: string; questions: { id: string; text: string; fn: string; topic: string; sat: number; dis: number }[];
+  groups: { group: string; label: string; n: number; sat: number | null; dis: number | null }[]; byLink: { n: number; sat: number | null };
+};
+export function pointOf(s: Survey, all: Answer[], census: Census | null): StreetPoint | null {
+  const summary = summarise(s, all, census);
+  if (!summary) return null;
+  const kept = all.filter((r) => !r.excluded), replied = kept.filter(fromSelf), results = surveyResults(summary.selfOnly ? noSites(s) : s, summary.selfOnly ? kept.filter(counted) : kept.filter((r) => !fromSelf(r)), census);
+  const questions = [...CORE.slice(0, 1), ...s.locals].flatMap((q) => {
+    const r = results.questions.find((x) => x.id === q.id);
+    if (!r || r.held) return [];
+    const sat = r.options.filter((o) => /satisfied/i.test(o.label) && !/dissatisfied|neither/i.test(o.label)), dis = r.options.filter((o) => /dissatisfied/i.test(o.label) && !/neither/i.test(o.label));
+    if (!sat.length || !dis.length) return [];
+    return [{ id: q.id, text: q.text, fn: q.fn ?? "", topic: q.topic ?? "", sat: Math.round(sat.reduce((a, o) => a + o.pct, 0)), dis: Math.round(dis.reduce((a, o) => a + o.pct, 0)) }];
+  });
+  const here = kept.filter(counted), linkAll = here.filter((r) => r.answers.c1), linkSat = linkAll.filter((r) => SATISFIED.has(r.answers.c1)).length; // replies from elsewhere aren't in any figure
+  return {
+    ...summary, service: s.service ?? DEFAULT_SERVICE, questions, groups: results.groups.filter((g) => g.group !== "Site").map((g) => ({ group: g.group, label: g.label, n: g.answered, sat: g.satisfied, dis: g.dissatisfied })),
+    byLink: { n: summary.selfOnly ? 0 : here.length, sat: linkAll.length >= MIN_GROUP ? round((linkSat / linkAll.length) * 100) : null },
+  };
+}
+export async function streetPoints(c: Config, code: string): Promise<StreetPoint[]> {
   const surveys = (await listSurveys(c, code)).filter((s) => s.status !== "draft");
+  if (!surveys.length) return [];
+  const census = await loadCensus(c, code);
+  const out = (await Promise.all(surveys.map(async (s) => pointOf(s, await loadAnswers(c, code, s.id), census)))).filter((x): x is StreetPoint => !!x);
+  return out.sort((a, b) => b.ran.localeCompare(a.ran));
+}
+
+/** Road surveys, which are what every figure about roads stands on. A survey of another service shows only under that service. */
+export async function streetSummaries(c: Config, code: string): Promise<StreetSummary[]> {
+  const surveys = (await listSurveys(c, code)).filter((s) => s.status !== "draft" && (s.service ?? DEFAULT_SERVICE) === DEFAULT_SERVICE);
   if (!surveys.length) return [];
   const census = await loadCensus(c, code);
   const out: StreetSummary[] = [];
@@ -594,17 +734,43 @@ export async function streetSummaries(c: Config, code: string): Promise<StreetSu
 
 // Everything a survey's page shows. `edit`: a lead or site administrator. `own`: a member of the authority, the
 // only people who get the words of a comment. Topic counts go to everyone who can see the survey.
-export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edit: boolean, own: boolean, areas = 0) {
-  const used = rows.filter((r) => !r.excluded);
-  const cleaned = cleanComments(s, used);
-  const comments = own ? cleaned : [];
+function selfDays(rows: Answer[]): { day: string; replies: number; left: number; byDay: number }[] {
+  const days = new Map<string, { day: string; replies: number; left: number; byDay: number }>();
+  for (const r of rows.filter(fromSelf)) {
+    const day = dayOf(r.at), x = days.get(day) ?? { day, replies: 0, left: 0, byDay: 0 };
+    x.replies++; if (r.excluded) x.left++; if (r.dayLeft) x.byDay++;
+    days.set(day, x);
+  }
+  return [...days.values()].sort((a, b) => b.day.localeCompare(a.day));
+}
+
+// While the election setting is on, what a survey tells people is held back with the rest of a campaign
+const notAsked = (q: { id: string }) => !/^k\d/.test(q.id);
+export function withoutMessages(page: ReturnType<typeof surveyPage>) {
+  const less = <T extends { questions: { id: string }[] }>(r: T | null): T | null => (r ? { ...r, questions: r.questions.filter(notAsked) } : r);
+  return { ...page, survey: { ...page.survey, tell: [] }, questions: page.questions.filter(notAsked), results: less(page.results) as typeof page.results, self: page.self ? { ...page.self, results: less(page.self.results) } : null };
+}
+
+export function surveyPage(s: Survey, rows: Answer[], census: Census | null, edit: boolean, own: boolean, areas = 0, tally: AreaTally = {}) {
+  const used = rows.filter((r) => !r.excluded), replied = used.filter(fromSelf), selfOnly = replied.length > 0 && replied.length === used.length;
+  const headline = selfOnly ? surveyResults(noSites(s), rows.filter(counted), census) : surveyResults(s, rows.filter((r) => !fromSelf(r)), census);
+  const bySource: Record<string, number> = {};
+  for (const r of used) bySource[r.via] = (bySource[r.via] || 0) + 1;
+  const everyone = cleanComments(s, used), shown = cleanComments(s, used.filter((r) => (selfOnly ? counted(r) : !fromSelf(r)))), theirs = cleanComments(s, used.filter(counted));
   const numbers = rows.map((r) => Number(r.form)).filter(Number.isInteger);
+  const whereCount = (w: Where) => replied.filter((r) => (r.where ?? "unknown") === w).length;
   return {
-    survey: edit ? s : { ...s, access: "" }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS,
+    survey: edit ? s : { ...s, access: "", self: "", selfOn: false }, canEdit: edit, core: CORE, about: ABOUT, maxLocal: MAX_LOCAL, questions: allQuestions(s), accessChecks: ACCESS_CHECKS, howTold: HOW_TOLD, maxTold: MAX_TOLD,
     template: edit ? templateCsv(s) : "",
     census: census ? { adults: census.adults } : null, areas, targets: ageSexTargets(census, s.plan.target),
-    results: surveyResults(s, rows, census), topics: topicCounts(cleaned), comments, ownComments: own, waiting: waitingComments(s, used),
-    problems: edit ? findProblems(s, rows) : [], excluded: edit ? rows.filter((r) => r.excluded).map((r) => ({ n: r.n, form: r.form })) : [],
-    sample: edit && own ? commentSample(comments) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1,
+    results: { ...headline, total: rows.length, bySource }, selfOnly, topics: topicCounts(shown), comments: own ? shown : [], ownComments: own, waiting: waitingComments(s, used),
+    self: rows.some(fromSelf) ? {
+      results: selfOnly ? null : surveyResults(noSites(s), rows.filter(counted), census), here: whereCount("here"), elsewhere: whereCount("elsewhere"), notSaid: whereCount("unknown"), areas: areaRows(tally),
+      left: rows.filter((r) => fromSelf(r) && r.excluded).length,
+      topics: selfOnly ? [] : topicCounts(theirs), comments: own && !selfOnly ? theirs : [],
+    } : null,
+    problems: edit ? [...findProblems(s, rows.filter((r) => !fromSelf(r))), ...findProblems(s, rows.filter(fromSelf))] : [], excluded: edit ? rows.filter((r) => r.excluded && !r.dayLeft).map((r) => ({ n: r.n, form: r.form })) : [],
+    selfDays: edit ? selfDays(rows) : [],
+    sample: edit && own ? commentSample(everyone) : [], nextForm: numbers.length ? Math.max(...numbers) + 1 : 1,
   };
 }

@@ -59,6 +59,7 @@ function h(tag, attrs, ...kids) {
   return el;
 }
 const CODE = (location.pathname.split("/")[2] || "").toUpperCase();
+const SELF = location.pathname.split("/")[1].toLowerCase() === "r"; // someone filling it in themselves, from a link
 const SEND_EVERY_MS = window.SEND_EVERY_MS || 30000;
 const store = {
   get(key, fallback) { try { const v = localStorage.getItem(`${key}_${CODE}`); return v === null ? fallback : JSON.parse(v); } catch (e) { return fallback; } },
@@ -81,12 +82,13 @@ async function call(path, body) {
 
 function queue() { return store.get("clarion_queue", []); }
 function drawStatus() {
+  if (SELF) return;
   const n = queue().length;
   status.textContent = (S.closed || S.stuck) && n ? `${n} form${n === 1 ? "" : "s"} still on this tablet` : n ? `${n} form${n === 1 ? "" : "s"} waiting to send` : "All sent";
 }
 // Forms stay on the tablet until Clarion says it has them. Each has its own id, so sending one twice does no harm.
 async function send() {
-  if (S.sending || !CODE) return;
+  if (S.sending || !CODE || SELF) return;
   S.sending = true;
   const wasClosed = S.closed;
   try {
@@ -113,7 +115,7 @@ async function send() {
 }
 
 function frame(...kids) {
-  const title = S.survey ? S.survey.title : "Street survey";
+  const title = S.survey ? S.survey.title : SELF ? "Survey" : "Street survey";
   app.replaceChildren(h("header", {}, h("span", {}, title), status), h("main", {}, kids), h("footer", {}, "Clarion, from the Future Highways Research Group"));
   window.scrollTo(0, 0);
 }
@@ -152,8 +154,8 @@ function startScreen() {
 
 function question() {
   const qs = S.survey.questions, q = qs[S.i], form = S.form;
-  const next = () => { if (S.i + 1 < qs.length) { S.i++; question(); } else finish(); };
-  const back = h("button", { class: "quiet", type: "button", onclick: () => { if (S.i > 0) { S.i--; question(); } else { S.form = null; startScreen(); } } }, S.i > 0 ? "Back" : "Cancel");
+  const next = () => { if (S.i + 1 < qs.length) { S.i++; question(); } else (SELF ? postcodeScreen : finish)(); };
+  const back = h("button", { class: "quiet", type: "button", onclick: () => { if (S.i > 0) { S.i--; question(); } else { S.form = null; (SELF ? selfStart : startScreen)(); } } }, S.i > 0 ? "Back" : "Cancel");
   const heading = h("h1", { tabindex: "-1" }, q.text);
   if (q.kind === "text") {
     const area = h("textarea", { rows: 5, maxlength: 1000, "aria-label": q.text, oninput: () => { form.answers[q.id] = area.value; } });
@@ -173,9 +175,87 @@ function finish() {
   const answers = Object.fromEntries(Object.entries(f.answers).filter(([, v]) => String(v).trim()));
   const saved = !Object.keys(answers).length || store.set("clarion_queue", [...queue(), { client: f.client, site: f.site, secs: Math.round((Date.now() - f.started) / 1000), answers }]);
   drawStatus();
+  const readOut = S.survey.readOut || [], told = S.survey.told || [];
   frame(h("h1", {}, "Thank you"), saved ? null : h("p", { class: "bad", role: "alert" }, "This tablet's storage is full, so that form wasn't kept. Send the waiting forms before carrying on."),
+    readOut.length ? [h("h2", {}, "Interviewer: please read this out"), readOut.map((t) => h("p", {}, t))] : null,
+    told.length ? [h("h2", {}, `What ${S.survey.collector} would like you to know`), told.map((t) => h("p", {}, t))] : null,
     h("button", { class: "main-btn", type: "button", onclick: startScreen }, "Next person"));
   send();
+}
+
+// ----- filling it in themselves. One person, one reply, sent straight away. Devices get shared, so a reply that hasn't gone
+// waits only in this browser tab, which clears it when it's closed, and nobody ever sends it without being asked. Each reply
+// has its own id, so sending one twice does no harm.
+const unsent = {
+  get() { try { return JSON.parse(sessionStorage.getItem(`clarion_reply_${CODE}`)); } catch (e) { return null; } },
+  set(reply) { try { sessionStorage.setItem(`clarion_reply_${CODE}`, JSON.stringify(reply)); } catch (e) { /* it's still on the screen */ } },
+  drop() { try { sessionStorage.removeItem(`clarion_reply_${CODE}`); } catch (e) { /* nothing to drop */ } },
+};
+function selfStart(message) {
+  frame(h("h1", {}, S.survey.title), h("p", {}, "It takes a few minutes, and you can skip any question."), message ? h("p", { class: "bad", role: "alert" }, message) : null,
+    h("div", { class: "card" }, h("p", { class: "note" }, NOTICE(S.survey.collector)), h("p", { class: "note" }, "If you give the first half of your postcode, we keep only a count of replies from each area, and whether you live here.")),
+    h("button", { class: "main-btn", type: "button", onclick: () => { S.form = { client: uid(), answers: {}, postcode: "", started: Date.now() }; S.i = 0; question(); } }, "Start"));
+}
+function postcodeScreen() {
+  const box = h("input", { "aria-label": "The first half of your postcode", autocomplete: "off", autocapitalize: "characters", maxlength: 8, oninput: () => { S.form.postcode = box.value; } });
+  box.value = S.form.postcode;
+  const heading = h("h1", { tabindex: "-1" }, "What's the first half of your postcode?");
+  frame(h("div", { class: "steps" }, "Last question"), heading, box, h("p", { class: "note" }, "For example RH12. This is optional, and helps show whether replies come from the area."),
+    h("button", { class: "main-btn", type: "button", onclick: finishSelf }, "Send my answers"),
+    h("div", { class: "nav" }, h("button", { class: "quiet", type: "button", onclick: () => question() }, "Back"), h("button", { class: "quiet", type: "button", onclick: () => { S.form.postcode = ""; finishSelf(); } }, "Skip")));
+  heading.focus();
+}
+// the first half only ever leaves the device, however much was typed
+function firstHalf(typed) {
+  const t = String(typed || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").trim();
+  return t.includes(" ") ? t.split(/\s+/)[0] : t.length > 4 ? t.slice(0, -3) : t;
+}
+function finishSelf() {
+  const f = S.form;
+  const answers = Object.fromEntries(Object.entries(f.answers).filter(([, v]) => String(v).trim()));
+  S.form = null;
+  if (!Object.keys(answers).length) return selfStart("You didn't answer any questions, so nothing has been sent.");
+  const reply = { client: f.client, secs: Math.round((Date.now() - f.started) / 1000), answers, postcode: firstHalf(f.postcode) };
+  unsent.set(reply);
+  sendSelf(reply);
+}
+async function sendSelf(reply) {
+  frame(h("p", { role: "status" }, "Sending your answers…"));
+  try {
+    await call("/api/r/submit", { access: CODE, ...reply });
+    unsent.drop(); store.set("clarion_done", true);
+    const told = S.survey?.told || [];
+    frame(h("h1", {}, "Thank you"), h("p", {}, "Your answers have been sent."), told.length ? [h("h2", {}, `What ${S.survey.collector} would like you to know`), told.map((t) => h("p", {}, t))] : null);
+  } catch (e) {
+    if (e.status === 409 || e.status === 404) { unsent.drop(); return e.status === 404 ? frame(h("h1", {}, "This link isn't working"), h("p", {}, `${e.message} Your answers couldn't be sent, and they've been removed from this device.`)) : selfClosed(e.message, true); }
+    frame(h("h1", {}, "Your answers haven't been sent yet"), h("p", {}, e.status === 429 ? e.message : "Check your connection, then try again."), h("button", { class: "main-btn", type: "button", onclick: () => sendSelf(reply) }, "Try again"));
+  }
+}
+function selfClosed(message, lost) {
+  const paused = /paused/.test(message);
+  frame(h("h1", {}, paused ? "This survey is paused" : "This survey has closed"), h("p", {}, paused ? "Surveys stop during a pre-election period. Please try again afterwards." : "Thank you for your interest."),
+    lost ? h("p", {}, "Your answers couldn't be sent, and they've been removed from this device.") : null);
+}
+function waitingScreen(reply) {
+  frame(h("h1", {}, "An unsent reply is on this device"), h("p", {}, "Someone filled this in here, but it wasn't sent. If it was you, send it. If not, delete it."),
+    h("button", { class: "main-btn", type: "button", onclick: () => sendSelf(reply) }, "Send it"),
+    h("button", { class: "quiet", type: "button", onclick: () => { unsent.drop(); selfStart(); } }, "Delete it"));
+}
+async function loadSelf() {
+  const waiting = unsent.get();
+  if (store.get("clarion_done", false)) return frame(h("h1", {}, "Thank you"), h("p", {}, "A reply has already been sent from this device."));
+  frame(h("p", { role: "status" }, "Opening the survey…"));
+  try {
+    S.survey = (await call("/api/r/get", { access: CODE })).survey;
+  } catch (e) {
+    if (e.status === 409 || e.status === 404) unsent.drop(); // it can never be sent now
+    if (e.status === 409) return selfClosed(e.message, !!waiting);
+    if (e.status === 404 || e.status === 429) return frame(h("h1", {}, "This link isn't working"), h("p", {}, e.message));
+    return frame(h("h1", {}, "The survey couldn't be opened"), h("p", {}, "Check your connection, then try again."), h("button", { class: "main-btn", type: "button", onclick: loadSelf }, "Try again"));
+  }
+  document.title = S.survey.title;
+  if (waiting) return waitingScreen(waiting);
+  selfStart();
 }
 
 async function load() {
@@ -201,9 +281,9 @@ async function load() {
 
 window.addEventListener("online", send);
 setInterval(send, SEND_EVERY_MS);
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("/s/sw.js").catch(() => {});
+if (!SELF && "serviceWorker" in navigator) navigator.serviceWorker.register("/s/sw.js").catch(() => {});
 drawStatus();
-load();
+(SELF ? loadSelf : load)();
 </script>
 </body>
 </html>

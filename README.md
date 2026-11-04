@@ -17,9 +17,15 @@ For the pilot authorities (Lincolnshire, Kirklees and West Sussex):
 - **Evidence:** survey results, DfT ratings, published figures compared with the region and England, public fault reports, petitions and MPs' questions, and what's missing.
 - **Mood reading:** Claude writes a reading from that evidence. A change is only reported when two kinds of signal agree.
 - **Impact note:** choose an announcement, and Clarion pins down what changed, tests it against nine routes of impact, challenges its own claims, and logs each forecast with a check date.
+- **The map:** one mood figure in the middle, and at every part around it, for a chosen service, month and topic, seen from the authority, the public or a key partner. Each part has its own method, and every mood can be opened to show how it's worked out and what's behind it.
+- **Dashboard:** the mood and what makes it up, Claude's reading, by function, month by month, attention against concern and what's missing.
+- **High-impact issues and the campaign calendar:** Clarion proposes issues by a calculation on concern, reach and mood, and an officer confirms them, with a key message. Responses are planned by date, topic and channel, from a mention, a survey result or an issue, beside what to bear in mind.
+- **Set-up:** the Climate Toolkit's highways functions, which each authority can change, key partners, campaign channels and the mood weights.
+- **Filling in a survey online:** an officer turns on a link and QR code, and sends it from their own email system. Replies are shown beside interviewers' rather than added to them, with an optional first half of a postcode to spot replies from elsewhere.
+- **Officers' briefing:** one page before a meeting, put together from what Clarion holds, to read or take out as Word.
 - **Councillor briefing:** Claude drafts one from figures and topic counts, an officer edits it, and a named officer of the authority releases it, which fixes that version. It then leaves as Word or PDF, through the council's own channels. An election setting, set by the authority's own lead, takes out lines to take and suggested answers, and pauses street surveys.
 - **What's being said:** automatic reading of sources with no licensing issue (GOV.UK, Parliament, FixMyStreet). For press, broadcast and social sources, Clarion can check whether a keyword turns up, keeping only yes or no and the date, and an officer finds the piece and records a guided assessment in their own words. Each assessment shows the likely audience, and allows for the source's stance, with raw and adjusted figures side by side.
-- **Street Surveys:** fixed core questions plus up to five local ones, which Claude can suggest and check. Suggested levels for how many people to ask, with a site survey of four sites of 30 as the default. Proposed sites on a map, chosen from Census and deprivation figures, which an officer can change, with age targets for each. A plan with age and sex targets from Census 2021. Numbered A4 forms to print, and a link for tablets that works without a signal. Answers come from tablets, typed-in forms, scans read by Claude and checked by a person, or a CSV file. Claude takes names out of written comments and sorts them into topics. Results are weighted to the local population, always labelled indicative, and feed the mood reading as figures and topic counts.
+- **Street Surveys:** fixed core questions plus up to five local ones, which Claude can suggest and check. Suggested levels for how many people to ask, with a site survey of four sites of 30 as the default. Proposed sites on a map, chosen from Census and deprivation figures, which an officer can change and pinpoint on a street map, with age targets for each and a site plan to print. Each survey can also tell people things: messages tied to a topic, on tablets, on paper, read out or after a reply by link, with an optional "Did you know?" question. A plan with age and sex targets from Census 2021. Numbered A4 forms to print, and a link for tablets that works without a signal. Answers come from tablets, typed-in forms, scans read by Claude and checked by a person, or a CSV file. Claude takes names out of written comments and sorts them into topics. Results are weighted to the local population, always labelled indicative, and feed the mood reading as figures and topic counts.
 
 ## What's here
 
@@ -32,9 +38,13 @@ For the pilot authorities (Lincolnshire, Kirklees and West Sussex):
 | `src/pilots.ts` | The pilot authorities and what's known about each |
 | `src/library.ts` | The FHRG reference library and the headline figures |
 | `src/signals.ts` | FixMyStreet, petitions, MPs' questions and GOV.UK |
+| `src/mood.ts`, `src/mapdata.ts` | The map's calculations, and what they need |
+| `src/setup.ts`, `src/campaign.ts` | Functions, partners, channels and weights; high-impact issues and the calendar |
+| `src/officers.ts` | The officers' briefing |
 | `src/evidence.ts` | Everything held on an authority |
 | `src/reading.ts`, `src/notes.ts` | The mood reading and the impact note |
 | `src/briefings.ts`, `src/docx.ts` | Councillor briefings, the election setting and the Word file |
+| `src/postcodes.ts`, `src/qr.ts` | The optional postcode check on self-completed surveys, and the QR code |
 | `src/surveys.ts`, `src/surveyai.ts` | Street surveys, and what Claude does for them |
 | `src/sites.ts` | Proposing survey sites from neighbourhood figures |
 | `src/coverage.ts` | What's being said: sources, assessments, audiences and coverage checks |

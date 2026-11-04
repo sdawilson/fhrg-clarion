@@ -20,6 +20,7 @@ import { isOwnLead, type Pilot } from "./pilots";
 import { latestReadings } from "./reading";
 import { savePretty, storageDelete, storageJson } from "./storage";
 import { HOUSE_STYLE, MOOD_METHOD } from "./style";
+import { interviewedOnly, type StreetSummary } from "./surveys";
 import { FriendlyError, cleanLong, cleanText, londonToday, withLock } from "./util";
 import { loadWorks } from "./works";
 
@@ -42,6 +43,7 @@ const RECENT_EVENT_DAYS = 56;
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const ELECTION_NOTE = "Pre-election period: lines to take and suggested answers have been left out.";
 const INDICATIVE = "Street survey results are indicative: a street sample isn't a random one.";
+const CHOSE = "People who chose to answer a survey may not be typical of the authority.";
 const MADE_WITH = "Drafted with AI from figures held in Clarion, then checked and released by a named officer.";
 export const PAUSED = "Street surveys are paused for the pre-election period.";
 
@@ -67,7 +69,7 @@ const RULES = `This is a briefing for cabinet members and scrutiny councillors i
 
 - Stay neutral and factual. Section 2 of the Local Government Act 1986 bars publicity that seems designed to affect support for a party, so nothing here may praise, blame or defend a party, a councillor or a political decision.
 - Say where each claim comes from: the survey, the street survey, assessed press pieces, enquiries, fault reports or published figures.
-- Street survey results are indicative, and always say so.
+- Street survey results are indicative, and always say so. A survey people chose to answer is weaker still: say that, and never call it a street survey.
 - Name no resident, councillor, MP or candidate, and don't repeat unverified claims about named people or firms.
 - Use only the material given. If it's thin, say so plainly rather than filling the gap.`;
 
@@ -92,12 +94,14 @@ const finishTool = (election: boolean) => strictTool({
 const surveysUsed = (e: Evidence) => e.surveys.slice(0, MAX_SURVEYS).map(({ year, measure, score, outOf, responses, source }) => ({ year, measure, score, outOf, responses, source }));
 const streetsUsed = (e: Evidence) => e.streets.filter((s) => s.current);
 
+const survey = ({ ran, responses, weighted, satisfied, dissatisfied, better, worse, blameCouncil, topics, note }: StreetSummary) => ({ ran, responses, weighted, satisfied, dissatisfied, better, worse, blameCouncil, topics, note });
+
 function position(p: Pilot, e: Evidence): Record<string, unknown> {
   const s = e.signals, petitions = s.petitions.ok ? s.petitions.data ?? [] : [];
   return {
     authority: p.name, kind: p.kind, strategic_authority: p.strategicAuthority || "none", funding_route: p.fundingRoute, dft_rating: p.rating,
     survey_results: surveysUsed(e), survey_note: p.surveyNote,
-    street_surveys: streetsUsed(e).map(({ ran, responses, weighted, satisfied, dissatisfied, better, worse, blameCouncil, topics, note }) => ({ ran, responses, weighted, satisfied, dissatisfied, better, worse, blameCouncil, topics, note })),
+    street_surveys: interviewedOnly(streetsUsed(e)).map(survey), surveys_people_chose_to_answer: streetsUsed(e).filter((x) => x.selfOnly).map(survey),
     published_figures: e.figures, fault_reports: s.fixMyStreet.ok ? s.fixMyStreet.data : null,
     road_petitions: { count: petitions.length, signatures_here: petitions.reduce((sum, x) => sum + x.local, 0), above_a_fair_share_here: petitions.filter((x) => x.localShare > x.fairShare).length },
     mps_written_questions_about_roads: s.questions.ok ? s.questions.data?.length ?? 0 : null,
@@ -113,7 +117,7 @@ function sourcesFrom(e: Evidence, reading: { created: string } | null, uploaded:
     `Evidence read on ${longDate(today)}.`,
     ...(reading ? [`Clarion mood reading of ${longDate(reading.created)}`] : []),
     ...new Set(surveysUsed(e).map((x) => `${x.source}, ${x.year}`)),
-    ...streetsUsed(e).map((x) => `Street survey "${x.title}", ${x.responses} replies (indicative)`),
+    ...streetsUsed(e).map((x) => (x.selfOnly ? `Survey "${x.title}", ${x.responses} people who chose to reply (indicative)` : `Street survey "${x.title}", ${x.responses} replies (indicative)`)),
     ...(pieces ? [`${pieces} press and media pieces assessed by officers in the last four weeks`] : []),
     ...(e.contacts?.length ? ["The authority's enquiries and complaints, latest month"] : []),
     ...(s.fixMyStreet.ok && s.fixMyStreet.data?.to ? [`FixMyStreet public reports, to ${longDate(s.fixMyStreet.data.to)}`] : []),
@@ -255,7 +259,7 @@ export function briefingBlocks(raw: Briefing, election: Election): Block[] {
     for (const q of b.questions) blocks.push({ kind: "question", text: q.question }, ...(q.answer ? [{ kind: "text" as const, text: q.answer }] : []));
   }
   if (b.lines.length) blocks.push({ kind: "heading", text: "Factual lines" }, ...b.lines.map((t) => ({ kind: "bullet" as const, text: t })));
-  blocks.push({ kind: "heading", text: "Sources" }, ...[...b.sources, ...(b.sources.some((t) => t.includes("indicative")) ? [INDICATIVE] : []), MADE_WITH].map((t) => ({ kind: "note" as const, text: t })));
+  blocks.push({ kind: "heading", text: "Sources" }, ...[...b.sources, ...(b.sources.some((t) => t.startsWith("Street survey")) ? [INDICATIVE] : []), ...(b.sources.some((t) => t.includes("chose to reply")) ? [CHOSE] : []), MADE_WITH].map((t) => ({ kind: "note" as const, text: t })));
   return blocks;
 }
 

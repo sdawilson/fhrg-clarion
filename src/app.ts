@@ -7,8 +7,11 @@
 //   GET  /sso#t=<pass>             members arriving from the FHRG website
 //   GET  /s  /s/<access code>      the tablet page for a street survey (public/survey.html); no account needed
 //   GET  /s/sw.js                  lets that page reopen without a signal
+//   GET  /r/<link code>            the same page, for someone filling a survey in themselves; no account needed
 //   GET  /demo                     the same page, opening the Northbridge demonstration
 //   GET  /demo/data.json           the demonstration's made-up data (public; see demo.ts)
+//   POST /demo/map                 {service, month, topic, bias, view, partner, include}: the map worked out from that data
+//   POST /demo/officers            {service, month, word}: the officers' briefing from that data
 //   POST /api/config               website address and whether the demonstration is on (public)
 //   POST /api/login | /api/logout
 //   POST /api/sso                  {token}: a two-minute, single-use pass signed by the website
@@ -30,7 +33,7 @@
 //   POST /api/briefing/word        {code, id}: a released briefing as a Word file
 //   POST /api/briefing/election    {code, on}: the pre-election setting
 //   POST /api/coverage/get         {code}: sources, assessments, and what's been read automatically
-//   POST /api/coverage/summary     {code}: the last four weeks' assessments, for the Summary page
+//   POST /api/coverage/summary     {code}: the last four weeks' assessments
 //   POST /api/coverage/source      {code, ...source}: add or change a source
 //   POST /api/coverage/unsource    {code, id}: take a source off
 //   POST /api/coverage/assess      {code, ...assessment}: record an assessment
@@ -49,6 +52,18 @@
 //   POST /api/abc/save             {text}: ABC's table, pasted (site administrators)
 //   POST /api/attention            {code}: each topic by public concern and media attention
 //   POST /api/admin/overview       site administrators: the position across all authorities
+//   POST /api/map                  {code, service, month, topic, bias, view, partner, include}: the map, and what the Dashboard needs
+//   POST /api/rate                 {code, key, tone}: an officer's rating of a petition or an MP's question
+//   POST /api/setup/get            {code}: functions, partners and channels, and the mood weights
+//   POST /api/setup/save           {code, part, service, list}: leads and admins
+//   POST /api/setup/weights        {...weights}: site administrators
+//   POST /api/briefing/officers    {code, service, month, word}: the officers' briefing, or as a Word file
+//   POST /api/campaign/get         {code, service}: issues and campaign events, held back by the election setting
+//   POST /api/issue/set            {code, service, topic, status, key, own}: confirm, set aside or change a key message
+//   POST /api/issue/drop           {code, service, topic}
+//   POST /api/campaign/item        {code, service, id, title, date, channel, topics, origin, survey}: add or change an event
+//   POST /api/campaign/remove      {code, id}
+//   POST /api/note/effect          {code, id, effect, topic}: what an officer expects a note to do to mood
 //   POST /api/facts/survey         {code, year, measure, score, outOf, responses, source, url}: leads and admins
 //   POST /api/facts/notes          {code, notes}: leads and admins
 //
@@ -73,8 +88,13 @@
 // nothing but the questions and a way to add answers.
 //   POST /api/s/get                {access}
 //   POST /api/s/submit             {access, forms}
+//   POST /api/r/get                {access}
+//   POST /api/r/submit             {access, client, secs, answers, postcode}: one person's reply
+//   POST /api/survey/self          {code, id, on}: turns the self-completion link on or off
+//   POST /api/survey/qr            {code, id, origin}: that link, and its QR code
+//   POST /api/survey/selfday       {code, id, day, action}: leave out, put back or delete a day's replies by link
 
-import { clientIp, handleLogin, handleLogout, handleSso, signedIn, type Member } from "./accounts";
+import { handleLogin, handleLogout, handleSso, networkOf, signedIn, type Member } from "./accounts";
 import { findTitles, saveTitles, titlesHeld } from "./abc";
 import { loadWorks, refreshWorks, turnOff, turnOn, worksPage } from "./works";
 import { enquiriesView, loadEnquiries, readNews, removeImport, saveImport, saveMatch, savePage } from "./enquiries";
@@ -82,23 +102,30 @@ import { adminOverview, benchmark } from "./admin";
 import { MAX_LISTED, PAUSED, approveBriefing, canApprove, copyBriefing, forReader, getBriefing, listBriefings, loadElection, removeBriefing, saveBriefing, setElection, startBriefing, wordCopy, type Briefing, type Election } from "./briefings";
 import { loadComparison } from "./comparison";
 import {
-  FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, audienceFor, checkCoverage, loadAssessments, loadRates, loadSources,
-  removeAssessment, removeSource, saveAssessment, saveSource, summarise, withWeights, type Rate,
+  FUNCTIONS, LEANINGS, PROMINENCE, REACH_BANDS, REACH_UNITS, REACH_UNIT_FOR, RELEVANCE, SOURCE_TYPES, STANCES, TONES, adultsByAge, audienceFor, channelsFrom, checkCoverage, loadAssessments, loadChecks, loadRates, loadSources,
+  removeAssessment, removeSource, roadsOnly, saveAssessment, saveRating, saveSource, summarise, withWeights, type Rate,
 } from "./coverage";
 import { monthSpend } from "./claude";
 import { getConfig, missingSettings, type Config } from "./config";
-import { demoPack } from "./demo";
+import { demoMap, demoOfficers, demoPack } from "./demo";
 import { addSurvey, loadEvidence, loadFacts, saveNotes } from "./evidence";
 import { validId } from "./jobs";
-import { getNote, listNotes, readInput, startNote } from "./notes";
-import { canEdit, canSee, isMember, pilotByCode, pilotsFor, type Pilot } from "./pilots";
+import { getNote, listNotes, readInput, setEffect, startNote } from "./notes";
+import { loadMapData } from "./mapdata";
+import { buildMap, readFilters } from "./mood";
+import { officersBriefing, officersWord } from "./officers";
+import { DEFAULT_SERVICE, SERVICES, loadSetup, loadWeights, saveSetup, saveWeights, serviceId, standardFunctions } from "./setup";
+import { dropIssue, held as heldCampaign, loadCampaign, removeItem, saveItem, setIssue, syncTell } from "./campaign";
+import { canEdit, canSee, isMember, isOwnLead, pilotByCode, pilotsFor, type Pilot } from "./pilots";
 import { getReading, latestReadings, startReading } from "./reading";
+import { areaOf, outcodeOf, whereIs } from "./postcodes";
+import { qrCode } from "./qr";
 import { announcements, fixMyStreetUrl, loadSignals } from "./signals";
 import { loadSites } from "./sites";
 import { MAX_SCAN_CHARS, getHelp, sharedTopics, sortJob, startScan, startSorting, startSuggest, startWording, sweepHelp } from "./surveyai";
 import {
-  addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, closeSurvey, createSurvey, formNumber, listSurveys, loadAnswers,
-  loadCensus, loadSurvey, openSurvey, publicSurvey, readCsv, saveSurvey, surveyByAccess, surveyPage, textQuestionIds, validAccess, type Survey,
+  AGES, addAnswers, answersCsv, backToDraft, changeAnswer, changeAnswers, changeDay, closeSurvey, countArea, createSurvey, formNumber, listSurveys, loadAnswers, loadAreas,
+  loadCensus, loadSurvey, openSurvey, publicSelf, publicSurvey, withoutMessages, readAnswers, readCsv, saveSurvey, setSelf, surveyByAccess, surveyBySelf, surveyPage, textQuestionIds, validAccess, validSelf, type Survey,
 } from "./surveys";
 import { FriendlyError, briefly, tryAgainNow, cleanLong, cleanText, escapeHtml, json, londonToday, readJsonBody } from "./util";
 
@@ -169,6 +196,56 @@ async function handleAuthority(c: Config, request: Request): Promise<Response> {
   });
 }
 
+// The shared topics, and any an authority has added as its own high-impact issue
+async function topicsHere(c: Config, code: string): Promise<string[]> {
+  const [shared, campaign] = await Promise.all([sharedTopics(c), loadCampaign(c, code)]);
+  return [...shared, ...campaign.issues.filter((x) => x.own && !shared.includes(x.topic)).map((x) => x.topic)];
+}
+
+async function handleMap(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 2000);
+  const p = pilotFor(me, b.code);
+  const data = await loadMapData(c, p);
+  return json({ ...buildMap(data, readFilters(b, data.today, data.topics)), canEdit: canEdit(me, p), isLead: isOwnLead(me, p) });
+}
+
+async function handleSetup(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const [setup, weights, election] = await Promise.all([loadSetup(c, p.code), loadWeights(c), loadElection(c, p.code)]);
+  return json({ setup, weights, election: election.on, canApprove: canApprove(me, p), services: SERVICES, standard: Object.fromEntries(SERVICES.map((s) => [s.id, standardFunctions(s.id)])), canEdit: canEdit(me, p), isLead: isOwnLead(me, p), canWeigh: me.siteAdmin });
+}
+
+// Everything held back while the election setting is on, and nothing can be changed
+async function notInElection(c: Config, code: string): Promise<void> {
+  if ((await loadElection(c, code)).on) throw new FriendlyError("The election setting is on, so nothing can be planned until it's off.", 409);
+}
+
+async function handleOfficers(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const data = await loadMapData(c, p), map = buildMap(data, readFilters({ service: b.service, month: b.month }, data.today, data.topics));
+  const [readings, comparison] = await Promise.all([latestReadings(c, p.code), briefly(`comparison|${p.code}`, { ready: false as const }, () => loadComparison(c, p))]);
+  const signs = comparison.ready ? comparison.earlySigns.map((x: { topic: string }) => x.topic) : [];
+  const roads = map.service === DEFAULT_SERVICE, reading = roads ? readings.find((r) => r.status === "ready") ?? null : null;
+  const issues = data.campaign.issues.filter((x) => x.status === "confirmed" && x.service === map.service);
+  const briefing = officersBriefing(map, issues, reading, roads ? signs : [], data.today);
+  return json(b.word === true ? officersWord(briefing) : { briefing });
+}
+
+async function handleCampaign(c: Config, request: Request): Promise<Response> {
+  const me = await signedIn(c, request);
+  const b = await readJsonBody(request, 1000);
+  const p = pilotFor(me, b.code);
+  const service = serviceId(b.service);
+  const [campaign, setup, election] = await Promise.all([loadCampaign(c, p.code), loadSetup(c, p.code), loadElection(c, p.code)]);
+  const now = heldCampaign(campaign, election.on);
+  return json({ issues: now.issues.filter((x) => x.service === service), items: now.items.filter((x) => x.service === service), channels: setup.channels, election: election.on, canEdit: canEdit(me, p) });
+}
+
 async function handleAttention(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
@@ -186,11 +263,11 @@ async function handleCoverage(c: Config, request: Request): Promise<Response> {
     briefly("announcements", null, () => announcements()), briefly(`signals|${p.code}`, null, () => loadSignals(p), (x) => !x.fixMyStreet.ok || !x.petitions.ok || !x.questions.ok), loadEnquiries(c, p.code),
   ]);
   const posts = await councilNews(p, enquiries.page || p.newsPage, topics);
-  const rows = withWeights(assessments, sources);
+  const rows = withWeights(assessments.filter((x) => (x.service ?? DEFAULT_SERVICE) === serviceId(b.service)), sources);
   const faults = signals?.fixMyStreet.data, petitions = signals?.petitions.data, questions = signals?.questions.data;
   const unread = "Couldn't be read just now";
   return json({
-    ready: true, canEdit: canEdit(me, p), today: londonToday(), searchReady: !!c.searchKey, adults: census?.adults ?? null, sources, rows, summary: summarise(rows, londonToday()),
+    ready: true, canEdit: canEdit(me, p), today: londonToday(), searchReady: !!c.searchKey, adults: census?.adults ?? null, sources, rows, summary: summarise(rows, londonToday()), checks: await loadChecks(c, p.code),
     topics, functions: FUNCTIONS, types: SOURCE_TYPES, leanings: LEANINGS, stances: STANCES, reachUnits: REACH_UNITS, reachUnitFor: REACH_UNIT_FOR, reachBands: REACH_BANDS, relevance: RELEVANCE, tones: TONES, prominence: PROMINENCE,
     audiences: Object.fromEntries(SOURCE_TYPES.map((t) => [t, audienceFor(t, census, rates)])),
     automatic: [
@@ -204,12 +281,12 @@ async function handleCoverage(c: Config, request: Request): Promise<Response> {
   });
 }
 
-// Only what the Summary page needs, from Clarion's own storage, so it never waits on anyone else
+// Only the recent assessments, from Clarion's own storage, so it never waits on anyone else
 async function handleCoverageSummary(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 1000);
   const p = pilotFor(me, b.code);
-  const [sources, assessments] = await Promise.all([loadSources(c, p.code), loadAssessments(c, p.code)]);
+  const [sources, assessments] = await Promise.all([loadSources(c, p.code), loadAssessments(c, p.code).then(roadsOnly)]);
   return json({ summary: summarise(withWeights(assessments, sources), londonToday()) });
 }
 
@@ -380,17 +457,18 @@ async function handleSurveyList(c: Config, request: Request): Promise<Response> 
   return json({
     paused: election.on,
     canEdit: canEdit(me, p),
-    surveys: surveys.map((s, i) => ({ id: s.id, title: s.title, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: counts[i].filter((r) => !r.excluded).length, target: s.plan.target })),
+    surveys: surveys.map((s, i) => { const used = counts[i].filter((r) => !r.excluded); return { id: s.id, title: s.title, service: s.service ?? DEFAULT_SERVICE, status: s.status, created: s.created, by: s.by, openedOn: s.openedOn, responses: used.filter((r) => r.via !== "self").length, byLink: used.filter((r) => r.via === "self").length, target: s.plan.target }; }),
   });
 }
 
 async function handleSurveyGet(c: Config, request: Request): Promise<Response> {
   const { me, p, s } = await reader(c, request);
   const edit = canEdit(me, p);
-  const [rows, census, sorting, election] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id), loadElection(c, p.code)]);
+  const [rows, census, sorting, election, tally] = await Promise.all([loadAnswers(c, p.code, s.id), loadCensus(c, p.code), sortJob(c, p.code, s.id), loadElection(c, p.code), loadAreas(c, p.code, s.id)]);
+  const page = surveyPage(s, rows, census, edit, isMember(me, p), p.constituencies.length, tally);
   return json({
     paused: election.on,
-    ...surveyPage(s, rows, census, edit, isMember(me, p), p.constituencies.length),
+    ...(election.on ? withoutMessages(page) : page),
     sorting: sorting?.status === "working" ? sorting : null, dropped: edit && sorting?.status === "ready" ? sorting.result?.dropped ?? 0 : 0,
   });
 }
@@ -401,8 +479,12 @@ async function handleSurveyNew(c: Config, request: Request): Promise<Response> {
 }
 
 async function handleSurveySave(c: Config, request: Request): Promise<Response> {
-  const { b, s } = await surveyEditor(c, request, 30_000);
-  return json({ survey: await saveSurvey(c, s, b) });
+  const { me, b, s } = await surveyEditor(c, request, 30_000);
+  if (b.tell === undefined) return json({ survey: await saveSurvey(c, s, b) });
+  await notPaused(c, s.code); // messages are held back with the rest of a campaign
+  const saved = await saveSurvey(c, s, b), { channels } = await loadSetup(c, s.code);
+  await syncTell(c, s.code, saved, saved.service ?? DEFAULT_SERVICE, channels.find((x) => x.node === "street")?.id ?? "", me.name);
+  return json({ survey: saved });
 }
 
 async function handleSurveyStatus(c: Config, request: Request): Promise<Response> {
@@ -470,8 +552,9 @@ async function handleSurveyExport(c: Config, request: Request): Promise<Response
 
 // Public routes: a wrong code costs a storage read, so wrong guesses are limited
 const WINDOW_MS = 10 * 60 * 1000;
-const MAX_WRONG = 30, MAX_FORMS = 1500;
+const MAX_WRONG = 30, MAX_FORMS = 1500, MAX_SELF_PER_ADDRESS = 20, MAX_SELF_PER_BLOCK = 200, MAX_SELF_REPLIES = 600;
 const tallies = new Map<string, { from: number; n: number }>();
+const MAX_DEMO = 600; // the demonstration's calculations, in the window below, as they need no sign-in
 function countOf(key: string): { from: number; n: number } {
   const now = Date.now();
   if (tallies.size > 20_000) for (const [k, v] of tallies) if (now - v.from > WINDOW_MS) tallies.delete(k);
@@ -482,8 +565,14 @@ function countOf(key: string): { from: number; n: number } {
   return fresh;
 }
 
+// Survey pages only ever post JSON from their own address, so another website can't send replies from its visitors' browsers
+function fromOurPage(request: Request): void {
+  if (!/^application\/json/i.test(request.headers.get("content-type") ?? "") || request.headers.get("sec-fetch-site") === "cross-site") throw new FriendlyError("That wasn't sent from a survey page.", 403);
+}
+
 async function surveyFromCode(c: Config, request: Request, value: unknown, forms = 1): Promise<Survey> {
-  const wrong = countOf(`wrong|${clientIp(request)}`);
+  fromOurPage(request);
+  const wrong = countOf(`wrong|${networkOf(request)}`);
   if (wrong.n >= MAX_WRONG) throw new FriendlyError("Too many tries. Please wait a few minutes.", 429);
   const access = String(value ?? "").toUpperCase().replace(/[\s-]/g, "");
   const s = validAccess(access) ? await surveyByAccess(c, access) : null;
@@ -495,6 +584,48 @@ async function surveyFromCode(c: Config, request: Request, value: unknown, forms
   if (s.status !== "open") throw new FriendlyError("This survey isn't open.", 409);
   await notPaused(c, s.code);
   return s;
+}
+
+// The self-completion link. It's meant to travel, so nothing about it is secret, and the limits are on how fast replies
+// can arrive: a campaign can't fill a survey in a few minutes, and most of a shared office can still reply
+async function surveyFromSelf(c: Config, request: Request, value: unknown): Promise<Survey> {
+  fromOurPage(request);
+  const wrong = countOf(`wronglink|${networkOf(request)}`); // apart from tablets, so an old poster can't lock out an interviewer
+  if (wrong.n >= MAX_WRONG) throw new FriendlyError("Too many tries. Please wait a few minutes.", 429);
+  const link = String(value ?? "").toUpperCase();
+  const s = validSelf(link) ? await surveyBySelf(c, link) : null;
+  if (!s || s.self !== link) { wrong.n++; throw new FriendlyError("This link isn't right. Check it with whoever sent it.", 404); }
+  if (s.status !== "open" || !s.selfOn) throw new FriendlyError("This survey has closed.", 409);
+  await notPaused(c, s.code);
+  return s;
+}
+
+function countReply(request: Request, link: string): void {
+  const person = countOf(`self|${networkOf(request)}`), block = countOf(`selfblock|${networkOf(request, 3)}`), all = countOf(`selfall|${link}`);
+  if (person.n >= MAX_SELF_PER_ADDRESS || block.n >= MAX_SELF_PER_BLOCK || all.n >= MAX_SELF_REPLIES) throw new FriendlyError("A lot of replies are arriving at once. Please try again in a few minutes.", 429);
+  person.n++; block.n++; all.n++;
+}
+
+async function handleSelfSubmit(c: Config, request: Request): Promise<Response> {
+  const b = await readJsonBody(request, 20_000);
+  const s = await surveyFromSelf(c, request, b.access);
+  // before anything is counted, so a request with nothing real in it can't use up the limits
+  if (!cleanText(b.client, 60) || !Object.keys(readAnswers(s, b.answers).answers).length) throw new FriendlyError("That reply has no answers.");
+  countReply(request, s.self as string);
+  const outcode = outcodeOf(b.postcode), p = pilotByCode(s.code);
+  const where = p && outcode ? whereIs(p, await areaOf(c, outcode)) : "unknown";
+  const r = await addAnswers(c, s, [{ client: b.client, secs: b.secs, answers: b.answers, where }], "self");
+  if (!r.done.length) throw new FriendlyError(r.problems[0] ?? "That reply couldn't be saved.", 409);
+  if (r.added && outcode && where === "here") await countArea(c, s, outcode); // an area outside the authority is never named, only counted as elsewhere
+  return json({ ok: true });
+}
+
+async function handleSurveyQr(c: Config, request: Request): Promise<Response> {
+  const { b, s } = await surveyEditor(c, request);
+  if (!s.self) throw new FriendlyError("Turn on the link first.", 404);
+  if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(String(b.origin))) throw new FriendlyError("That address isn't right.");
+  const url = `${b.origin}/r/${s.self}`;
+  return json({ url, rows: qrCode(url) });
 }
 
 async function handlePublicGet(c: Config, request: Request): Promise<Response> {
@@ -530,11 +661,18 @@ export async function handleRequest(request: Request): Promise<Response> {
         return new Response(await demoPack(), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-cache", "x-content-type-options": "nosniff" } });
       }
       if (path === "/s/sw.js") return new Response(SURVEY_WORKER, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache", "x-content-type-options": "nosniff" } });
-      if (path === "/s" || /^\/s\/[a-z0-9]{1,12}$/i.test(path)) return serveSurveyPage();
+      if (path === "/s" || /^\/s\/[a-z0-9]{1,12}$/i.test(path) || /^\/r\/[a-z0-9]{12}$/i.test(path)) return serveSurveyPage();
       if (path === "/" || path === "/index.html" || /^\/[a-z0-9][a-z0-9-]{0,48}$/i.test(path)) return servePage(c);
     }
     if (request.method === "POST") {
       if (path === "/api/config") return json({ websiteUrl: c.websiteUrl, demo: c.demo });
+      if (path === "/demo/map" || path === "/demo/officers") {
+        if (!c.demo) return json({ error: "Not found." }, 404);
+        const used = countOf(`demo|${networkOf(request)}`);
+        if (used.n++ >= MAX_DEMO) throw new FriendlyError("Too many requests. Please wait a few minutes.", 429);
+        const b = await readJsonBody(request, 2000);
+        return json(path === "/demo/map" ? demoMap(b) : demoOfficers(b));
+      }
       if (path === "/api/logout") return handleLogout();
       if (missingSettings(c).length) throw new FriendlyError(`Clarion is not set up yet. Missing settings: ${missingSettings(c).join(", ")}.`, 500);
       switch (path) {
@@ -560,6 +698,18 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/facts/survey": return await handleFactsSurvey(c, request);
         case "/api/facts/notes": return await handleFactsNotes(c, request);
         case "/api/attention": return await handleAttention(c, request);
+        case "/api/map": return await handleMap(c, request);
+        case "/api/rate": { const { p, b } = await editor(c, request, 1000); await saveRating(c, p.code, b.key, b.tone); return json({ ok: true }); }
+        case "/api/setup/get": return await handleSetup(c, request);
+        case "/api/setup/save": { const { me, p, b } = await editor(c, request, 20000); return json({ setup: await saveSetup(c, p.code, b, me.name) }); }
+        case "/api/setup/weights": { const me = await signedIn(c, request); if (!me.siteAdmin) throw new FriendlyError("Only FHRG site administrators can do this.", 403); return json({ weights: await saveWeights(c, await readJsonBody(request, 1000)) }); }
+        case "/api/briefing/officers": return await handleOfficers(c, request);
+        case "/api/campaign/get": return await handleCampaign(c, request);
+        case "/api/issue/set": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); return json({ issue: await setIssue(c, p.code, b, serviceId(b.service), me.name) }); }
+        case "/api/issue/drop": { const { p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await dropIssue(c, p.code, b.topic, serviceId(b.service)); return json({ ok: true }); }
+        case "/api/campaign/item": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); return json({ item: await saveItem(c, p.code, b, serviceId(b.service), me.name) }); }
+        case "/api/campaign/remove": { const { p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await removeItem(c, p.code, b.id); return json({ ok: true }); }
+        case "/api/note/effect": { const { p, b } = await editor(c, request, 1000); if (!validId(b.id)) throw new FriendlyError("That note wasn't found.", 404); return json({ note: await setEffect(c, p.code, b.id, b.effect, b.topic) }); }
         case "/api/enquiries/get": return await handleEnquiries(c, request);
         case "/api/enquiries/import": { const { me, p, b } = await editor(c, request, 3000000); return json({ import: await saveImport(c, me, p, b) }); }
         case "/api/enquiries/remove": { const { p, b } = await editor(c, request, 1000); await removeImport(c, p, b.id); return json({ ok: true }); }
@@ -575,7 +725,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/coverage/summary": return await handleCoverageSummary(c, request);
         case "/api/coverage/source": { const { me, p, b } = await editor(c, request, 3000); return json({ source: await saveSource(c, me, p, b, await sharedTopics(c)) }); }
         case "/api/coverage/unsource": { const { p, b } = await editor(c, request, 1000); await removeSource(c, p, b.id); return json({ ok: true }); }
-        case "/api/coverage/assess": { const { me, p, b } = await editor(c, request, 3000); return json({ assessment: await saveAssessment(c, me, p, b, await sharedTopics(c)) }); }
+        case "/api/coverage/assess": { const { me, p, b } = await editor(c, request, 3000); return json({ assessment: await saveAssessment(c, me, p, b, await topicsHere(c, p.code)) }); }
         case "/api/coverage/unassess": { const { p, b } = await editor(c, request, 1000); await removeAssessment(c, p, b.id); return json({ ok: true }); }
         case "/api/coverage/check": { const { p, b } = await editor(c, request, 3000); return json(await checkCoverage(c, p, b)); }
         case "/api/admin/overview": return await handleAdminOverview(c, request);
@@ -597,6 +747,11 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/survey/export": return await handleSurveyExport(c, request);
         case "/api/s/get": return await handlePublicGet(c, request);
         case "/api/s/submit": return await handlePublicSubmit(c, request);
+        case "/api/r/get": { const b = await readJsonBody(request, 1000); return json({ survey: publicSelf(await surveyFromSelf(c, request, b.access)) }); }
+        case "/api/r/submit": return await handleSelfSubmit(c, request);
+        case "/api/survey/self": { const { b, s } = await surveyEditor(c, request); if (b.on === true) await notPaused(c, s.code); return json({ survey: await setSelf(c, s, b.on === true) }); }
+        case "/api/survey/qr": return await handleSurveyQr(c, request);
+        case "/api/survey/selfday": { const { b, s } = await surveyEditor(c, request); await changeDay(c, s, b.day, b.action); return json({ ok: true }); }
       }
     }
     return json({ error: "Not found." }, 404);

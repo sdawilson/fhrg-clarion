@@ -185,6 +185,21 @@ export function trendOf(latest: number, before: (number | undefined)[]): string 
 
 const shift = (month: string, by: number) => { const d = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + by, 1)); return d.toISOString().slice(0, 7); };
 
+/** Every month's contacts, in all and by topic. Counts only. */
+export function enquiriesByMonth(held: Held, topics: string[]) {
+  const topicOf = (name: string) => (Object.hasOwn(held.matches, name) ? held.matches[name] : topicFor(name, topics));
+  return Object.fromEntries(Object.entries(held.months).map(([month, m]) => {
+    const byTopic: Record<string, number> = {};
+    let total = 0;
+    for (const [name, [enquiries, complaints]] of Object.entries(m.categories)) {
+      total += enquiries + complaints;
+      const topic = topicOf(name);
+      if (topic) byTopic[topic] = (byTopic[topic] ?? 0) + enquiries + complaints;
+    }
+    return [month, { total, byTopic }];
+  }));
+}
+
 export function enquiriesView(held: Held, adults: number | null, topics: string[]) {
   const months = Object.keys(held.months).sort(), latest = months.at(-1) ?? "";
   if (!latest) return { ready: false as const };
