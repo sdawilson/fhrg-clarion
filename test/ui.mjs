@@ -61,7 +61,7 @@ let page = text(d.querySelector(".main"));
 ok(/Condition of highways/.test(page) && /24 \/ 100/.test(page) && /Amber/.test(page), "the dashboard shows survey results and the DfT rating");
 ok(/This needs assessed press and media pieces/.test(page), "and says what the comparison is waiting for");
 ok(/Not enough authorities have results yet/.test(page), "and no FHRG figure appears yet");
-ok(!d.querySelector(".demo-banner"), "there's no demonstration banner for a member");
+ok(!d.querySelector(".demo-banner") && d.querySelector(".foot .circles") && [...d.querySelectorAll(".foot a")].some((x) => x.textContent === "FHRG website") && /hello@fhrg.co.uk/.test(text(d.querySelector(".foot"))), "there's no demonstration strip for a member, and the footer is the website's, with the way back to it");
 ok([...d.querySelectorAll(".tabs button")].map((b) => b.textContent).join() === "1Map,2Surveys,3Dashboard,4High-impact issues,5Campaign calendar,6Briefings,Sources,Set-up", "the tabs list the sections, numbered in the order of the work");
 ok(d.querySelector(".brand-logo img") && /West Sussex/.test(text(d.querySelector(".brand-sub"))), "with the FHRG logo and the member's authority");
 
