@@ -307,12 +307,13 @@ tr.selected td { background: var(--surface-2); }
 .fn-bar { position: relative; display: block; height: 14px; } .fn-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); } .fn-fill { position: absolute; top: 0; bottom: 0; } .fn-fill.lean-down { background: var(--lean-down); border-radius: 4px 0 0 4px; } .fn-fill.lean-up { background: var(--lean-up); border-radius: 0 4px 4px 0; } .fn-fill.lean-mixed { background: var(--lean-mixed); }
 .heat { display: grid; grid-template-columns: minmax(130px, 1.5fr) repeat(5, minmax(52px, 1fr)); gap: 6px; align-items: center; } .heat-h { font-size: 0.8rem; color: var(--ink-3); text-align: center; } .heat-l { font-weight: 700; font-size: 0.88rem; }
 .heat-c { display: grid; place-items: center; min-height: 42px; border-radius: 8px; font-weight: 800; text-decoration: none; color: var(--ink); } .heat-c.lean-down { background: var(--lean-down); color: var(--lean-down-ink); } .heat-c.lean-up { background: var(--lean-up); color: var(--lean-up-ink); } .heat-c.lean-mixed { background: var(--lean-mixed); color: var(--lean-mixed-ink); } .heat-c.lean-none { background: var(--surface); color: var(--ink-2); border: 1.5px dashed var(--line-2); }
-.meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .meter { display: grid; gap: 2px; font-size: 0.92rem; }
+.meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .mtr { display: grid; gap: 2px; font-size: 0.92rem; }
 .cal-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); } .cal { display: grid; min-width: 820px; }
 .cal-h { padding: 8px 10px; font-size: 0.8rem; font-weight: 700; color: var(--ink-2); border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); } .cal-h:first-child { border-left: 0; }
 .cal-r { display: grid; align-content: start; gap: 2px; padding: 10px; font-size: 0.92rem; border-bottom: 1px solid var(--line); } .cal-c { display: grid; align-content: start; gap: 6px; min-height: 96px; padding: 6px; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); }
 .ev { display: grid; gap: 0; width: 100%; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--accent-wash); color: var(--ink); text-align: left; font-size: 0.84rem; line-height: 1.25; cursor: pointer; } .ev[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .ev-add { width: 100%; min-height: 40px; border: 1.5px dashed var(--line-2); border-radius: 6px; background: none; color: var(--ink-3); font-size: 1.1rem; cursor: pointer; } .ev-add:hover { color: var(--accent); border-color: var(--accent); }
+.grid.top-align { align-items: start; }
 .er { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; } .er input { flex: 1 1 140px; min-width: 0; padding: 6px 10px; border: 1.5px solid var(--line-2); border-radius: 7px; background: var(--surface); }
 .wt { display: grid; grid-template-columns: minmax(130px, 1fr) 90px 44px; gap: 10px; align-items: center; font-size: 0.9rem; } .wt input { padding: 4px 8px; border: 1.5px solid var(--line-2); border-radius: 7px; background: var(--surface); }
 @media print { .bub, .hub, .fn-fill, .heat-c { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .seg, .filters, .panel .row { display: none; } }
@@ -599,7 +600,7 @@ function shell() {
   const main = h("main", { class: "main", id: "main" });
   clear($app).append(h("div", { class: "app" }, head, tabs, main));
   fillPickers();
-  if (current && !App.meta && !["a", "dash", "issues", "campaign"].includes(view)) loadMap(current).catch(() => {});
+  if (current && !App.meta && !["a", "dash", "issues", "campaign"].includes(view)) loadMap(current, true).catch(() => {});
   const page = h("div", { class: "page" });
   main.append(page);
   if (App.demo) page.append(h("div", { class: "demo-banner no-print" },
@@ -653,8 +654,9 @@ App.cal = { by: "topic", channel: "all", start: "", open: "" };
 App.meta = null; App.pick = {};
 
 const mapAsk = (a) => ({ code: a.code, ...App.filters, bias: App.map.bias, view: App.map.view, partner: App.map.partner, include: App.map.include });
-async function loadMap(a) {
-  const d = await API.call("/api/map", mapAsk(a));
+// Every other page reads the authority's own position, whatever the map happens to be showing
+async function loadMap(a, own) {
+  const d = await API.call("/api/map", own ? { code: a.code, ...App.filters } : mapAsk(a));
   App.filters.month = d.month; App.meta = d;
   fillPickers();
   return d;
@@ -719,7 +721,7 @@ const hubEl = (x) => h("button", { type: "button", class: `hub lean-${x.lean}`, 
 const cap = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 const chipRow = (list, on, pick) => h("div", { class: "chips" }, list.map(([id, words]) => h("button", { type: "button", class: "chip", "aria-pressed": String(on(id)), onclick: () => pick(id) }, words)));
 const filterBox = (label, ...kids) => h("div", { class: "filter" }, h("span", { class: "note" }, label), ...kids);
-const mapLegend = () => h("div", { class: "pic-legend" }, [["down", "Mood below −10"], ["up", "Mood above +10"], ["mixed", "Mixed"], ["none", "Too little to read yet"], ["ctx", "Informs campaigns, not counted in the mood"]].map(([k, words]) => h("span", {}, h("i", { class: `sw sw-${k}` }), words)), h("span", {}, "A bigger circle means a bigger share"));
+const mapLegend = () => h("div", { class: "pic-legend" }, [["down", "Mood −10 or lower"], ["up", "Mood +10 or higher"], ["mixed", "Mixed"], ["none", "Too little to read yet"], ["ctx", "Informs campaigns, not counted in the mood"]].map(([k, words]) => h("span", {}, h("i", { class: `sw sw-${k}` }), words)), h("span", {}, "A bigger circle means a bigger share"));
 const trailOf = (tree, path) => { const out = [tree]; for (const id of path) { const next = out.at(-1).kids.find((k) => k.id === id); if (!next) break; out.push(next); } return out; };
 const sourcesUnder = (node) => (node.source ? [{ id: node.source, label: node.label }] : node.kids.flatMap(sourcesUnder));
 
@@ -745,7 +747,7 @@ function drawMap(box, a, d, ask) {
     ? filterBox("Age", chipRow(d.public.ages.map((x) => [x, x]), (x) => x === m.age, (x) => { m.age = x; redraw(); }))
     : isPartners
       ? h("div", { class: "filters" }, filterBox("Key partners", d.partners.length ? chipRow(d.partners.map((p) => [p.id, p.name]), (x) => x === m.partner, (x) => { m.partner = x; m.path = []; again(); }) : h("p", { class: "note" }, "No partners yet. Add them in Set-up, if a partner is more visible than the authority."), h("a", { href: `#setup/${a.code}` }, "Edit the list")),
-        partner ? filterBox("Include in the authority's position", chipRow([[partner.id, m.include.includes(partner.id) ? "Included" : "Kept apart"]], (x) => m.include.includes(x), toggleIn)) : null)
+        partner ? filterBox("In the authority's position", chipRow([["apart", "Kept apart"], ["in", "Included"]], (x) => (x === "in") === m.include.includes(partner.id), (x) => { if ((x === "in") !== m.include.includes(partner.id)) toggleIn(partner.id); })) : null)
       : h("div", { class: "filters" }, filterBox("Filter by political leaning", chipRow(BIAS, (x) => x === m.bias, (x) => { m.bias = x; again(); })), d.partners.length ? filterBox("Add partners to the authority's position", chipRow(d.partners.map((p) => [p.id, p.name]), (x) => m.include.includes(x), toggleIn)) : null);
   const crumbs = !isPublic && !root ? h("ol", { class: "crumbs", "aria-label": "Where you are on the map" }, trail.map((n, i) => h("li", {}, h("button", { type: "button", "aria-current": i === trail.length - 1 ? "page" : null, onclick: () => go(m.path.slice(0, i)) }, i ? n.label : rootName)))) : null;
 
@@ -781,13 +783,13 @@ function drawMap(box, a, d, ask) {
 }
 
 const moodFmt = (v) => (v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : "0");
-const moodName = (v) => (v <= -40 ? "very negative" : v <= -15 ? "negative" : v < 15 ? "mixed" : v < 40 ? "positive" : "very positive");
+const moodName = (v) => (v <= -40 ? "very negative" : v <= -10 ? "negative" : v < 10 ? "mixed" : v < 40 ? "positive" : "very positive");
 const leanName = (v) => (v <= -10 ? "down" : v >= 10 ? "up" : "mixed");
 
 function publicPanel(a, d) {
   const m = App.map, i = d.public.ages.indexOf(m.age), groups = Object.keys(d.public.groups);
   if (!groups.includes(m.split)) m.split = groups[0] ?? "";
-  const top = [...d.public.channels].sort((x, y) => y.rates[i] - x.rates[i]).slice(0, 3).map((c) => (c.key === "bbc" ? c.label : c.label.toLowerCase()));
+  const top = [...d.public.channels].sort((x, y) => y.rates[i] - x.rates[i]).slice(0, 3).map((c) => (/^(BBC|YouTube|WhatsApp)/.test(c.label) ? c.label : c.label.toLowerCase()));
   let up = 0, all = 0;
   for (const c of d.public.channels) if (c.mood && c.mood.v !== null) { up += c.rates[i] * c.mood.v; all += c.rates[i]; }
   const row = (d.public.groups.Age ?? []).find((g) => g.label === m.age), bars = h("div", { class: "rows" });
@@ -841,7 +843,7 @@ function nodePanel(a, d, cur, root, rootName, redraw, go) {
   return panel;
 }
 function mentionRow(a, d, p) {
-  const about = d.partners.find((x) => x.id === p.about), planned = d.planned.filter((x) => d.topicOf?.[x.id]?.includes(p.topic)).length;
+  const about = d.partners.find((x) => x.id === p.about), planned = d.planned.filter((x) => x.topics.includes(p.topic)).length;
   return h("li", {}, h("span", { class: `tone tone-${p.tone.toLowerCase()}` }, p.tone), h("div", {}, h("strong", {}, p.source), " ", h("span", { class: "note" }, fmtDate(p.date)), h("p", {}, p.summary),
     h("div", { class: "tags" }, h("span", { class: "tag" }, p.scope), h("span", { class: "tag" }, p.covers.join(", ") || d.services.find((s) => s.id === d.service)?.label), about ? h("span", { class: "tag" }, `About ${about.name}`) : null),
     h("div", { class: "tags" }, p.topic ? h("button", { class: "tag-b", type: "button", onclick: () => { App.filters.topic = p.topic; location.hash = `#campaign/${a.code}`; } }, `${p.topic}${planned ? `: ${planned} planned` : ""}`) : null,
@@ -910,7 +912,7 @@ async function dashView(page, a) {
   page.append(body);
   const view = App.viewId;
   let d, map, att;
-  try { [d, map, att] = await Promise.all([API.call("/api/authority", { code: a.code }), loadMap(a), API.call("/api/attention", { code: a.code }).catch(() => ({ ready: false, needs: "" }))]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
+  try { [d, map, att] = await Promise.all([API.call("/api/authority", { code: a.code }), loadMap(a, true), API.call("/api/attention", { code: a.code }).catch(() => ({ ready: false, needs: "" }))]); } catch (e) { if (view === App.viewId) clear(body).append(failure(e)); return; }
   if (view !== App.viewId) return;
   const street = d.evidence.streets.find((x) => !x.selfOnly) ?? null, month = map.months.find((x) => x.id === map.month)?.label;
   const tiles = [
@@ -922,7 +924,7 @@ async function dashView(page, a) {
   clear(body).append(pageHead(`${a.name}: ${map.services.find((s) => s.id === map.service)?.label}, ${month}`, "The figures behind the map, and what they mean."), h("div", { class: "grid g2" }, moodCard(a, map), readingCard(a, d)), h("div", { class: "grid g4" }, tiles), h("div", { class: "grid g2" }, functionCard(map), heatCard(a, map)));
   if (att.ready) add(body, h("div", { class: "grid g-wide" }, attentionCard(att), earlySignsCard(a, att)), drivingCard(att));
   else add(body, h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "Attention against concern"), h("p", {}, "Shows what's loud, what's felt, and what nobody is reporting yet."))), h("div", { class: "empty" }, h("p", { style: { margin: "0 auto 10px" } }, att.needs ? `This needs ${att.needs}.` : "This can't be worked out just now."), h("a", { class: "btn small", href: `#surveys/${a.code}` }, "Plan a street survey"))));
-  add(body, h("div", { class: "row" }, h("a", { class: "btn small", href: `#evidence/${a.code}` }, "Published evidence and what's missing"), h("a", { class: "btn small", href: `#attention/${a.code}` }, "Attention and concern in full")), compareCard(a, d, street), roleCard());
+  add(body, h("div", { class: "row" }, h("a", { class: "btn small", href: `#evidence/${a.code}` }, "Published evidence and what's missing"), h("a", { class: "btn small", href: `#attention/${a.code}` }, "Attention and concern in full"), h("a", { class: "btn small", href: `#notes/${a.code}` }, "Impact notes")), compareCard(a, d, street), roleCard());
 }
 
 // ---------------------------------------------------------------- high-impact issues
@@ -931,11 +933,11 @@ async function issuesView(page, a) {
   page.append(body);
   const view = App.viewId;
   const draw = async () => {
-    const [d, camp] = await Promise.all([loadMap(a), API.call("/api/campaign/get", { code: a.code, service: App.filters.service })]);
+    const [d, camp] = await Promise.all([loadMap(a, true), API.call("/api/campaign/get", { code: a.code, service: App.filters.service })]);
     if (view !== App.viewId) return;
     const status = (t) => camp.issues.find((x) => x.topic === t)?.status, canAct = d.canEdit && !d.election, month = d.months.find((x) => x.id === d.month)?.label;
     const peak = (k) => Math.max(1, ...d.topics.map((t) => Math.abs(t[k] || 0)));
-    const meters = (t) => h("div", { class: "meters" }, [["Concern", `${fmt(t.enquiries)} enquiries`, (100 * t.concern) / peak("concern")], ["Reach", `${fmt(t.reach)} people`, (100 * t.reach) / peak("reach")], ["Mood", t.mood === null ? "–" : moodFmt(t.mood), Math.abs(t.mood ?? 0)]].map(([label, value, pct]) => h("div", { class: "meter" }, h("span", { class: "note" }, label), h("strong", {}, value), h("span", { class: "bar-t" }, h("span", { class: "bar-f", style: { width: `${pct}%` } })))));
+    const meters = (t) => h("div", { class: "meters" }, [["Concern", `${fmt(t.enquiries)} enquiries`, (100 * t.concern) / peak("concern")], ["Reach", `${fmt(t.reach)} people`, (100 * t.reach) / peak("reach")], ["Mood", t.mood === null ? "–" : moodFmt(t.mood), Math.abs(t.mood ?? 0)]].map(([label, value, pct]) => h("div", { class: "mtr" }, h("span", { class: "note" }, label), h("strong", {}, value), h("span", { class: "bar-t" }, h("span", { class: "bar-f", style: { width: `${pct}%` } })))));
     const set = (topic, fields) => once(async () => { await API.call("/api/issue/set", { code: a.code, service: App.filters.service, topic, ...fields }); await draw(); }, (e) => toast(e.message));
     const drop = (topic) => once(async () => { await API.call("/api/issue/drop", { code: a.code, service: App.filters.service, topic }); await draw(); }, (e) => toast(e.message));
     const proposed = d.topics.filter((t) => t.proposed && !status(t.topic)), aside = camp.issues.filter((x) => x.status === "aside"), confirmed = camp.issues.filter((x) => x.status === "confirmed");
@@ -967,7 +969,7 @@ async function campaignView(page, a) {
   page.append(body);
   const view = App.viewId, cal = App.cal;
   const draw = async () => {
-    const [d, camp] = await Promise.all([loadMap(a), API.call("/api/campaign/get", { code: a.code, service: App.filters.service })]);
+    const [d, camp] = await Promise.all([loadMap(a, true), API.call("/api/campaign/get", { code: a.code, service: App.filters.service })]);
     if (view !== App.viewId) return;
     cal.start ||= mondayOn(d.today ?? new Date().toISOString().slice(0, 10));
     const weeks = [0, 7, 14, 21, 28].map((n) => plusDays(cal.start, n)), canPlan = d.canEdit && !camp.election, byTopic = cal.by === "topic", topic = App.filters.topic !== "all" ? App.filters.topic : "";
@@ -1034,7 +1036,7 @@ async function setupView(page, a) {
   const total = Object.values(d.weights).reduce((x, y) => x + y, 0) || 1;
   const names = { surveys: "Surveys", broadcast: "TV and radio", print: "Press and magazines", social: "Social and video", contact: "People getting in touch", events: "Events and context" };
   const weightMsg = saveNote(), weights = Object.keys(names).map((k) => { const el = h("input", { type: "number", min: 0, max: 100, step: 5, value: d.weights[k], disabled: !d.canWeigh, "aria-label": `Weight for ${names[k]}` }); return { k, el }; });
-  clear(body).append(h("div", { class: "grid g2" },
+  clear(body).append(h("div", { class: "grid g2 top-align" },
     h("section", { class: "card" }, h("h2", {}, `Functions for ${label}`), h("p", { class: "note" }, `${service === "highways" ? "FHRG's standard list is the Climate Toolkit's 13 highways functions." : std.length ? "FHRG sets a starting list." : "FHRG has no list for this service yet, so add your own."} Each authority's lead can rename, take out or add to it. A renamed function keeps its link to the Climate Toolkit.`), fns,
       d.canEdit && std.length ? h("button", { class: "btn small ghost", type: "button", onclick: once(async () => { await API.call("/api/setup/save", { code: a.code, part: "functions", service, list: std }); route(); }, (e) => toast(e.message)) }, "Go back to the standard list") : null),
     h("div", { class: "stack gap" },
@@ -1044,7 +1046,7 @@ async function setupView(page, a) {
       h("section", { class: "card" }, h("h2", {}, "Key partners"), h("p", { class: "note" }, "Optional. Useful where a partner is more visible than the authority. Ratings stick to what was said."), partners),
       h("section", { class: "card" }, h("h2", {}, "Campaign channels"), channels),
       h("section", { class: "card" }, h("h2", {}, "Switches"), h("div", { class: "fact" }, h("strong", {}, "Press from an NLA licence"), h("span", { class: "note" }, "Off until NLA confirms which licence covers it. Until then an officer posts and rates each piece.")), h("div", { class: "fact" }, h("strong", {}, "Works and weather"), h("span", { class: "note" }, "Only a lead of this authority can turn it on, and turning it off removes what's held."), h("a", { href: `#attention/${a.code}/works` }, "Works and weather")), h("div", { class: "fact" }, h("strong", {}, "Election setting"), h("span", { class: "note" }, "Only a lead of this authority can use it. It holds back campaign events and key messages, takes lines to take out of briefings, and pauses street surveys."), h("a", { href: `#briefings/${a.code}` }, "Councillor briefings"))),
-      h("a", { class: "btn small", href: `#about/${a.code}` }, "Sources and method"))));
+      h("div", { class: "row" }, h("a", { class: "btn small", href: `#about/${a.code}` }, "Sources and method")))));
 }
 
 const wordList = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list.join(""));

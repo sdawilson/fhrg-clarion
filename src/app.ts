@@ -193,6 +193,12 @@ async function handleAuthority(c: Config, request: Request): Promise<Response> {
   });
 }
 
+// The shared topics, and any an authority has added as its own high-impact issue
+async function topicsHere(c: Config, code: string): Promise<string[]> {
+  const [shared, campaign] = await Promise.all([sharedTopics(c), loadCampaign(c, code)]);
+  return [...shared, ...campaign.issues.filter((x) => x.own && !shared.includes(x.topic)).map((x) => x.topic)];
+}
+
 async function handleMap(c: Config, request: Request): Promise<Response> {
   const me = await signedIn(c, request);
   const b = await readJsonBody(request, 2000);
@@ -711,7 +717,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/picture": return await handlePicture(c, request);
         case "/api/coverage/source": { const { me, p, b } = await editor(c, request, 3000); return json({ source: await saveSource(c, me, p, b, await sharedTopics(c)) }); }
         case "/api/coverage/unsource": { const { p, b } = await editor(c, request, 1000); await removeSource(c, p, b.id); return json({ ok: true }); }
-        case "/api/coverage/assess": { const { me, p, b } = await editor(c, request, 3000); return json({ assessment: await saveAssessment(c, me, p, b, await sharedTopics(c)) }); }
+        case "/api/coverage/assess": { const { me, p, b } = await editor(c, request, 3000); return json({ assessment: await saveAssessment(c, me, p, b, await topicsHere(c, p.code)) }); }
         case "/api/coverage/unassess": { const { p, b } = await editor(c, request, 1000); await removeAssessment(c, p, b.id); return json({ ok: true }); }
         case "/api/coverage/check": { const { p, b } = await editor(c, request, 3000); return json(await checkCoverage(c, p, b)); }
         case "/api/admin/overview": return await handleAdminOverview(c, request);

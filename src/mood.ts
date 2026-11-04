@@ -94,7 +94,7 @@ const CHANNEL_PATHS: Record<string, string[] | null> = {
 
 export const fmtMood = (v: number | null | undefined) => (v === null || v === undefined ? "–" : v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : "0");
 export const leanOf = (v: number | null | undefined) => (v === null || v === undefined ? "none" : v <= -10 ? "down" : v >= 10 ? "up" : "mixed");
-export const moodWord = (v: number | null | undefined) => (v === null || v === undefined ? "too little to read" : v <= -40 ? "very negative" : v <= -15 ? "negative" : v < 15 ? "mixed" : v < 40 ? "positive" : "very positive");
+export const moodWord = (v: number | null | undefined) => (v === null || v === undefined ? "too little to read" : v <= -40 ? "very negative" : v <= -10 ? "negative" : v < 10 ? "mixed" : v < 40 ? "positive" : "very positive");
 const fromChange = (pct: number) => { const v = Math.round(pct * 2); return v === 0 ? 0 : -Math.max(-40, Math.min(40, v)); };
 const changeWords = (c: number) => (c > 0 ? `up ${c}%` : c < 0 ? `down ${Math.abs(c)}%` : "no change");
 const mean = (l: number[]) => (l.length ? Math.round(l.reduce((a, b) => a + b, 0) / l.length) : null);
@@ -244,7 +244,7 @@ function leaf(x: Ctx, d: Def, month: string): Mood {
 }
 function moodOf(x: Ctx, d: Def, month = x.f.month): Mood {
   if ((hasPool(d) && !d.blend) || (d === ROOT && x.f.view === "partners")) { // a firm has only what's been said about it
-    const least = d.id === "meetings" ? 1 : MIN_PIECES;
+    const least = d.id === "meetings" && x.f.view !== "partners" ? 1 : MIN_PIECES; // one meeting can't speak for a firm
     const list = d === ROOT ? piecesFor(x, { month }) : piecesFor(x, { month }).filter((p) => inDef(p.src, d)), sc = scoreOf(list, least);
     if (!list.length) return NONE;
     if (sc.adj === null) { const unit = list.length === 1 ? "piece" : "pieces"; return { v: null, txt: String(list.length), unit, lean: "none", word: moodWord(null), tip: `A mood needs ${least} pieces` }; }
@@ -270,6 +270,10 @@ const madeOf = (x: Ctx, d: Def, month = x.f.month) => {
     const all = piecesFor(x, { month }).filter((p) => inDef(p.src, d)).length;
     return rows.map((r) => { const n = piecesFor(x, { month }).filter((p) => inDef(p.src, r.d)).length; return { id: r.d.id, label: r.d.label, txt: r.m.txt, share: "Pooled", pct: shareOf(n, all), words: all ? `${n} of ${all} pieces` : "" }; });
   }
+  if (d === ROOT && x.f.view === "partners") { // a partner's mood pools its pieces, so each part shows its count
+    const list = piecesFor(x, { month });
+    return rows.map((r) => { const n = list.filter((p) => inDef(p.src, r.d)).length; return { id: r.d.id, label: r.d.label, txt: r.m.txt, share: `${n} ${n === 1 ? "piece" : "pieces"}`, pct: shareOf(n, list.length), words: list.length ? `${n} of ${list.length} pieces` : "" }; });
+  }
   const all = rows.reduce((a, r) => a + (r.w > 0 && r.m.v !== null ? r.w : 0), 0);
   return rows.map((r) => {
     const counted = r.w > 0 && r.m.v !== null, pct = counted ? shareOf(r.w, all) : null;
@@ -286,7 +290,7 @@ function factsFor(x: Ctx, d: Def): { title: string; sub: string; tags?: string[]
     case "mps": return data.questions.filter((q) => inMonth(q.date)).map((q) => ({ title: q.heading || "Question on roads", sub: q.date }));
     case "gov": return data.notes.filter((n) => inMonth(n.date)).map((n) => ({ title: n.title, sub: n.effect === null ? "No expected effect confirmed yet, so it isn't counted." : `Expected effect ${fmtMood(n.effect)}, confirmed by an officer.`, tags: n.routes.length ? n.routes : undefined }));
     case "news": return data.posts.filter((p) => inMonth(p.date)).map((p) => ({ title: p.title, sub: p.date }));
-    case "weather": return data.works.on ? data.works.events.filter((e) => inMonth(e.start)).map((e) => ({ title: e.label, sub: e.start === e.end ? e.start : `${e.start} to ${e.end}` })) : [];
+    case "weather": return data.works.on ? data.works.events.filter((e) => inMonth(e.start)).map((e) => ({ title: e.label, sub: e.start === e.end ? dayOf(e.start) : `${dayOf(e.start)} to ${dayOf(e.end)}` })) : [];
     case "published": return data.published.map((p) => ({ title: p.name, sub: `Here ${p.here}, region ${p.region}, England ${p.england}` }));
     default: return [];
   }
@@ -299,7 +303,7 @@ function notesFor(x: Ctx, d: Def, m: Mood): string[] {
   if (hasPool(d) && d !== ROOT) {
     const list = piecesFor(x).filter((p) => inDef(p.src, d));
     if (!list.length) out.push("Nothing recorded for this month yet.");
-    else if (m.v === null) out.push(`Too few to read: a mood needs ${d.id === "meetings" ? 1 : MIN_PIECES} pieces.`);
+    else if (m.v === null) out.push(`Too few to read: a mood needs ${d.id === "meetings" && f.view !== "partners" ? 1 : MIN_PIECES} pieces.`);
   }
   if (["print", "press"].includes(d.id)) out.push("An officer posts and rates each piece until NLA confirms which licence covers automatic collection.");
   if (["broadcast", "tv", "radio", "social", "socialm", "video"].includes(d.id)) out.push("Clarion doesn't read this. Officers record and rate each mention.");
@@ -375,12 +379,13 @@ function topicRows(x: Ctx) {
 }
 
 /** Not counted in the mood, but these should inform campaigns. */
+const dayOf = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 function considerations(x: Ctx) {
   const { d: data, f } = x, m = f.month;
   if (f.service !== DEFAULT_SERVICE) return [];
   const out: { kind: string; title: string; sub: string; topic: string }[] = [];
-  if (data.works.on) for (const e of data.works.events.filter((y) => y.start.slice(0, 7) === m)) out.push({ kind: "Weather", title: e.label, sub: e.start === e.end ? e.start : `${e.start} to ${e.end}`, topic: "" });
-  for (const p of data.posts.filter((y) => y.date.slice(0, 7) === m)) out.push({ kind: "Council news", title: p.title, sub: p.date, topic: p.topic });
+  if (data.works.on) for (const e of data.works.events.filter((y) => y.start.slice(0, 7) === m)) out.push({ kind: "Weather", title: e.label, sub: e.start === e.end ? dayOf(e.start) : `${dayOf(e.start)} to ${dayOf(e.end)}`, topic: "" });
+  for (const p of data.posts.filter((y) => y.date.slice(0, 7) === m)) out.push({ kind: "Council news", title: p.title, sub: dayOf(p.date), topic: p.topic });
   for (const p of data.published) out.push({ kind: "Published figures", title: `${p.name}: ${p.here}`, sub: `Region ${p.region}, England ${p.england}`, topic: "" });
   const r = streetFor(x, m);
   if (r?.byLink.n) out.push({ kind: "Replies by link", title: `${r.byLink.n} people chose to reply${r.byLink.sat === null ? "" : `: ${Math.round(r.byLink.sat)}% satisfied`}`, sub: r.satisfied === null ? "" : `Against ${Math.round(r.satisfied)}% with interviewers`, topic: "" });
@@ -398,7 +403,7 @@ export function buildMap(data: MapData, f: Filters) {
   const channelsById = new Map(data.setup.channels.map((c) => [c.id, c]));
   const planned = f.view === "authority" ? data.campaign.items.filter((i) => i.service === f.service && (f.topic === "all" || i.topics.includes(f.topic))).map((i) => {
     const ch = channelsById.get(i.channel), node = ch?.node ? find(ch.node) : null, trail = node ? pathToDef(node.id) : [];
-    return { id: i.id, title: i.title, date: i.date, channel: ch?.name ?? "No channel", nodes: ["root", ...trail] };
+    return { id: i.id, title: i.title, date: i.date, channel: ch?.name ?? "No channel", topics: i.topics, nodes: ["root", ...trail] };
   }) : [];
   const fns = (data.setup.functions[f.service] ?? []).map((fn) => {
     const list = piecesFor(x, { allAbout: false }).filter((p) => (p.functions ?? []).includes(fn.id)), sc = scoreOf(list), q = streetFor(x, f.month)?.questions.find((y) => y.fn === fn.id);
