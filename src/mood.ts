@@ -10,7 +10,7 @@
 
 import type { Plans } from "./campaign";
 import { pieceWeight, type Assessment, type Source } from "./coverage";
-import type { Setup, Weights } from "./setup";
+import type { Fn, Setup, Weights } from "./setup";
 import { DEFAULT_SERVICE, SERVICES, serviceId } from "./setup";
 import type { StreetPoint } from "./surveys";
 
@@ -21,7 +21,7 @@ export type MapData = {
   enquiries: Record<string, { total: number; byTopic: Record<string, number> }>; adults: number | null; ageAdults: number[] | null;
   monthly: Record<string, { perDay: number | null; reports: number; petitions?: { title: string; local: number; above: boolean }[]; questions?: { date: string; heading: string }[] }>; // an unread feed leaves its part out
   questions: { date: string; heading: string }[]; rated: Record<string, string>; announcements: { title: string; date: string }[];
-  works: { on: boolean; weeks: { week: string; public: number }[]; events: { label: string; start: string; end: string; detail?: string }[] };
+  works: { on: boolean; weeks: { week: string; public: number; fns: Record<string, number> }[]; events: { label: string; start: string; end: string; detail?: string }[] };
   notes: { id: string; title: string; date: string; effect: number | null; topic: string; routes: string[] }[];
   posts: { title: string; date: string; topic: string }[];
   published: { name: string; here: string; region: string; england: string }[];
@@ -173,6 +173,25 @@ const NONE: Mood = { v: null, txt: "–", unit: "", lean: "none", word: moodWord
 const show = (v: number, unit = "", tip = ""): Mood => ({ v, txt: fmtMood(v), unit, lean: leanOf(v), word: moodWord(v), tip });
 const context = (n: number, unit: string, tip = "It informs campaigns, and isn't counted in the mood"): Mood => ({ v: null, ctx: true, txt: String(n), unit, lean: n ? "ctx" : "none", word: "informs campaigns", tip });
 
+/** Which functions pull most on public opinion. A piece with no function chosen is about the service overall, so it counts for none of them.
+ *  Three signals, each a function's share of the service's total: coverage weighted by reach and leaning critical, dissatisfied replies
+ *  in the street survey, and jobs logged by function in the four weeks to the month's end. The pull is the average of the shares that
+ *  have anything, so a function nobody has written about can still pull through the survey. A calculation on counts, not Claude's opinion. */
+function functionRows(x: Ctx, fns: Fn[]) {
+  const pieces = piecesFor(x, { allAbout: false }), street = streetFor(x, x.f.month), end = lastDay(x.f.month);
+  const from = new Date(Date.parse(`${end}T12:00:00Z`) - 28 * DAY_MS).toISOString().slice(0, 10);
+  const jobsIn = x.d.works.on ? x.d.works.weeks.filter((w) => w.week > from && w.week <= end) : [];
+  const ahead = x.d.plans.actions.filter((i) => i.service === x.f.service && i.date >= x.d.today);
+  const rows = fns.map((fn) => {
+    const list = pieces.filter((p) => (p.functions ?? []).includes(fn.id)), sc = scoreOf(list), q = street?.questions.find((y) => y.fn === fn.id);
+    const press = list.reduce((a, p) => a + reachBand(p) * pieceWeight(p.src, p).factor * (1 - toneOf(p)), 0); // critical counts double a neutral piece, supportive nothing
+    const jobs = x.d.works.on ? jobsIn.reduce((a, w) => a + (w.fns[fn.id] ?? 0), 0) : null;
+    return { id: fn.id, name: fn.name, pieces: list.length, mood: sc.adj, raw: sc.raw, survey: q ? q.sat : null, dis: q ? q.dis : null, press, jobs, actions: ahead.filter((i) => (i.functions ?? []).includes(fn.id)).length };
+  });
+  const share = (get: (r: (typeof rows)[number]) => number | null) => { const all = rows.reduce((a, r) => a + (get(r) ?? 0), 0); return all > 0 ? rows.map((r) => (100 * (get(r) ?? 0)) / all) : null; };
+  const signals = [["coverage", share((r) => r.press)], ["the street survey", share((r) => r.dis)], ["jobs by function", share((r) => r.jobs)]].filter((s): s is [string, number[]] => s[1] !== null);
+  return rows.map(({ press: _press, ...r }, i) => ({ ...r, pull: signals.length ? Math.round(signals.reduce((a, s) => a + s[1][i], 0) / signals.length) : null, signals: signals.map((s) => s[0]) }));
+}
 const streetFor = (x: Ctx, month: string) => {
   const end = lastDay(month), from = new Date(Date.parse(`${end}T12:00:00Z`) - SURVEY_DAYS * DAY_MS).toISOString().slice(0, 10);
   return x.d.streets.find((s) => !s.selfOnly && (s.service ?? DEFAULT_SERVICE) === x.f.service && s.ran && s.ran <= end && s.ran >= from) ?? null;
@@ -451,10 +470,7 @@ export function buildMap(data: MapData, f: Filters) {
     const ch = channelsById.get(i.channel), node = ch?.node ? find(ch.node) : null, trail = node ? pathToDef(node.id) : [];
     return { id: i.id, title: i.title, date: i.date, channel: ch?.name ?? "No channel", topics: i.topics, nodes: ["root", ...trail] };
   }) : [];
-  const fns = (data.setup.functions[f.service] ?? []).map((fn) => {
-    const list = piecesFor(x, { allAbout: false }).filter((p) => (p.functions ?? []).includes(fn.id)), sc = scoreOf(list), q = streetFor(x, f.month)?.questions.find((y) => y.fn === fn.id);
-    return { id: fn.id, name: fn.name, pieces: list.length, mood: sc.adj, raw: sc.raw, survey: q ? q.sat : null };
-  });
+  const fns = functionRows(x, data.setup.functions[f.service] ?? []);
   const street = streetFor(x, f.month);
   const lastMonths = monthsFor(data.today).slice(0, 5).reverse();
   const heat = [{ id: "root", label: "Mood" }, ...BRANCHES.map((b) => ({ id: b.id, label: b.label }))].map((r) => ({ ...r, cells: lastMonths.map((m) => { const v = moodOf(x, find(r.id)!, m.id); return { month: m.id, txt: v.ctx ? "–" : v.txt, lean: v.v === null ? "none" : v.lean, raw: v.raw ?? null, tip: v.tip }; }) }));

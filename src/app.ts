@@ -63,7 +63,7 @@
 //   POST /api/issue/drop           {code, service, topic}
 //   POST /api/campaign/save        {code, service, id, name, topic, messages, start, end, ongoing, review, budget, budgets}
 //   POST /api/campaign/remove      {code, service, id}
-//   POST /api/action/save          {code, service, id, title, date, channel, topics, origin, survey, campaign, planned, actual}: add or change an action
+//   POST /api/action/save          {code, service, id, title, date, channel, topics, functions, origin, survey, campaign, planned, actual}: add or change an action (no functions: the service overall)
 //   POST /api/action/remove        {code, id}
 //   POST /api/action/actual        {code, id, actual}: what an action already held cost, allowed under the election setting
 //   POST /api/note/effect          {code, id, effect, topic}: what an officer expects a note to do to mood
@@ -720,7 +720,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         case "/api/issue/drop": { const { p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await dropIssue(c, p.code, b.topic, serviceId(b.service)); return json({ ok: true }); }
         case "/api/campaign/save": { const { me, p, b } = await editor(c, request, 6000); await notInElection(c, p.code); const money = isMember(me, p); return json({ campaign: campaignFor(await saveCampaign(c, p.code, b, serviceId(b.service), me.name, money), money) }); }
         case "/api/campaign/remove": { const { me, p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await removeCampaign(c, p.code, b.id, isMember(me, p)); return json({ ok: true }); }
-        case "/api/action/save": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); const money = isMember(me, p); return json({ action: actionFor(await saveAction(c, p.code, b, serviceId(b.service), me.name, money), money) }); }
+        case "/api/action/save": { const { me, p, b } = await editor(c, request, 3000); await notInElection(c, p.code); const money = isMember(me, p), service = serviceId(b.service), known = ((await loadSetup(c, p.code)).functions[service] ?? []).map((f) => f.id); return json({ action: actionFor(await saveAction(c, p.code, b, service, me.name, money, known), money) }); }
         case "/api/action/remove": { const { me, p, b } = await editor(c, request, 1000); await notInElection(c, p.code); await removeAction(c, p.code, b.id, isMember(me, p)); return json({ ok: true }); }
         case "/api/action/actual": { const { me, p, b } = await editor(c, request, 1000); if (!isMember(me, p)) throw new FriendlyError("Costs stay with the authority, so only its own members can add them.", 403); const x = await setActual(c, p.code, b.id, b.actual); return json({ action: { id: x.id, actual: x.actual } }); }
         case "/api/note/effect": { const { p, b } = await editor(c, request, 1000); if (!validId(b.id)) throw new FriendlyError("That note wasn't found.", 404); return json({ note: await setEffect(c, p.code, b.id, b.effect, b.topic) }); }

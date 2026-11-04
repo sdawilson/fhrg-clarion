@@ -80,7 +80,7 @@ export async function loadMapData(c: Config, p: Pilot): Promise<MapData> {
     today, unread, setup, weights, topics: [...topics, ...own.filter((t) => !topics.includes(t))], sources, assessments, streets, adults: census?.adults ?? null, ageAdults: census ? adultsByAge(census) : null, rated, announcements: (gov ?? []).map((x) => ({ title: x.title, date: x.date })),
     residents: headlineSurvey([...p.surveys, ...facts.surveys]), enquiries: enquiriesByMonth(heldEnquiries, topics), monthly,
     questions: Object.values(monthly).flatMap((m) => m.questions ?? []),
-    works: { on: works.on, weeks: works.weeks.map((w) => ({ week: w.week, public: w.public })), events: works.events.map((e) => ({ label: e.label, start: e.start, end: e.end })) },
+    works: { on: works.on, weeks: works.weeks.map((w) => ({ week: w.week, public: w.public, fns: w.fns ?? {} })), events: works.events.map((e) => ({ label: e.label, start: e.start, end: e.end })) },
     notes: notes.filter((n) => n.status === "ready").map((n) => ({ id: n.id, title: n.change?.title || n.input.title, date: n.created.slice(0, 10), effect: n.effect ?? null, topic: n.topic ?? "", routes: [...new Set(n.impacts.map((i) => i.route))] })),
     posts: (posts ?? []).map((x) => ({ title: x.title, date: x.date, topic: x.topic })),
     published: (figures?.condition ?? []).map((x) => ({ name: `${x.roadClass} roads to consider for repair, ${x.fye}`, here: `${x.value}%`, region: x.region === null ? "–" : `${x.region}%`, england: x.england === null ? "–" : `${x.england}%` })),
