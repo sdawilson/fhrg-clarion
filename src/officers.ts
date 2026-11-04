@@ -25,7 +25,7 @@ export function officersBriefing(map: MapPage, issues: Issue[], campaigns: Campa
   const onIssue = (i: Issue) => {
     const t = map.topics.find((x) => x.topic === i.topic), planned = map.planned.filter((x) => x.topics.includes(i.topic) && x.date >= today).length;
     const sign = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v)}`, mood = t && t.mood !== null ? `: mood ${sign(t.mood)} (${sign(t.raw ?? 0)} before weighting)` : "", asked = t?.enquiries ? `, ${t.enquiries.toLocaleString("en-GB")} ${t.enquiries === 1 ? "enquiry" : "enquiries"}` : "";
-    return `${i.topic}${mood}${asked}, ${planned} planned`;
+    return `${i.topic}${mood}${asked}, ${planned} planned${i.key && !campaigns.some((c) => c.topic === i.topic) ? `. Key message: ${i.key}` : ""}`;
   };
   const running = campaigns.filter((x) => x.ongoing || x.end >= today).sort((x, y) => x.start.localeCompare(y.start));
   const onCampaign = (x: Campaign) => `${x.name}, on ${x.topic.toLowerCase()}: ${x.ongoing ? "ongoing" : `${day(x.start)} to ${day(x.end)}`}${x.messages.length ? `. Key messages: ${x.messages.join(" ")}` : ""}`;

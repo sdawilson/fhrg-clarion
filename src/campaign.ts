@@ -43,8 +43,9 @@ function readDate(v: unknown, words: string): string {
   return date;
 }
 export function readCost(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  const n = typeof v === "number" ? v : Number(String(v).replace(/[£,\s]/g, ""));
+  const typed = typeof v === "number" ? v : String(v ?? "").replace(/[£,\s]/g, "");
+  if (typed === "") return null;
+  const n = Number(typed);
   if (!Number.isFinite(n) || n < 0 || n > MAX_COST) throw new FriendlyError("Give a cost in pounds, such as 1,500.");
   return Math.round(n * 100) / 100;
 }
@@ -88,7 +89,9 @@ export function saveCampaign(c: Config, code: string, b: any, service: string, b
   const name = cleanText(b?.name, NAME_CHARS), topic = cleanText(b?.topic, 80);
   if (!name) throw new FriendlyError("Give the campaign a name.");
   if (!topic) throw new FriendlyError("Choose the topic this campaign is aligned with.");
-  const messages = (Array.isArray(b?.messages) ? b.messages : []).map((t: unknown) => cleanLong(t, KEY_CHARS)).filter(Boolean);
+  const typed = Array.isArray(b?.messages) ? b.messages : [];
+  if (typed.some((t: unknown) => String(t ?? "").trim().length > KEY_CHARS)) throw new FriendlyError(`Keep each key message to ${KEY_CHARS} letters.`);
+  const messages = typed.map((t: unknown) => cleanLong(t, KEY_CHARS)).filter(Boolean);
   if (messages.length > MAX_MESSAGES) throw new FriendlyError(`A campaign can hold up to ${MAX_MESSAGES} key messages.`);
   const ongoing = b?.ongoing === true, start = readDate(b?.start, "Give the campaign a start date.");
   const end = ongoing ? "" : readDate(b?.end, "Give the campaign an end date, or mark it as ongoing.");
@@ -109,9 +112,11 @@ export function saveCampaign(c: Config, code: string, b: any, service: string, b
     return campaign;
   });
 }
-export function removeCampaign(c: Config, code: string, id: unknown): Promise<void> {
+const HOLDS_MONEY = "This holds money, so only the authority's own members can take it out.";
+export function removeCampaign(c: Config, code: string, id: unknown, money: boolean): Promise<void> {
   return change(c, code, (all) => {
-    const n = all.actions.filter((x) => x.campaign === id).length;
+    const was = all.campaigns.find((x) => x.id === id), n = all.actions.filter((x) => x.campaign === id).length;
+    if (!money && was && (was.budget !== null || Object.keys(was.budgets).length)) throw new FriendlyError(HOLDS_MONEY, 403);
     if (n) throw new FriendlyError(`Move or take out its ${n === 1 ? "action" : `${n} actions`} first, so no costs are lost.`);
     all.campaigns = all.campaigns.filter((x) => x.id !== id);
   });
@@ -122,7 +127,7 @@ export function syncTell(c: Config, code: string, survey: { id: string; title: s
   const wanted = [...new Set((survey.tell ?? []).map((m) => m.topic).filter(Boolean))], origin = `Message on the survey: ${survey.title}`, today = londonToday();
   return change(c, code, (all) => {
     const theirs = (x: Action) => x.survey === survey.id && x.origin.startsWith("Message on the survey");
-    all.actions = all.actions.filter((x) => !theirs(x) || x.topics.some((t) => wanted.includes(t)));
+    all.actions = all.actions.filter((x) => !theirs(x) || x.topics.some((t) => wanted.includes(t)) || x.planned !== null || x.actual !== null); // costs are never lost by changing a survey
     for (const topic of wanted) {
       if (all.actions.some((x) => theirs(x) && x.topics.includes(topic)) || all.actions.length >= MAX_ACTIONS) continue;
       const running = all.campaigns.find((x) => x.topic === topic && x.service === service && (x.ongoing || (today >= x.start && today <= x.end)));
@@ -152,8 +157,12 @@ export function saveAction(c: Config, code: string, b: any, service: string, by:
     return action;
   });
 }
-export function removeAction(c: Config, code: string, id: unknown): Promise<void> {
-  return change(c, code, (all) => { all.actions = all.actions.filter((x) => x.id !== id); });
+export function removeAction(c: Config, code: string, id: unknown, money: boolean): Promise<void> {
+  return change(c, code, (all) => {
+    const was = all.actions.find((x) => x.id === id);
+    if (!money && was && (was.planned !== null || was.actual !== null)) throw new FriendlyError(HOLDS_MONEY, 403);
+    all.actions = all.actions.filter((x) => x.id !== id);
+  });
 }
 
 /** The one change allowed while the election setting is on: what an action already held really cost. */

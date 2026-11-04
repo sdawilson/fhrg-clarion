@@ -454,7 +454,7 @@ const Demo = {
     return { briefing: on ? { ...b, lines: [], questions: b.questions.map((q) => ({ ...q, answer: "" })), electionNote: Demo.pack.electionNote } : { ...b, electionNote: "" }, canEdit: true, canApprove: true, election: Demo.election };
   },
   camp: null,
-  cost: (v) => (v === "" || v === null || v === undefined ? null : Number(String(v).replace(/[£,\s]/g, ""))),
+  cost: (v) => { const t = String(v ?? "").replace(/[£,\s]/g, ""), n = Number(t); if (t === "") return null; if (!Number.isFinite(n) || n < 0) throw new Error("Give a cost in pounds, such as 1,500."); return Math.round(n * 100) / 100; },
   campaign() { return (this.camp ??= JSON.parse(JSON.stringify(this.pack.campaign))); },
   prepared(kind, result) { this.job = { id: "20261030090000000-de000009", kind, status: "ready", stage: "Ready", result, done: 0, total: 0 }; return { job: this.job }; },
   async call(path, b = {}) {
@@ -711,7 +711,7 @@ function fillPickers() {
 }
 function pickerRow() {
   const pick = (label, key, first) => {
-    const sel = h("select", { onchange: () => { App.filters[key] = sel.value; App.map.path = []; App.map.scope = "all"; route(); } }, h("option", { value: first[0] }, first[1]));
+    const sel = h("select", { onchange: () => { App.filters[key] = sel.value; App.map.path = []; App.map.scope = "all"; if (key === "service") showPanel(); route(); } }, h("option", { value: first[0] }, first[1]));
     App.pick[key] = sel;
     return h("label", { class: "picker" }, label, sel);
   };
@@ -727,7 +727,7 @@ async function planFrom(a, topic, origin, survey = "") {
     const running = camp.campaigns.find((c) => c.topic === topic && stateOf(c, today) !== "Finished"); // it joins a campaign on the topic, if there is one
     const next = NEXT_TUESDAY(), date = !running || running.ongoing ? next : next < running.start ? running.start : next > running.end ? running.end : next;
     const { action } = await API.call("/api/action/save", { code: a.code, service: App.filters.service, title: topic ? `Response on ${topic.toLowerCase()}` : "New response", date, channel: camp.channels[0]?.id ?? "", topics: topic ? [topic] : [], origin, survey, campaign: running?.id ?? "" });
-    App.cal.open = action.id; App.cal.camp = ""; App.filters.topic = "all";
+    showPanel({ open: action.id }); App.filters.topic = "all";
     if (location.hash === `#campaign/${a.code}`) route(); else location.hash = `#campaign/${a.code}`;
   } catch (e) { toast(e.message); } finally { App.planning = false; }
 }
@@ -1023,8 +1023,8 @@ async function issuesView(page, a) {
     const right = h("section", { class: "stack" }, h("h2", {}, "Confirmed"), d.election ? h("div", { class: "callout warn" }, "The election setting is on, so campaigns and key messages are held back and nothing can be changed.") : null,
       confirmed.length ? confirmed.map((x) => {
         const t = d.topics.find((y) => y.topic === x.topic), n = camp.actions.filter((i) => i.topics.includes(x.topic) && i.date >= camp.today).length, bear = d.considerations.filter((b) => b.topic === x.topic), mine = camp.campaigns.filter((c) => c.topic === x.topic);
-        return h("article", { class: "card" }, h("div", { class: "row spread" }, h("h3", {}, x.topic), h("span", { class: "pill" }, `${n} planned`)), t && t.mood !== null ? meters(t) : null, mine.map((c) => h("a", { class: "row-link", href: `#campaign/${a.code}`, onclick: () => { App.cal.camp = c.id; App.cal.open = ""; } }, h("strong", {}, c.name), h("span", { class: "note" }, `${stateOf(c, camp.today)}. ${spanOf(c)}`))), x.key && !mine.length ? h("p", { class: "note" }, `Key message: ${x.key}`) : null, bear.length ? h("p", { class: "note" }, `Bear in mind: ${bear.map((b) => `${b.title} (${b.kind.toLowerCase()})`).join("; ")}`) : null,
-          h("div", { class: "row" }, canAct ? h("a", { class: "btn primary small", href: `#campaign/${a.code}`, onclick: () => { App.cal.camp = "new"; App.cal.open = ""; App.cal.seed = { topic: x.topic, messages: x.key ? [x.key] : [] }; } }, "Start a campaign") : null, h("a", { class: "btn small", href: `#campaign/${a.code}`, onclick: () => { App.filters.topic = x.topic; } }, "See its actions"), canAct ? h("button", { class: "btn ghost small", type: "button", onclick: drop(x.topic) }, "Step back") : null));
+        return h("article", { class: "card" }, h("div", { class: "row spread" }, h("h3", {}, x.topic), h("span", { class: "pill" }, `${n} planned`)), t && t.mood !== null ? meters(t) : null, mine.map((c) => h("a", { class: "row-link", href: `#campaign/${a.code}`, onclick: () => showPanel({ camp: c.id }) }, h("strong", {}, c.name), h("span", { class: "note" }, `${stateOf(c, camp.today)}. ${spanOf(c)}`))), x.key && !mine.length ? h("p", { class: "note" }, `Key message: ${x.key}. Start a campaign to change it.`) : null, bear.length ? h("p", { class: "note" }, `Bear in mind: ${bear.map((b) => `${b.title} (${b.kind.toLowerCase()})`).join("; ")}`) : null,
+          h("div", { class: "row" }, canAct ? h("a", { class: "btn primary small", href: `#campaign/${a.code}`, onclick: () => showPanel({ camp: "new", seed: { topic: x.topic, messages: x.key ? [x.key] : [] } }) }, "Start a campaign") : null, h("a", { class: "btn small", href: `#campaign/${a.code}`, onclick: () => { App.filters.topic = x.topic; } }, "See its actions"), canAct ? h("button", { class: "btn ghost small", type: "button", onclick: drop(x.topic) }, "Step back") : null));
       }) : h("p", { class: "muted" }, "Nothing confirmed yet."));
     add(clear(body), pageHead(`High-impact issues, ${month}`, "Clarion proposes these from concern, reach and mood. An officer confirms them, and can add their own."), h("div", { class: "grid g2" }, left, right));
   };
@@ -1035,62 +1035,74 @@ async function issuesView(page, a) {
 const mondayOn = (iso) => { const x = new Date(`${iso}T12:00:00Z`); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x.toISOString().slice(0, 10); };
 const plusDays = (iso, n) => { const x = new Date(`${iso}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const shortDay = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-const gbp = (n) => (n === null || n === undefined ? "–" : `£${n.toLocaleString("en-GB", { maximumFractionDigits: 2 })}`);
+const gbp = (n) => (n === null || n === undefined ? "–" : `£${n.toLocaleString("en-GB", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })}`);
+const pence = (n) => Math.round(n * 100) / 100;
 const fyOf = (iso) => { const y = Number(iso.slice(0, 4)), from = Number(iso.slice(5, 7)) >= 4 ? y : y - 1; return `${from}-${String(from + 1).slice(2)}`; };
 // The budget is set for the campaign, and its actions' costs are added up beside it. An ongoing campaign is read a financial year at a time.
 function totalsOf(c, actions, today) {
   const fy = fyOf(today), mine = actions.filter((x) => x.campaign === c.id && (!c.ongoing || fyOf(x.date) === fy));
-  const budget = c.ongoing ? c.budgets?.[fy] ?? null : c.budget, add = (of) => mine.reduce((n, x) => n + (of(x) ?? 0), 0);
-  return { fy, budget, planned: add((x) => x.planned), actual: add((x) => x.actual), left: budget === null ? null : budget - add((x) => x.actual ?? x.planned), actions: mine.length };
+  const budget = c.ongoing ? c.budgets?.[fy] ?? null : c.budget, add = (of) => pence(mine.reduce((n, x) => n + (of(x) ?? 0), 0));
+  return { fy, budget, planned: add((x) => x.planned), actual: add((x) => x.actual), left: budget === null ? null : pence(budget - add((x) => x.actual ?? x.planned)), actions: mine.length };
 }
 const stateOf = (c, today) => (c.ongoing ? (c.review <= today ? "Review due" : "Ongoing") : today < c.start ? "Not started" : today > c.end ? "Finished" : "Running");
 const spanOf = (c) => (c.ongoing ? `Review by ${fmtDate(c.review)}` : `${fmtDate(c.start)} to ${fmtDate(c.end)}`);
-const keyMessagesOf = (camp) => [...camp.campaigns.flatMap((x) => x.messages.map((text) => ({ topic: x.topic, text }))), ...camp.issues.filter((x) => x.key && x.status === "confirmed").map((x) => ({ topic: x.topic, text: x.key }))];
+// A key message from before campaigns stands until a campaign on its topic takes over
+const keyMessagesOf = (camp) => [...camp.campaigns.filter((x) => stateOf(x, camp.today) !== "Finished").flatMap((x) => x.messages.map((text) => ({ topic: x.topic, text }))), ...camp.issues.filter((x) => x.key && x.status === "confirmed" && !camp.campaigns.some((c) => c.topic === x.topic)).map((x) => ({ topic: x.topic, text: x.key }))];
 const leftWords = (t) => (t.left === null ? "–" : t.left < 0 ? h("span", { class: "pill serious" }, `${gbp(-t.left)} over`) : gbp(t.left));
 const moneyNote = (fy) => `The budget is set for the campaign, apart from its actions. Planned and actual add up its actions. What's left counts an action's actual cost once it's known, and its planned cost until then. An ongoing campaign shows ${fy}.`;
 
+// What the side panel shows. Anything typed or seeded for the last thing shown goes with it.
+const showPanel = (to = {}) => Object.assign(App.cal, { open: "", camp: "", seed: null, draft: null }, to);
 function campaignPanel(panel, a, d, camp, c, draw) {
-  const cal = App.cal, today = camp.today, canAct = d.canEdit && !camp.election, seed = c ? {} : cal.seed ?? {}, fy = fyOf(today), msg = h("div", {});
-  const name = h("input", { value: c?.name ?? "", maxlength: 120, disabled: !canAct });
-  const pick = c?.topic ?? seed.topic ?? (App.filters.topic !== "all" ? App.filters.topic : "");
+  const cal = App.cal, today = camp.today, canAct = d.canEdit && !camp.election, seed = c ? {} : cal.seed ?? {}, fy = fyOf(today), msg = h("div", {}), kept = cal.draft ?? {};
+  const name = h("input", { value: kept.name ?? c?.name ?? "", maxlength: 120, disabled: !canAct });
+  const pick = kept.topic ?? c?.topic ?? seed.topic ?? (App.filters.topic !== "all" ? App.filters.topic : "");
   const topic = h("select", { disabled: !canAct }, h("option", { value: "" }, "Choose a topic"), [...d.topicList, ...(pick && !d.topicList.includes(pick) ? [pick] : [])].map((t) => h("option", { value: t }, t)));
   topic.value = pick;
-  const messages = h("textarea", { rows: 4, disabled: !canAct }); messages.value = (c?.messages ?? seed.messages ?? []).join("\n");
-  const start = h("input", { type: "date", value: c?.start ?? today, disabled: !canAct }), end = h("input", { type: "date", value: c?.end ?? "", disabled: !canAct }), review = h("input", { type: "date", value: c?.review ?? "", disabled: !canAct });
-  const ongoing = h("input", { type: "checkbox", checked: !!c?.ongoing, disabled: !canAct, onchange: () => show() });
-  const budget = h("input", { inputmode: "decimal", disabled: !canAct }), budgetLabel = h("span", {}), endBox = h("label", { class: "field" }, "End date", end), reviewBox = h("label", { class: "field" }, "Review date", review);
-  const show = () => { endBox.hidden = ongoing.checked; reviewBox.hidden = !ongoing.checked; budgetLabel.textContent = ongoing.checked ? `Budget for ${fy}` : "Budget"; budget.value = (ongoing.checked ? c?.budgets?.[fy] : c?.budget) ?? ""; };
+  const messages = h("textarea", { rows: 4, disabled: !canAct }); messages.value = kept.messages ?? (c?.messages ?? seed.messages ?? []).join("\n");
+  const start = h("input", { type: "date", value: kept.start ?? c?.start ?? today, disabled: !canAct }), end = h("input", { type: "date", value: kept.end ?? c?.end ?? "", disabled: !canAct }), review = h("input", { type: "date", value: kept.review ?? c?.review ?? "", disabled: !canAct });
+  const ongoing = h("input", { type: "checkbox", checked: kept.ongoing ?? !!c?.ongoing, disabled: !canAct, onchange: () => show() });
+  let typed = kept.typed ?? false;
+  const budget = h("input", { inputmode: "decimal", disabled: !canAct, value: kept.budget ?? "", oninput: () => { typed = true; } }), budgetLabel = h("span", {}), endBox = h("label", { class: "field" }, "End date", end), reviewBox = h("label", { class: "field" }, "Review date", review);
+  const show = () => { endBox.hidden = ongoing.checked; reviewBox.hidden = !ongoing.checked; budgetLabel.textContent = ongoing.checked ? `Budget for ${fy}` : "Budget"; if (!typed) budget.value = (ongoing.checked ? c?.budgets?.[fy] : c?.budget) ?? ""; };
   show();
+  const keep = () => { cal.draft = { name: name.value, topic: topic.value, messages: messages.value, start: start.value, end: end.value, review: review.value, ongoing: ongoing.checked, budget: budget.value, typed }; };
+  panel.addEventListener("input", keep); panel.addEventListener("change", keep);
   const save = once(async () => {
     const budgets = { ...(c?.budgets ?? {}) };
     if (ongoing.checked) { if (budget.value.trim()) budgets[fy] = budget.value; else delete budgets[fy]; }
     await API.call("/api/campaign/save", { code: a.code, service: App.filters.service, id: c?.id, name: name.value, topic: topic.value, messages: messages.value.split("\n").map((x) => x.trim()).filter(Boolean), start: start.value, end: end.value, ongoing: ongoing.checked, review: review.value, budget: ongoing.checked ? c?.budget ?? null : budget.value, budgets });
-    cal.camp = ""; cal.seed = null; if (App.demo) toast("In the demonstration, nothing is saved."); await draw();
+    showPanel(); if (App.demo) toast("In the demonstration, nothing is saved."); await draw();
   }, (e) => add(clear(msg), failure(e)));
-  const remove = once(async () => { await API.call("/api/campaign/remove", { code: a.code, service: App.filters.service, id: c.id }); cal.camp = ""; await draw(); }, (e) => add(clear(msg), failure(e)));
+  const remove = once(async () => { await API.call("/api/campaign/remove", { code: a.code, service: App.filters.service, id: c.id }); showPanel(); await draw(); }, (e) => add(clear(msg), failure(e)));
   const t = c ? totalsOf(c, camp.actions, today) : null, mine = c ? camp.actions.filter((x) => x.campaign === c.id).sort((x, y) => x.date.localeCompare(y.date)) : [];
   add(panel, h("h2", {}, c ? c.name : "New campaign"), c ? h("p", { class: "note" }, `${stateOf(c, today)}. ${spanOf(c)}`) : null,
     c && camp.money ? [h("div", { class: "scorebox" }, [["Budget", gbp(t.budget)], ["Planned", gbp(t.planned)], ["Actual", gbp(t.actual)], ["Left", leftWords(t)]].map(([w, v]) => h("div", {}, h("strong", {}, v), h("span", { class: "note" }, w)))), h("p", { class: "note" }, moneyNote(t.fy))] : null,
     h("label", { class: "field" }, "Name", name), h("label", { class: "field" }, "Topic", topic), h("label", { class: "field" }, "Key messages, one on each line", messages, h("span", { class: "hint" }, "Up to five.")),
     h("label", { class: "field" }, "Start date", start), h("label", { class: "check" }, ongoing, "Ongoing, with no end date"), endBox, reviewBox, camp.money ? h("label", { class: "field" }, budgetLabel, budget, h("span", { class: "hint" }, "A figure set for the campaign, separate from its actions.")) : null, msg,
-    canAct ? h("div", { class: "row" }, h("button", { class: "btn primary small", type: "button", onclick: save }, "Save"), h("button", { class: "btn ghost small", type: "button", onclick: () => { cal.camp = ""; cal.seed = null; draw(); } }, "Cancel"), c ? h("button", { class: "btn ghost small", type: "button", onclick: remove }, "Take it out") : null) : h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => { cal.camp = ""; draw(); } }, "Done")),
-    mine.length ? [h("h3", {}, "Its actions"), h("div", { class: "rows" }, mine.map((x) => h("button", { class: "row-link linkrow", type: "button", onclick: () => { cal.open = x.id; cal.camp = ""; draw(); } }, h("strong", {}, x.title), h("span", { class: "note" }, `${shortDay(x.date)}${camp.money ? `. Planned ${gbp(x.planned)}, actual ${gbp(x.actual)}` : ""}`))))] : null);
+    canAct ? h("div", { class: "row" }, h("button", { class: "btn primary small", type: "button", onclick: save }, "Save"), h("button", { class: "btn ghost small", type: "button", onclick: () => { showPanel(); draw(); } }, "Cancel"), c ? h("button", { class: "btn ghost small", type: "button", onclick: remove }, "Take it out") : null) : h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => { showPanel(); draw(); } }, "Done")),
+    mine.length ? [h("h3", {}, "Its actions"), h("div", { class: "rows" }, mine.map((x) => h("button", { class: "row-link linkrow", type: "button", onclick: () => { showPanel({ open: x.id }); draw(); } }, h("strong", {}, x.title), h("span", { class: "note" }, `${shortDay(x.date)}${camp.money ? `. Planned ${gbp(x.planned)}, actual ${gbp(x.actual)}` : ""}`))))] : null);
 }
 
 function actionPanel(panel, a, d, camp, it, draw) {
   const cal = App.cal, canPlan = d.canEdit && !camp.election, owner = camp.campaigns.find((c) => c.id === it.campaign);
-  const save = async (fields) => { const saved = { ...it, ...fields }; try { await API.call("/api/action/save", { code: a.code, service: App.filters.service, ...saved }); Object.assign(it, fields); } catch (e) { toast(e.message); } };
+  const save = async (fields) => {
+    if (!canPlan) return;
+    const was = Object.fromEntries(Object.keys(fields).map((k) => [k, it[k]]));
+    Object.assign(it, fields); // the next save, however soon, carries this one too
+    try { await API.call("/api/action/save", { code: a.code, service: App.filters.service, ...it }); } catch (e) { Object.assign(it, was); cal.redo = true; toast(e.message); }
+  };
   const bounded = owner && !owner.ongoing ? { min: owner.start, max: owner.end } : {};
-  const title = h("input", { value: it.title, maxlength: 140, onchange: () => save({ title: title.value }).then(draw) }), date = h("input", { type: "date", value: it.date, ...bounded, onchange: () => { if (date.value) save({ date: date.value }).then(draw); } });
-  const choose = h("select", { "aria-label": "Campaign", onchange: () => save({ campaign: choose.value }).then(draw) }, h("option", { value: "" }, "No campaign"), camp.campaigns.map((c) => h("option", { value: c.id }, c.name)));
+  const title = h("input", { value: it.title, maxlength: 140, disabled: !canPlan, onchange: () => save({ title: title.value }).then(draw) }), date = h("input", { type: "date", value: it.date, disabled: !canPlan, ...bounded, onchange: () => { if (date.value) save({ date: date.value }).then(draw); } });
+  const choose = h("select", { "aria-label": "Campaign", disabled: !canPlan, onchange: () => save({ campaign: choose.value }).then(draw) }, h("option", { value: "" }, "No campaign"), camp.campaigns.map((c) => h("option", { value: c.id }, c.name)));
   choose.value = it.campaign;
-  const cost = (key) => { const el = h("input", { inputmode: "decimal", value: it[key] ?? "", onchange: () => save({ [key]: el.value }).then(draw) }); return el; };
+  const cost = (key) => { const el = h("input", { inputmode: "decimal", value: it[key] ?? "", disabled: !canPlan, onchange: () => save({ [key]: el.value }).then(draw) }); return el; };
   const keys = owner ? owner.messages : it.topics.flatMap((t) => keyMessagesOf(camp).filter((x) => x.topic === t).map((x) => x.text)), tiedBear = d.considerations.filter((b) => b.topic && it.topics.includes(b.topic));
   add(panel, h("h2", {}, "Action"), it.origin ? h("p", { class: "note" }, `Came from: ${it.origin}`) : null, h("label", { class: "field" }, "What it is", title), h("label", { class: "field" }, "Campaign", choose), h("label", { class: "field" }, "Date", date, owner ? h("span", { class: "hint" }, owner.ongoing ? "This campaign is ongoing, so any date will do." : `Must fall within ${spanOf(owner)}.`) : null),
     camp.money ? h("div", { class: "form-grid" }, h("label", { class: "field" }, "Planned cost", cost("planned")), h("label", { class: "field" }, "Actual cost", cost("actual"))) : null,
     h("div", { class: "field" }, "Channel", chipRow(camp.channels.map((c) => [c.id, c.name]), (x) => x === it.channel, (x) => save({ channel: x }).then(draw))), h("div", { class: "field" }, "Topics it answers: choose one or more", chipRow(d.topicList.map((t) => [t, t]), (x) => it.topics.includes(x), (x) => save({ topics: it.topics.includes(x) ? it.topics.filter((y) => y !== x) : [...it.topics, x] }).then(draw))),
     keys.length ? h("div", { class: "field" }, "Key messages", keys.map((t) => h("p", { class: "note" }, t))) : null, tiedBear.length ? h("div", { class: "field" }, "Bear in mind", tiedBear.map((b) => h("p", { class: "note" }, `${b.title}: ${b.sub}`))) : null,
-    h("div", { class: "row" }, h("button", { class: "btn primary small", type: "button", onclick: () => { cal.open = ""; draw(); } }, "Done"), it.survey ? h("a", { class: "btn small", href: `#survey/${a.code}/${it.survey}/tell` }, "Open the survey") : null, canPlan ? h("button", { class: "btn ghost small", type: "button", onclick: once(async () => { await API.call("/api/action/remove", { code: a.code, id: it.id }); cal.open = ""; await draw(); }, (e) => toast(e.message)) }, "Take it out") : null));
+    h("div", { class: "row" }, h("button", { class: "btn primary small", type: "button", onclick: () => { showPanel(); draw(); } }, "Done"), it.survey ? h("a", { class: "btn small", href: `#survey/${a.code}/${it.survey}/tell` }, "Open the survey") : null, canPlan ? h("button", { class: "btn ghost small", type: "button", onclick: once(async () => { await API.call("/api/action/remove", { code: a.code, id: it.id }); showPanel(); await draw(); }, (e) => toast(e.message)) }, "Take it out") : null));
 }
 
 // The election setting holds everything here back, but what's already been spent still has to be recorded
@@ -1114,23 +1126,25 @@ async function campaignView(page, a) {
     const chName = (id) => camp.channels.find((c) => c.id === id)?.name ?? "No channel";
     const confirmed = camp.issues.filter((x) => x.status === "confirmed").map((x) => x.topic), tied = [...new Set(camp.actions.flatMap((i) => i.topics))];
     const moods = Object.fromEntries(d.topics.map((t) => [t.topic, t])), moodWords = (t) => (moods[t]?.mood === null || moods[t]?.mood === undefined ? "" : `Mood ${moodFmt(moods[t].mood)}, ${moodFmt(moods[t].raw)} before weighting`);
+    const onTopic = (c) => !topic || c.topic === topic || camp.actions.some((i) => i.campaign === c.id && i.topics.includes(topic)); // an action in another campaign can still answer this topic
     const rows = cal.by === "campaign"
-      ? [...camp.campaigns.filter((c) => !topic || c.topic === topic).map((c) => ({ label: c.name, sub: [`${stateOf(c, today)}. ${spanOf(c)}`, moodWords(c.topic)].filter(Boolean).join(". "), match: (i) => i.campaign === c.id, seed: { campaign: c.id, topics: [c.topic] }, within: c })), ...(camp.actions.some((i) => !i.campaign && (!topic || i.topics.includes(topic))) ? [{ label: "No campaign", sub: "", match: (i) => !i.campaign && (!topic || i.topics.includes(topic)), seed: {} }] : [])]
+      ? [...camp.campaigns.filter(onTopic).map((c) => ({ label: c.name, sub: [`${stateOf(c, today)}. ${spanOf(c)}`, moodWords(c.topic)].filter(Boolean).join(". "), match: (i) => i.campaign === c.id && (!topic || c.topic === topic || i.topics.includes(topic)), seed: { campaign: c.id, topics: [c.topic] }, within: c })), ...(camp.actions.some((i) => !i.campaign && (!topic || i.topics.includes(topic))) ? [{ label: "No campaign", sub: "", match: (i) => !i.campaign && (!topic || i.topics.includes(topic)), seed: {} }] : [])]
       : cal.by === "topic"
         ? [...(topic ? [topic] : [...new Set([...confirmed, ...tied])]).map((t) => ({ label: t, sub: moodWords(t), match: (i) => i.topics.includes(t), seed: { topics: [t] } })), ...(!topic && camp.actions.some((i) => !i.topics.length) ? [{ label: "No topic yet", sub: "", match: (i) => !i.topics.length, seed: {} }] : [])]
         : camp.channels.map((c) => ({ label: c.name, sub: "", match: (i) => i.channel === c.id, seed: { channel: c.id } }));
     const shown = camp.actions.filter((i) => byChannel || cal.channel === "all" || i.channel === cal.channel);
     const outside = (r, w) => r.within && !r.within.ongoing && (plusDays(w, 6) < r.within.start || w > r.within.end);
     const dayIn = (r, w) => { const x = plusDays(w, 1), c = r.within; return !c || c.ongoing ? x : x < c.start ? c.start : x > c.end ? c.end : x; };
-    const addTo = (r, w) => once(async () => { const { action } = await API.call("/api/action/save", { code: a.code, service: App.filters.service, title: "New action", date: dayIn(r, w), channel: cal.channel !== "all" ? cal.channel : camp.channels[0]?.id ?? "", topics: [], origin: "Added on the calendar", ...r.seed }); cal.open = action.id; cal.camp = ""; await draw(); }, (e) => toast(e.message));
-    const openCampaign = (id) => { cal.camp = id; cal.open = ""; draw(); };
+    const addTo = (r, w) => once(async () => { const { action } = await API.call("/api/action/save", { code: a.code, service: App.filters.service, title: "New action", date: dayIn(r, w), channel: cal.channel !== "all" ? cal.channel : camp.channels[0]?.id ?? "", topics: [], origin: "Added on the calendar", ...r.seed }); showPanel({ open: action.id }); await draw(); }, (e) => toast(e.message));
+    const openCampaign = (id) => { showPanel({ camp: id }); draw(); };
     const grid = h("div", { class: "cal", style: { gridTemplateColumns: `180px repeat(${weeks.length}, minmax(128px, 1fr))` } }, h("div", { class: "cal-h" }, { campaign: "Campaign", topic: "Topic", channel: "Channel" }[cal.by]), weeks.map((w) => h("div", { class: "cal-h" }, `From ${shortDay(w)}`)),
       rows.map((r) => [h("div", { class: "cal-r" }, r.within ? h("button", { class: "linkish cal-name", type: "button", onclick: () => openCampaign(r.within.id) }, r.label) : h("strong", {}, r.label), r.sub ? h("span", { class: "note" }, r.sub) : null),
-        weeks.map((w) => h("div", { class: `cal-c${outside(r, w) ? " off" : ""}` }, shown.filter((i) => r.match(i) && i.date >= w && i.date < plusDays(w, 7)).sort((x, y) => x.date.localeCompare(y.date)).map((i) => h("button", { class: "ev", type: "button", "aria-pressed": String(cal.open === i.id), onclick: () => { cal.open = i.id; cal.camp = ""; draw().catch((e) => toast(e.message)); } }, h("span", { class: "note" }, shortDay(i.date)), h("strong", {}, i.title), h("span", { class: "note" }, byChannel ? i.topics.join(", ") || "No topic yet" : chName(i.channel)))),
+        weeks.map((w) => h("div", { class: `cal-c${outside(r, w) ? " off" : ""}` }, shown.filter((i) => r.match(i) && i.date >= w && i.date < plusDays(w, 7)).sort((x, y) => x.date.localeCompare(y.date)).map((i) => h("button", { class: "ev", type: "button", "aria-pressed": String(cal.open === i.id), onclick: () => { showPanel({ open: i.id }); draw().catch((e) => toast(e.message)); } }, h("span", { class: "note" }, shortDay(i.date)), h("strong", {}, i.title), h("span", { class: "note" }, byChannel ? i.topics.join(", ") || "No topic yet" : chName(i.channel)))),
           canPlan && !outside(r, w) ? h("button", { class: "ev-add", type: "button", "aria-label": `Add to ${r.label}, week from ${shortDay(w)}`, onclick: addTo(r, w) }, "+") : null))]));
-    const list = camp.campaigns.filter((c) => !topic || c.topic === topic), fy = fyOf(today);
-    const table = list.length ? h("section", { class: "card" }, h("h2", {}, "Campaigns"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Campaign"), h("th", {}, "Topic"), h("th", {}, "Dates"), h("th", { class: "r" }, "Actions"), camp.money ? ["Budget", "Planned", "Actual", "Left"].map((w) => h("th", { class: "r" }, w)) : null)),
-      h("tbody", {}, list.map((c) => { const t = totalsOf(c, camp.actions, today); return h("tr", {}, h("td", {}, h("button", { class: "linkish", type: "button", onclick: () => openCampaign(c.id) }, c.name)), h("td", {}, c.topic), h("td", {}, h("span", { class: "pill" }, stateOf(c, today)), " ", spanOf(c)), h("td", { class: "r" }, fmt(t.actions)), camp.money ? [gbp(t.budget), gbp(t.planned), gbp(t.actual), leftWords(t)].map((v) => h("td", { class: "r" }, v)) : null); })))), camp.money ? h("p", { class: "note" }, moneyNote(fy)) : null) : null;
+    const list = camp.campaigns.filter(onTopic), fy = fyOf(today), loose = camp.money ? camp.actions.filter((i) => !i.campaign && (i.planned !== null || i.actual !== null)) : [];
+    const table = list.length || loose.length ? h("section", { class: "card" }, h("h2", {}, "Campaigns"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Campaign"), h("th", {}, "Topic"), h("th", {}, "Dates"), h("th", { class: "r" }, "Actions"), camp.money ? ["Budget", "Planned", "Actual", "Left"].map((w) => h("th", { class: "r" }, w)) : null)),
+      h("tbody", {}, list.map((c) => { const t = totalsOf(c, camp.actions, today); return h("tr", {}, h("td", {}, h("button", { class: "linkish", type: "button", onclick: () => openCampaign(c.id) }, c.name)), h("td", {}, c.topic), h("td", {}, h("span", { class: "pill" }, stateOf(c, today)), " ", spanOf(c)), h("td", { class: "r" }, fmt(t.actions)), camp.money ? [gbp(t.budget), gbp(t.planned), gbp(t.actual), leftWords(t)].map((v) => h("td", { class: "r" }, v)) : null); }),
+        loose.length ? h("tr", {}, h("td", {}, "No campaign"), h("td", {}), h("td", {}, "Any date"), h("td", { class: "r" }, fmt(loose.length)), ["–", gbp(pence(loose.reduce((n, x) => n + (x.planned ?? 0), 0))), gbp(pence(loose.reduce((n, x) => n + (x.actual ?? 0), 0))), "–"].map((v) => h("td", { class: "r" }, v))) : null))), camp.money ? h("p", { class: "note" }, moneyNote(fy)) : null) : null;
     const main = h("div", { class: "col-main" }, pageHead("Campaign calendar", "Campaigns and their actions, placed by date."), camp.election ? h("div", { class: "callout warn" }, "The election setting is on. Campaigns, actions and key messages are held back until it's off.") : null, camp.held.length ? heldCosts(a, camp) : null,
       h("div", { class: "filters" }, filterBox("Arrange by", chipRow([["campaign", "By campaign"], ["topic", "By topic"], ["channel", "By channel"]], (x) => x === cal.by, (x) => { cal.by = x; draw(); })), byChannel ? null : filterBox("Show channel", chipRow([["all", "All"], ...camp.channels.map((c) => [c.id, c.name])], (x) => x === cal.channel, (x) => { cal.channel = x; draw(); })),
         filterBox("Weeks", h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => { cal.start = plusDays(cal.start, -28); draw(); } }, "Earlier"), h("button", { class: "btn small", type: "button", onclick: () => { cal.start = plusDays(cal.start, 28); draw(); } }, "Later")))),
@@ -1138,7 +1152,7 @@ async function campaignView(page, a) {
     const it = camp.actions.find((i) => i.id === cal.open), open = camp.campaigns.find((c) => c.id === cal.camp), panel = h("aside", { class: "panel", "aria-label": "Details" });
     const bear = d.considerations.filter((b) => !topic || !b.topic || b.topic === topic);
     if (it) actionPanel(panel, a, d, camp, it, draw);
-    else if (open || cal.camp === "new") campaignPanel(panel, a, d, camp, open ?? null, draw);
+    else if (open || (cal.camp === "new" && canPlan)) campaignPanel(panel, a, d, camp, open ?? null, draw);
     else {
       if (canPlan) add(panel, h("div", { class: "row" }, h("button", { class: "btn primary small", type: "button", onclick: () => openCampaign("new") }, "New campaign")));
       if (bear.length) add(panel, h("h2", {}, "Bear in mind"), h("p", { class: "note" }, "Not counted in the mood, but these should inform a campaign."), h("div", { class: "rows" }, bear.map((b) => h("div", { class: "fact" }, h("strong", {}, b.title), h("span", { class: "note" }, b.sub), h("div", { class: "tags" }, h("span", { class: "tag" }, b.kind), b.topic ? h("span", { class: "tag" }, b.topic) : null, canPlan ? h("button", { class: "linkish", type: "button", onclick: () => planFrom(a, b.topic, `${b.kind}: ${b.title}`) }, "Plan around this") : null)))));
@@ -1146,7 +1160,10 @@ async function campaignView(page, a) {
       if (keys.length) add(panel, h("h2", {}, "Key messages"), h("div", { class: "rows" }, keys.map((x) => h("div", { class: "fact" }, h("strong", {}, x.topic), h("span", { class: "note" }, x.text)))));
       add(panel, h("details", {}, h("summary", {}, "Change the channels"), listEditor(camp.channels, [["name", "Channel name"]], "Add a channel", async (rows) => (await API.call("/api/setup/save", { code: a.code, part: "channels", list: rows })).setup.channels, d.canEdit)));
     }
-    add(clear(body), main, panel);
+    // Moving from one box to the next shouldn't throw away what's being typed, so the totals update and the panel stays
+    const showing = `${cal.open}|${cal.camp}`, at = document.activeElement, typing = it && showing === cal.showing && !cal.redo && body.querySelector(".panel")?.contains(at) && /^(INPUT|TEXTAREA|SELECT)$/.test(at.tagName);
+    cal.showing = showing; cal.redo = false;
+    if (typing) body.firstChild.replaceWith(main); else add(clear(body), main, panel);
   };
   try { await draw(); } catch (e) { if (view === App.viewId) add(clear(body), failure(e)); }
 }
