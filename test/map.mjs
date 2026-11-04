@@ -70,6 +70,7 @@ ok(!JSON.stringify(map).match(/resident's|Jane/), "nothing about a person is on 
 // the election setting holds a campaign back, even in the demonstration
 const held = t.demoMap({ election: true });
 ok(held.election === true && held.planned.length === 0, "the election setting takes actions off the map");
+ok(t.demoOfficers({ election: true }).briefing.parts.find((p) => p.heading === "Campaigns").paras[0] === "Held back by the election setting." && t.demoOfficers({}).briefing.parts.find((p) => p.heading === "Campaigns").bullets.length === 2, "the officers' briefing holds back its campaigns too");
 ok(t.demoOfficers({ election: true }).briefing.parts.find((p) => p.heading === "Coming up").paras[0] === "Held back by the election setting." && !/We are repairing/.test(JSON.stringify(t.demoOfficers({ election: true }))), "and key messages and events out of the officers' briefing");
 
 // ---- Set-up
@@ -479,6 +480,8 @@ go(d, "#campaign/NORTHBRIDGE");
 await until(() => d.querySelector(".cal"), "the calendar");
 ok(d.querySelectorAll(".ev").length >= 4 && /Mood −/.test(text(d.querySelector(".cal"))) && /Fixing potholes faster/.test(text(d.querySelector(".cal"))) && clean(d), "the calendar lists actions by campaign, with each topic's mood");
 ok(!/[Cc]ampaign events?\b/.test(text(d.getElementById("app"))), "they're called actions");
+const year = JSON.parse(d.defaultView.eval(`JSON.stringify(totalsOf({ id: "c", ongoing: true, budgets: { "2026-27": 100 } }, [{ campaign: "c", date: "2026-10-01", planned: 10, actual: null }, { campaign: "c", date: "2027-04-01", planned: 50, actual: null }, { campaign: "c", date: "2026-03-31", planned: 70, actual: null }], "2026-11-04"))`));
+ok(year.fy === "2026-27" && year.planned === 10 && year.left === 90, "an ongoing campaign is read one financial year at a time");
 main = text(d.querySelector(".main"));
 ok(/Budget/.test(main) && /£12,000/.test(main) && /£6,300/.test(main) && /£5,700/.test(main), "each campaign shows its budget, what's planned and what's left");
 ok(/£20,000/.test(main) && /£3,250/.test(main) && /£14,250/.test(main), "what's left counts an actual cost once it's known");
