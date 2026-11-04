@@ -326,7 +326,7 @@ export function buildPack() {
     ],
     exports: { [autumn.id]: { name: "autumn-roads-survey.csv", csv: answersCsv(autumn, rows, census, true) }, [winter.id]: { name: "winter-roads-survey.csv", csv: answersCsv(winter, [], census, true) } },
     coverage: demoCoverage(census), enquiries, works: demoWorks(street?.satisfied ?? null), coverageCheck: DEMO_CHECK, abcTitles: [{ name: "Dale Valley Gazette", owner: "Made-up Media", period: "Jan - Dec 2025", total: 6200 }],
-    picture: { ages: AGE_BANDS.map(([from, to]) => (to ? `${from} to ${to}` : `${from} or over`)), adults: census ? adultsByAge(census) : null, channels: channelsFrom([...DEMO_RATES, ...demoChannels()]), announcements: 3, posts: 5, weather: { events: 2, latest: "Heavy rain" } },
+    picture: { ages: AGE_BANDS.map(([from, to]) => (to ? `${from} to ${to}` : `${from} or over`)), adults: census ? adultsByAge(census) : null, channels: channelsFrom([...DEMO_RATES, ...demoChannels()]), announcements: 3, posts: 5, weather: { events: 2, latest: "Heavy rain", to: today } },
     attention: comparison, qr: { url: "", rows: qrCode("Northbridge is a demonstration, so this code leads nowhere.") },
     ...demoBriefing(street?.satisfied ?? null, street?.responses ?? 0, today),
   };

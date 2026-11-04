@@ -232,10 +232,12 @@ async function handlePicture(c: Config, request: Request): Promise<Response> {
     briefly("announcements", null, () => announcements()), sharedTopics(c), loadEnquiries(c, p.code), loadWorks(c, p.code),
   ]);
   const posts = await councilNews(p, enquiries.page || p.newsPage, topics);
-  const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), recent = (list: { date: string }[] | null) => (list ? list.filter((x) => x.date >= since).length : null);
+  const fourWeeksBefore = (date: number) => new Date(date - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const since = fourWeeksBefore(Date.now()), recent = (list: { date: string }[] | null) => (list ? list.filter((x) => x.date >= since).length : null);
+  const weatherFrom = fourWeeksBefore(Date.parse(`${works.weatherTo || londonToday()}T12:00:00Z`)); // these figures stand still until the page is next opened, so they say how far they go
   return json({
     ages: AGES.map(([age]) => age), adults: census ? adultsByAge(census) : null, channels: channelsFrom(rates), announcements: recent(gov), posts: recent(posts),
-    weather: works.on ? { events: works.events.filter((e) => e.end >= since).length, latest: works.events.at(-1)?.label ?? "" } : null,
+    weather: works.on ? { events: works.events.filter((e) => e.end >= weatherFrom).length, latest: works.events.at(-1)?.label ?? "", to: works.weatherTo } : null,
   });
 }
 
