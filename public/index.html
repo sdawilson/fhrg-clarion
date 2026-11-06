@@ -787,7 +787,7 @@ function aroundHub(n, rx, ry) {
   return Array.from({ length: n }, (_, i) => {
     const a = ((start + (360 * i) / n) * Math.PI) / 180, up = Math.sin(a), over = Math.cos(a);
     // the label sits on the far side of its circle, so a line never crosses one
-    return { x: +(50 + rx * over).toFixed(2), y: +(50 + ry * up).toFixed(2), side: up < -0.85 ? "above" : up > 0.85 ? "below" : over >= 0 ? "right" : "left" };
+    return { x: +(50 + rx * over).toFixed(2), y: +(50 + ry * up).toFixed(2), side: up < -0.95 ? "above" : up > 0.95 ? "below" : over >= 0 ? "right" : "left" };
   });
 }
 // With shares, each circle sits beside its stretch of the ring, the first at the top, and small shares are spread
