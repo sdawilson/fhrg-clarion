@@ -438,14 +438,24 @@ ok(d.querySelectorAll(".stage .nd").length === 6, "six circles around the middle
 ok(node(d, "Surveys").querySelector(".bub").textContent === "−26" && /of the mood/.test(node(d, "Surveys").querySelector(".nd-sub").textContent), "each with its mood inside and its share below");
 ok(node(d, "Surveys").className.includes("lean-down") && d.querySelector(".hub").className.includes("lean-down"), "coloured by mood, with the middle too");
 ok(d.querySelectorAll(".wires path").length === 1 && d.querySelector(".wires path").getAttribute("d").split("M").length === 7, "joined by straight lines");
-const size = (x) => parseInt(x.style.getPropertyValue("--d"), 10);
-ok(size(node(d, "Surveys")) > size(node(d, "TV and radio")), "a bigger share is a bigger circle");
+ok(![...d.querySelectorAll(".stage .nd")].some((x) => x.style.getPropertyValue("--d")), "every circle is the same size");
+const arcs = [...d.querySelectorAll(".hub-ring path")], degs = arcs.map((x) => Number(x.dataset.deg));
+ok(arcs.length === 5, "the ring has a stretch for each part counted in the mood, and none for one that isn't");
+ok(Math.abs(degs.reduce((x, y) => x + y, 0) - 360) < 0.5, "the stretches go right round");
+ok(Math.abs(degs[0] - 158.4) < 4 && degs[0] > degs[1] * 3, "a bigger share is a longer stretch of the ring");
+ok(arcs[0].getAttribute("class") === "ring-down", "each stretch takes its part's colour");
+ok(node(d, "Surveys").className.includes("above"), "the first part sits at the top");
+ok(new Set([...d.querySelectorAll(".stage .nd")].map((x) => `${x.style.left} ${x.style.top}`)).size === 6, "no two circles share a place");
+ok(/share of the mood/.test(text(d.querySelector(".pic-legend"))) && !/bigger circle/.test(text(d.querySelector(".pic-legend"))), "the key says what the ring shows");
 ok(/1 planned|2 planned/.test(text(node(d, "Press and magazines"))), "planned events show on their part of the map");
 
 // the same in every view
 d.querySelector(".nd .nd-label").closest("button");
 [...d.querySelectorAll(".seg button")].find((b) => b.textContent === "The public").click();
 await until(() => /Aged 45 to 54/.test(text(d.querySelector(".hub"))), "the public view");
+ok(!d.querySelector(".hub-ring") && d.querySelectorAll(".bub-arc").length === d.querySelectorAll(".stage.big .nd").length, "reach doesn't add up to 100, so each circle has its own arc and there's no ring");
+ok([...d.querySelectorAll(".stage.big .nd")].every((x) => x.querySelector(".bub-arc circle").getAttribute("stroke-dasharray").split(" ")[0] === x.querySelector(".nd-sub").textContent.match(/^(\d+)%/)[1]), "each arc is that circle's own percentage");
+ok(/arc round each circle/.test(text(d.querySelector(".pic-legend"))), "and the key says so");
 ok(d.querySelectorAll(".stage.big .nd").length >= 7 && [...d.querySelectorAll(".stage.big .nd")].every((x) => /% of this age group/.test(x.querySelector(".nd-sub").textContent)), "the public view keeps a share below each circle");
 ok(/from one Ofcom question/.test(text(d.querySelector(".panel"))) && /doesn't measure Northbridge/.test(text(d.querySelector(".panel"))), "labelled as a national pattern that doesn't measure the authority");
 ok(!/WhatsApp and nextdoor|youtube/.test(text(d.querySelector(".panel"))), "with names kept as they should be");
