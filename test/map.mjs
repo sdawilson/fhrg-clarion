@@ -466,6 +466,16 @@ ok(d.querySelector(".panel details table") && /See every age as a table/.test(te
 [...d.querySelectorAll(".seg button")].find((b) => b.textContent === "Key partners").click();
 await until(() => /Dale Highways/.test(text(d.querySelector(".hub"))), "the partner view");
 ok(/isn't a verdict/.test(text(d.querySelector(".panel"))) && clean(d), "a partner's view records what was said");
+// a partner is mentioned in few places, so several parts have no share and want the same spot by the ring
+const spacing = () => { const p = [...d.querySelectorAll(".stage .nd")].map((x) => [parseFloat(x.style.left) * 10, parseFloat(x.style.top) * 7]); return Math.min(...p.flatMap((a, i) => p.slice(i + 1).map((b) => Math.hypot(a[0] - b[0], a[1] - b[1])))); };
+const clockwise = () => [...d.querySelectorAll(".stage .nd")].map((x) => ({ name: x.querySelector(".nd-label").textContent, deg: (Math.atan2(parseFloat(x.style.left) - 50, 50 - parseFloat(x.style.top)) * 180) / Math.PI })).map((x) => ({ ...x, deg: (x.deg + 360) % 360 }));
+for (const name of ["Dale Highways", "Brightway Lighting", "Northern Valley Water"]) {
+  [...d.querySelectorAll(".filter .chip")].find((b) => b.textContent === name).click();
+  await until(() => text(d.querySelector(".hub")).includes(name), name);
+  const round = clockwise(), from = round.reduce((best, x, i) => (x.deg < round[best].deg ? i : best), 0), seen = [...round.slice(from), ...round.slice(0, from)].map((x) => x.name);
+  ok(spacing() > 150, `${name}: no circle sits on another`);
+  ok([...round].sort((x, y) => x.deg - y.deg).map((x) => x.name).join() === seen.join(), `${name}: the circles keep the ring's order`);
+}
 [...d.querySelectorAll(".seg button")].find((b) => b.textContent === "The authority").click();
 await until(() => /Negative, worsening/.test(text(d.querySelector(".hub"))), "back to the authority");
 

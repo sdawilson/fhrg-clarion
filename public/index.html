@@ -803,17 +803,37 @@ function placeAround(nodes, rx, ry, big) {
     at += sweep;
     return mid;
   });
-  const gap = (360 / n) * 0.72;
-  if (n > 1) for (let pass = 0; pass < 60; pass++) for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n, apart = (((angles[j] - angles[i]) % 360) + 360) % 360;
-    if (apart < gap) { angles[i] -= (gap - apart) / 2; angles[j] += (gap - apart) / 2; }
-  }
   const high = big ? 0.82 : 0.7;
-  const pts = angles.map((deg) => {
+  const pts = spreadAngles(angles, (360 / n) * 0.72).map((deg) => {
     const t = (deg * Math.PI) / 180, a = Math.atan2(-Math.cos(t) / (ry * high), Math.sin(t) / rx), up = Math.sin(a), over = Math.cos(a);
     return { x: +(50 + rx * over).toFixed(2), y: +(50 + ry * up).toFixed(2), side: up < -0.97 ? "above" : up > 0.97 ? "below" : over >= 0 ? "right" : "left" };
   });
   return { pts, arcs };
+}
+// Moves circles apart so neighbours are at least `gap` degrees apart, keeping their order round the ring and moving
+// each as little as possible. Several parts with no share all want the same spot, so this is worked out exactly (a
+// least-squares fit that can only rise, read from each circle in turn) rather than by nudging pairs apart, which
+// let circles pass through one another and settle on top of each other.
+function spreadAngles(want, gap) {
+  const n = want.length;
+  if (n < 2) return want.slice();
+  let best = null;
+  for (let s = 0; s < n; s++) {
+    const order = Array.from({ length: n }, (_, k) => (s + k) % n), d = order.map((i, k) => want[i] + (s + k >= n ? 360 : 0));
+    const blocks = [];
+    d.forEach((v, k) => {
+      blocks.push({ sum: v - k * gap, n: 1 });
+      while (blocks.length > 1 && blocks.at(-2).sum / blocks.at(-2).n > blocks.at(-1).sum / blocks.at(-1).n) { const b = blocks.pop(); blocks.at(-1).sum += b.sum; blocks.at(-1).n += b.n; }
+    });
+    const x = blocks.flatMap((b) => Array(b.n).fill(b.sum / b.n)).map((y, k) => y + k * gap);
+    if (x[n - 1] - x[0] > 360 - gap + 1e-6) continue; // the last would crowd the first
+    const cost = x.reduce((sum, v, k) => sum + (v - d[k]) ** 2, 0);
+    if (!best || cost < best.cost) best = { cost, order, x };
+  }
+  if (!best) { const step = 360 / n, mid = want.reduce((sum, v, i) => sum + v - i * step, 0) / n; return want.map((_, i) => mid + i * step); }
+  const out = Array(n);
+  best.order.forEach((i, k) => { out[i] = best.x[k]; });
+  return out;
 }
 function ringArc({ from, sweep }) {
   const r = 96, pad = sweep >= 359.9 ? 0 : Math.min(1, sweep / 4), run = Math.min(sweep, 359.9) - pad * 2;
