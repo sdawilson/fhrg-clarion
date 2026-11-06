@@ -264,10 +264,13 @@ tr.selected td { background: var(--surface-2); }
 .map-zoom button { width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; }
 .map-credit { position: absolute; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.85); padding: 1px 6px; font-size: 0.72rem; }
 .qr { width: 220px; height: 220px; display: block; }
-/* The map, in all three views: the mood in a circle, the same colours, its share below, and a bigger circle for a
-   bigger share. A plain line joins each pair of circles by the shortest route. */
-:root { --lean-down: #d9731f; --lean-down-ink: #17212c; --lean-up: #264a6f; --lean-up-ink: #ffffff; --lean-mixed: #7f8ea3; --lean-mixed-ink: #17212c; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --lean-down: #e38a3e; --lean-up: #6ea3e0; --lean-up-ink: #0b1420; --lean-mixed: #5c6b7d; --lean-mixed-ink: #ffffff; } }
+/* The map, in all three views: the mood in a circle, the same colours, its share below, and every circle the same
+   size. A ring round the middle shows the shares; in the public view, where the figures are reach and don't add up to
+   100, an arc round each circle shows its own. A plain line joins each circle to the middle. */
+:root { --lean-down: #d9731f; --lean-down-ink: #17212c; --lean-up: #264a6f; --lean-up-ink: #ffffff; --lean-mixed: #7f8ea3; --lean-mixed-ink: #17212c;
+  --wash-down: #fdf0e3; --wash-down-ink: #8a4306; --wash-up: #e6eef6; --wash-up-ink: #264a6f; --wash-mixed: #eef1f4; --wash-mixed-ink: #475465; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --lean-down: #e38a3e; --lean-up: #6ea3e0; --lean-up-ink: #0b1420; --lean-mixed: #5c6b7d; --lean-mixed-ink: #ffffff;
+  --wash-down: #3a2413; --wash-down-ink: #f4b783; --wash-up: #1b2e44; --wash-up-ink: #adcdf1; --wash-mixed: #29323e; --wash-mixed-ink: #c6cfda; } }
 .split { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px; }
 .col-main { flex: 999 1 560px; min-width: 0; display: grid; gap: 12px; }
 .panel { flex: 1 1 340px; min-width: 0; max-width: 100%; display: grid; gap: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
@@ -282,29 +285,36 @@ tr.selected td { background: var(--surface-2); }
 .stage-box { container-type: inline-size; container-name: stage; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
 .stage { position: relative; aspect-ratio: 1000 / 700; } .stage.big { aspect-ratio: 1000 / 820; }
 .wires { position: absolute; inset: 0; width: 100%; height: 100%; } .wires path { fill: none; stroke: var(--line-2); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
-.hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 176px; height: 176px; border-radius: 50%; display: grid; place-content: center; justify-items: center; gap: 2px; padding: 14px; border: 0; text-align: center; background: var(--navy-deep); color: #fff; cursor: pointer; }
+.hub-wrap { position: absolute; left: 50%; top: 50%; width: 200px; height: 200px; transform: translate(-50%, -50%); display: grid; place-items: center; }
+.hub-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; } .hub-ring path { fill: none; stroke: var(--line-2); stroke-width: 7; }
+.hub-ring .ring-down { stroke: var(--lean-down); } .hub-ring .ring-up { stroke: var(--lean-up); } .hub-ring .ring-mixed { stroke: var(--lean-mixed); }
+.stage.enter { animation: map-in 0.28s ease-out both; } @keyframes map-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+.hub { position: relative; width: 176px; height: 176px; border-radius: 50%; display: grid; place-content: center; justify-items: center; gap: 2px; padding: 14px; border: 0; text-align: center; background: var(--navy-deep); color: #fff; cursor: pointer; }
 .hub:disabled { cursor: default; opacity: 1; }
 .hub-title { font-weight: 800; font-size: 1rem; line-height: 1.15; } .hub-line { font-size: 0.82rem; line-height: 1.2; } .hub-strong { font-weight: 800; font-size: 1.7rem; line-height: 1.1; } .hub-mood { font-weight: 700; font-size: 0.84rem; line-height: 1.2; }
-.hub.lean-down { background: var(--lean-down); color: var(--lean-down-ink); } .hub.lean-mixed { background: var(--lean-mixed); color: var(--lean-mixed-ink); } .hub.lean-up { background: var(--lean-up); color: var(--lean-up-ink); }
+.hub.lean-down { background: var(--wash-down); color: var(--wash-down-ink); box-shadow: 0 0 0 1px var(--lean-down); } .hub.lean-mixed { background: var(--wash-mixed); color: var(--wash-mixed-ink); box-shadow: 0 0 0 1px var(--lean-mixed); } .hub.lean-up { background: var(--wash-up); color: var(--wash-up-ink); box-shadow: 0 0 0 1px var(--lean-up); }
 .hub.lean-none, .hub.lean-ctx { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 2px var(--line-2); }
-.nd { --d: 72px; --lw: clamp(84px, 15cqw, 132px); position: absolute; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--ink); cursor: pointer; }
+.nd { --d: 64px; --lw: clamp(84px, 15cqw, 132px); position: absolute; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--ink); cursor: pointer; }
 .nd.right { width: calc(var(--d) + 8px + var(--lw)); transform: translate(calc(var(--d) / -2), -50%); text-align: left; }
 .nd.left { width: calc(var(--d) + 8px + var(--lw)); flex-direction: row-reverse; transform: translate(calc(var(--d) / 2 - 100%), -50%); text-align: right; }
 .nd.above { width: 176px; flex-direction: column-reverse; gap: 4px; transform: translate(-50%, calc(var(--d) / 2 - 100%)); text-align: center; }
 .nd.below { width: 176px; flex-direction: column; gap: 4px; transform: translate(-50%, calc(var(--d) / -2)); text-align: center; }
 .nd-text { display: grid; gap: 2px; min-width: 0; justify-items: start; } .nd.left .nd-text { justify-items: end; } .nd.above .nd-text, .nd.below .nd-text { justify-items: center; }
 .nd:hover .nd-label { text-decoration: underline; }
-.bub { flex: none; width: var(--d); height: var(--d); border-radius: 50%; display: grid; place-content: center; justify-items: center; font-weight: 800; font-size: 1.08rem; line-height: 1.05; box-shadow: 0 0 0 1.5px var(--line-2); }
+.bub { position: relative; flex: none; width: var(--d); height: var(--d); border-radius: 50%; display: grid; place-content: center; justify-items: center; font-weight: 800; font-size: 1.08rem; line-height: 1.05; box-shadow: 0 0 0 1px var(--line-2); }
+.bub-arc { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); transform: rotate(-90deg); pointer-events: none; } .bub-arc circle { fill: none; stroke: currentColor; stroke-width: 3; }
+.nd.more .bub::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1px solid currentColor; opacity: 0.45; }
 .bub-u { font-size: 0.68rem; font-weight: 600; }
 .nd-label { font-weight: 700; font-size: 0.9rem; line-height: 1.15; } .nd-sub { font-size: 0.78rem; line-height: 1.15; color: var(--ink-3); }
 .nd-flag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; background: var(--navy-deep); color: #fff; font-size: 0.74rem; font-weight: 700; }
 .nd.sel .bub { box-shadow: 0 0 0 3px var(--accent); }
-.lean-down .bub { background: var(--lean-down); color: var(--lean-down-ink); } .lean-up .bub { background: var(--lean-up); color: var(--lean-up-ink); } .lean-mixed .bub { background: var(--lean-mixed); color: var(--lean-mixed-ink); }
+.lean-down .bub { background: var(--wash-down); color: var(--wash-down-ink); box-shadow: 0 0 0 1px var(--lean-down); } .lean-up .bub { background: var(--wash-up); color: var(--wash-up-ink); box-shadow: 0 0 0 1px var(--lean-up); } .lean-mixed .bub { background: var(--wash-mixed); color: var(--wash-mixed-ink); box-shadow: 0 0 0 1px var(--lean-mixed); }
 .lean-none .bub { background: var(--surface); color: var(--ink-2); box-shadow: none; border: 1.5px dashed var(--line-2); } .lean-ctx .bub { background: var(--surface-2); color: var(--ink-2); }
 .lean-add .bub { background: var(--surface); color: var(--accent); box-shadow: none; border: 1.5px dashed var(--accent); font-size: 1.5rem; } .lean-root .bub { background: var(--surface-2); }
 @container stage (max-width: 540px) {
   .stage, .stage.big { aspect-ratio: auto; display: grid; gap: 8px; } .wires { display: none; }
-  .hub { position: static; transform: none; width: auto; height: auto; border-radius: var(--radius); padding: 12px; }
+  .hub-wrap { position: static; transform: none; width: auto; height: auto; display: block; } .hub-ring { display: none; }
+  .hub { width: 100%; height: auto; border-radius: var(--radius); padding: 12px; }
   .nd, .nd.left, .nd.right, .nd.above, .nd.below { position: static; transform: none; width: auto; flex-direction: row; gap: 12px; text-align: left; }
   .nd .nd-text, .nd.left .nd-text, .nd.above .nd-text, .nd.below .nd-text { justify-items: start; }
 }
@@ -765,8 +775,9 @@ async function planFrom(a, topic, origin, survey = "") {
 }
 
 // ---------------------------------------------------------------- the map
-// Every view works the same way: the mood in a circle, the same colours, its share below, and a bigger circle for a
-// bigger share. The middle is coloured by its own mood. A line joins each pair of circles by the shortest route.
+// Every view works the same way: the mood in a circle, the same colours, its share below, and every circle the same
+// size. A ring round the middle shows the shares; in the public view, where the figures are reach and don't add up to
+// 100, an arc round each circle shows its own. The middle is coloured by its own mood. A line joins each circle to it.
 const LEANINGS = ["Not known", "None shown", "Left", "Centre left", "Centre", "Centre right", "Right"], STANCES = ["Balanced", "Usually supportive", "Usually critical"];
 const RELEVANCE = ["High", "Some", "Little", "None"], TONES = ["Critical", "Neutral", "Supportive"], PROMINENCE = ["Front page or lead", "Inside page", "Passing mention"];
 const BIAS = [["all", "All sources"], ["left", "Left"], ["centre", "Centre"], ["right", "Right"], ["none", "None shown"]];
@@ -779,17 +790,47 @@ function aroundHub(n, rx, ry) {
     return { x: +(50 + rx * over).toFixed(2), y: +(50 + ry * up).toFixed(2), side: up < -0.85 ? "above" : up > 0.85 ? "below" : over >= 0 ? "right" : "left" };
   });
 }
+// With shares, each circle sits beside its stretch of the ring, the first at the top, and small shares are spread
+// out so circles and labels don't run together. The stage is wider than it's tall, so an angle on the ring is turned
+// into its point on the oval the circles sit on. With no shares, the circles are evenly spaced and there's no ring.
+function placeAround(nodes, rx, ry, big) {
+  const parts = nodes.map((x) => (x.share > 0 ? x.share : 0)), total = parts.reduce((x, y) => x + y, 0), n = nodes.length;
+  if (!total) return { pts: aroundHub(n, rx, ry), arcs: [] };
+  let at = (-parts[0] / total) * 180;
+  const arcs = [], angles = nodes.map((x, i) => {
+    const sweep = (parts[i] / total) * 360, mid = at + sweep / 2;
+    if (sweep) arcs.push({ from: at, sweep, lean: x.lean });
+    at += sweep;
+    return mid;
+  });
+  const gap = (360 / n) * 0.72;
+  if (n > 1) for (let pass = 0; pass < 60; pass++) for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, apart = (((angles[j] - angles[i]) % 360) + 360) % 360;
+    if (apart < gap) { angles[i] -= (gap - apart) / 2; angles[j] += (gap - apart) / 2; }
+  }
+  const high = big ? 0.82 : 0.7;
+  const pts = angles.map((deg) => {
+    const t = (deg * Math.PI) / 180, a = Math.atan2(-Math.cos(t) / (ry * high), Math.sin(t) / rx), up = Math.sin(a), over = Math.cos(a);
+    return { x: +(50 + rx * over).toFixed(2), y: +(50 + ry * up).toFixed(2), side: up < -0.97 ? "above" : up > 0.97 ? "below" : over >= 0 ? "right" : "left" };
+  });
+  return { pts, arcs };
+}
+function ringArc({ from, sweep }) {
+  const r = 96, pad = sweep >= 359.9 ? 0 : Math.min(1, sweep / 4), run = Math.min(sweep, 359.9) - pad * 2;
+  const at = (deg) => { const t = (deg * Math.PI) / 180; return `${(100 + r * Math.sin(t)).toFixed(2)} ${(100 - r * Math.cos(t)).toFixed(2)}`; };
+  return `M${at(from + pad)}A${r} ${r} 0 ${run > 180 ? 1 : 0} 1 ${at(from + pad + run)}`;
+}
 function bubble(x) {
-  const b = h("button", { type: "button", class: `nd lean-${x.lean} ${x.side}${x.sel ? " sel" : ""}`, style: { left: `${x.x}%`, top: `${x.y}%` }, title: x.tip || null, "aria-label": x.aria, onclick: x.open },
-    h("span", { class: "bub" }, h("span", {}, x.txt), x.unit ? h("span", { class: "bub-u" }, x.unit) : null),
+  const b = h("button", { type: "button", class: `nd lean-${x.lean} ${x.side}${x.sel ? " sel" : ""}${x.more ? " more" : ""}`, style: { left: `${x.x}%`, top: `${x.y}%` }, title: x.tip || null, "aria-label": x.aria, onclick: x.open },
+    h("span", { class: "bub" }, x.reach === undefined ? null : svg("svg", { class: "bub-arc", viewBox: "0 0 100 100", "aria-hidden": "true" }, svg("circle", { cx: 50, cy: 50, r: 48, pathLength: 100, "stroke-dasharray": `${x.reach} 100` })), h("span", {}, x.txt), x.unit ? h("span", { class: "bub-u" }, x.unit) : null),
     h("span", { class: "nd-text" }, h("span", { class: "nd-label" }, x.label), x.sub ? h("span", { class: "nd-sub" }, x.sub) : null, x.planned ? h("span", { class: "nd-flag" }, svg("svg", { width: 12, height: 12, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 2, "aria-hidden": "true" }, svg("path", { d: "M5 22V3h13l-3 5 3 5H5" })), x.planned) : null));
-  b.style.setProperty("--d", `${x.d}px`);
   return b;
 }
 function stageEl(nodes, hub, big, ry, rx) {
-  const pts = aroundHub(nodes.length, rx, ry);
+  const { pts, arcs } = placeAround(nodes, rx, ry, big);
+  const ring = arcs.length ? svg("svg", { class: "hub-ring", viewBox: "0 0 200 200", "aria-hidden": "true" }, ...arcs.map((a) => svg("path", { class: `ring-${a.lean}`, d: ringArc(a), "data-deg": a.sweep.toFixed(1) }))) : null;
   const wires = svg("svg", { class: "wires", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" }, svg("path", { d: pts.map((p) => `M50 50L${p.x} ${p.y}`).join("") }));
-  return h("div", { class: "stage-box" }, h("div", { class: `stage${big ? " big" : ""}` }, wires, hub, nodes.map((n, i) => bubble({ ...n, ...pts[i] }))));
+  return h("div", { class: "stage-box" }, h("div", { class: `stage${big ? " big" : ""}` }, wires, h("div", { class: "hub-wrap" }, ring, hub), nodes.map((n, i) => bubble({ ...n, ...pts[i] }))));
 }
 const hubEl = (x) => h("button", { type: "button", class: `hub lean-${x.lean}`, disabled: !x.back, "aria-label": x.back ? "Back one level" : null, onclick: x.back || null }, x.person ? svg("svg", { width: 30, height: 30, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 2, "aria-hidden": "true" }, svg("circle", { cx: 12, cy: 7.5, r: 4 }), svg("path", { d: "M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" })) : null,
   x.strong ? h("span", { class: "hub-strong" }, x.strong) : null, h("span", { class: "hub-title" }, x.title), x.line ? h("span", { class: "hub-line" }, x.line) : null, x.mood ? h("span", { class: "hub-mood" }, x.mood) : null);
@@ -798,7 +839,7 @@ const chipRow = (list, on, pick) => h("div", { class: "chips" }, list.map(([id, 
 const filterBox = (label, ...kids) => h("div", { class: "filter" }, h("span", { class: "note" }, label), ...kids);
 // Functions for a piece or an action: "Service overall" is pressed while none is chosen, and pressing it clears the rest
 const functionChips = (fns, chosen, set) => { const row = () => chipRow([["", "Service overall"], ...fns.map((f) => [f.id, f.name])], (x) => (x ? chosen().includes(x) : !chosen().length), (x) => { set(!x ? [] : chosen().includes(x) ? chosen().filter((y) => y !== x) : [...chosen(), x]); add(clear(box), row()); }); const box = h("div", { class: "fn-chips" }, row()); return box; };
-const mapLegend = () => h("div", { class: "pic-legend" }, [["down", "Mood −10 or lower"], ["up", "Mood +10 or higher"], ["mixed", "Mixed"], ["none", "Too little to read yet"], ["ctx", "Informs campaigns, not counted in the mood"]].map(([k, words]) => h("span", {}, h("i", { class: `sw sw-${k}` }), words)), h("span", {}, "A bigger circle means a bigger share"));
+const mapLegend = (reach, more) => h("div", { class: "pic-legend" }, [["down", "Mood −10 or lower"], ["up", "Mood +10 or higher"], ["mixed", "Mixed"], ["none", "Too little to read yet"], ["ctx", "Informs campaigns, not counted in the mood"]].map(([k, words]) => h("span", {}, h("i", { class: `sw sw-${k}` }), words)), h("span", {}, reach ? "The arc round each circle shows how many people it reaches" : "The ring shows each part's share of the mood"), more ? h("span", {}, "An outer ring means there's more below") : null);
 const trailOf = (tree, path) => { const out = [tree]; for (const id of path) { const next = out.at(-1).kids.find((k) => k.id === id); if (!next) break; out.push(next); } return out; };
 const sourcesUnder = (node) => (node.source ? [{ id: node.source, label: node.label }] : node.kids.flatMap(sourcesUnder));
 
@@ -838,28 +879,30 @@ function drawMap(box, a, d, ask) {
     const nodes = d.public.channels.map((c) => {
       const v = rateOf(c), mo = c.mood ?? { txt: "–", unit: "", lean: "none", tip: "Private groups and search can't be tracked", word: "can't be tracked" };
       const diff = whole || !allAdults ? 0 : v - everyone(c.rates), against = diff ? `${fmt(Math.abs(diff))} ${diff > 0 ? "more" : "fewer"} in every 100 than everyone here` : "";
-      return { lean: mo.lean, txt: mo.txt, unit: mo.unit, label: c.label, sub: `${fmt(v)}% of ${whole ? "adults here" : "this age group"}`, tip: [mo.tip, against].filter(Boolean).join(". "), d: Math.round(52 + v * 0.45), aria: `${c.label}: ${mo.txt}, ${mo.word}, ${fmt(v)}% of ${whole ? "adults here" : "this age group"}`, open: () => { if (c.path) { m.view = "authority"; m.path = c.path; m.scope = "all"; again(); } else toast("Private groups and search can't be tracked, so there's nothing to open."); } };
+      return { lean: mo.lean, txt: mo.txt, unit: mo.unit, label: c.label, sub: `${fmt(v)}% of ${whole ? "adults here" : "this age group"}`, tip: [mo.tip, against].filter(Boolean).join(". "), reach: v, aria: `${c.label}: ${mo.txt}, ${mo.word}, ${fmt(v)}% of ${whole ? "adults here" : "this age group"}`, open: () => { if (c.path) { m.view = "authority"; m.path = c.path; m.scope = "all"; again(); } else toast("Private groups and search can't be tracked, so there's nothing to open."); } };
     });
-    stage = stageEl(nodes, hubEl({ person: true, title: whole ? "Everyone here" : `Aged ${m.age}`, strong: mood === null ? "" : moodFmt(mood), mood: mood === null ? "" : cap(moodName(mood)), line: mood === null ? "Too few to report" : "", lean: mood === null ? "root" : leanName(mood) }), true, 39, 33);
+    stage = stageEl(nodes, hubEl({ person: true, title: whole ? "Everyone here" : `Aged ${m.age}`, strong: mood === null ? "" : moodFmt(mood), mood: mood === null ? "" : cap(moodName(mood)), line: mood === null ? "Too few to report" : "", lean: mood === null ? "root" : leanName(mood) }), true, 36, 28);
   } else {
     const nodes = cur.kids.map((k) => {
       const count = isPartners ? 0 : planOn(d, k.id).filter((p) => p.date >= d.today).length; // what's still to come
-      return { lean: k.mood.lean, txt: k.mood.txt, unit: k.mood.unit, label: k.label, sub: k.sub, tip: k.mood.tip, d: k.pct === null ? 60 : Math.round(56 + k.pct * 0.6), planned: count ? `${count} planned` : "", aria: `${k.label}: ${k.mood.txt}, ${k.mood.word}${k.sub ? `, ${k.sub}` : ""}`, open: () => go([...m.path, k.id]) };
+      return { lean: k.mood.lean, txt: k.mood.txt, unit: k.mood.unit, label: k.label, sub: k.sub, tip: k.mood.tip, share: k.pct, more: k.kids.length > 0, planned: count ? `${count} planned` : "", aria: `${k.label}: ${k.mood.txt}, ${k.mood.word}${k.sub ? `, ${k.sub}` : ""}`, open: () => go([...m.path, k.id]) };
     });
     if (cur.source && trail.some((t) => ["tv", "radio", "press"].includes(t.id))) {
       const list = d.pieces.filter((p) => p.nodes.includes(cur.id));
-      for (const sc of ["Local", "National"]) { const n = list.filter((p) => p.scope === sc).length; nodes.push({ lean: n ? "mixed" : "none", txt: String(n), unit: "", label: `${sc} mentions`, sub: "", tip: "", d: 60, sel: m.scope === sc, aria: `${sc} mentions: ${n}`, open: () => { m.scope = m.scope === sc ? "all" : sc; redraw(); } }); }
+      for (const sc of ["Local", "National"]) { const n = list.filter((p) => p.scope === sc).length; nodes.push({ lean: n ? "mixed" : "none", txt: String(n), unit: "", label: `${sc} mentions`, sub: "", tip: "", sel: m.scope === sc, aria: `${sc} mentions: ${n}`, open: () => { m.scope = m.scope === sc ? "all" : sc; redraw(); } }); }
     }
-    if (cur.add && d.canEdit) nodes.push({ lean: "add", txt: "+", unit: "", label: `Add a ${cur.add}`, sub: "", tip: "", d: 60, aria: `Add a ${cur.add}`, open: () => { m.form = "source"; redraw(); } });
+    if (cur.add && d.canEdit) nodes.push({ lean: "add", txt: "+", unit: "", label: `Add a ${cur.add}`, sub: "", tip: "", aria: `Add a ${cur.add}`, open: () => { m.form = "source"; redraw(); } });
     const held = cur.mood.v !== null, sub = App.filters.topic !== "all" ? App.filters.topic : "";
     const hub = root
       ? isPartners
         ? { title: partner?.name ?? "No partners yet", line: sub || partner?.role || "", strong: held ? cur.mood.txt : "", mood: held ? cap(cur.mood.word) : "", lean: held ? cur.mood.lean : "root" }
         : { title: a.name, line: sub || d.services.find((s) => s.id === d.service)?.label, strong: held ? cur.mood.txt : "", mood: held ? `${cap(cur.mood.word)}${sub ? "" : `, ${d.direction.word.toLowerCase()}`}` : "Nothing to read yet", lean: held ? cur.mood.lean : "root" }
       : { title: cur.label, strong: cur.mood.txt, line: cur.mood.unit || (held ? cap(cur.mood.word) : ""), lean: cur.mood.lean, back: () => go(m.path.slice(0, -1)) };
-    stage = stageEl(nodes, hubEl(hub), false, 34, 30);
+    stage = stageEl(nodes, hubEl(hub), false, 34, 27);
   }
-  const main = h("div", { class: "col-main" }, seg, tools, crumbs, stage, mapLegend());
+  const place = `${m.view}|${m.path.join("/")}`; // a gentle movement between levels, not on every filter
+  if (m.place !== place) { stage.querySelector(".stage")?.classList.add("enter"); m.place = place; }
+  const main = h("div", { class: "col-main" }, seg, tools, crumbs, stage, mapLegend(isPublic, !isPublic && cur.kids.some((k) => k.kids.length > 0)));
   const formKey = m.form ? `${m.form}|${cur.id}` : "", redrawNow = () => m.redraw(); // a form keeps what's been typed while a filter changes behind it
   if (m.formEl?.key !== formKey) m.formEl = formKey ? { key: formKey, el: (m.form === "mention" ? mentionForm : sourceForm)(a, d, cur, redrawNow, again) } : null;
   const panel = h("aside", { class: "panel", "aria-label": "Details" }, m.formEl ? m.formEl.el : isPublic ? publicPanel(a, d) : nodePanel(a, d, cur, root, rootName, redraw, go));
