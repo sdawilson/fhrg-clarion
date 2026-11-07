@@ -475,6 +475,24 @@ for (const name of ["Dale Highways", "Brightway Lighting", "Northern Valley Wate
   const round = clockwise(), from = round.reduce((best, x, i) => (x.deg < round[best].deg ? i : best), 0), seen = [...round.slice(from), ...round.slice(0, from)].map((x) => x.name);
   ok(spacing() > 150, `${name}: no circle sits on another`);
   ok([...round].sort((x, y) => x.deg - y.deg).map((x) => x.name).join() === seen.join(), `${name}: the circles keep the ring's order`);
+  ok(round[0].deg === 0 && round.every((x, i) => !i || x.deg > round[i - 1].deg), `${name}: the first circle stays at the top and the rest follow round in order`);
+}
+// the spacing itself, on many mixes of shares: the first at the top, the rest in order and never closer than the gap
+{
+  const w = d.defaultView, spread = (want, gap) => w.eval(`spreadAngles(${JSON.stringify(want)}, ${gap})`);
+  let seed = 5, fails = 0; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let t = 0; t < 400; t++) {
+    const n = 2 + Math.floor(rnd() * 9), shares = Array.from({ length: n }, () => (rnd() < 0.5 ? 0 : Math.ceil(rnd() * 40))), total = shares.reduce((x, y) => x + y, 0) || 1;
+    let at = (-shares[0] / total) * 180; const want = shares.map((s) => { const mid = at + (s / total) * 180; at += (s / total) * 360; return mid; });
+    const gap = (360 / n) * 0.8, got = spread(want, gap);
+    if (got[0] !== 0 || got.some((x, i) => i && x - got[i - 1] < gap - 1e-9) || got.at(-1) > 360 - gap + 1e-9) fails++;
+  }
+  ok(!fails, "on 400 mixes of shares, circles keep their order and their distance, with the first at the top");
+  ok(JSON.stringify(spread([0, 180, 180, 180], 72)) === JSON.stringify([0, 108, 180, 252]), "circles that want the same spot are spread evenly round it");
+  ok(JSON.stringify(spread([0, 90, 180, 270], 72)) === JSON.stringify([0, 90, 180, 270]), "circles already far enough apart don't move");
+  const drawn = (n) => w.eval(`stageEl(Array.from({ length: ${n} }, (_, i) => ({ lean: "none", txt: "–", label: "Part " + i, sub: "", share: i % 2, tip: "", aria: "", open: () => {} })), hubEl({ title: "Middle", lean: "root" }), false, 34, 27)`).querySelector(".stage");
+  ok(!drawn(8).classList.contains("tall") && drawn(9).classList.contains("tall") && drawn(10).classList.contains("tall") && drawn(11).classList.contains("list"), "nine or ten circles get a taller stage, and eleven or more are a list");
+  ok(/^clamp\(84px, calc\([\d.]+cqw - 10px\), 220px\)$/.test(drawn(5).style.getPropertyValue("--lv")), "labels above and below are kept to the space between their neighbours");
 }
 [...d.querySelectorAll(".seg button")].find((b) => b.textContent === "The authority").click();
 await until(() => /Negative, worsening/.test(text(d.querySelector(".hub"))), "back to the authority");
