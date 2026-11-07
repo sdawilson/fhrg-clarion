@@ -472,6 +472,20 @@ await until(() => d.querySelector("svg.qr"), "the QR code");
 const code = (await api("/api/survey/get", { code: WSX, id: fresh.id }, lead)).survey.self;
 ok(text(d.querySelector(".main")).includes(`/r/${code}`) && d.querySelector("svg.qr path").getAttribute("d").length > 500, "turned on, it shows the link and a QR code");
 ok([...d.querySelectorAll("textarea")].some((x) => x.value.includes(`/r/${code}`)), "and wording for an email, with the link in it");
+ok([...d.querySelectorAll("textarea")].some((x) => x.value.includes("about the roads and pavements where you live")), "a highways survey's email is about roads and pavements");
+{
+  const other = (await api("/api/survey/new", { code: WSX, title: "Parks survey", purpose: "x", service: "parks" }, lead)).survey;
+  await api("/api/survey/status", { code: WSX, id: other.id, status: "open" }, lead);
+  const e = await open(lead, `#survey/${WSX}/${other.id}/collect`);
+  await see(e, /A link for people to fill in themselves/);
+  button(e, "Turn on the link").click();
+  await until(() => e.querySelector("svg.qr"), "the second QR code");
+  const words = [...e.querySelectorAll("textarea")].map((x) => x.value).join(" ");
+  ok(words.includes("about local services where you live") && !words.includes("roads and pavements"), "another service's email says local services, as its core questions are still about roads");
+  button(e, "Prepare forms to print").click();
+  await until(() => e.querySelector(".sheet"), "the forms");
+  ok(/Your views on local services/.test(text(e.querySelector(".sheet .sheet-head"))), "and so does its printed form");
+}
 d.defaultView.HTMLCanvasElement.prototype.getContext = () => ({ fillRect: () => {} });
 d.defaultView.HTMLCanvasElement.prototype.toBlob = function (done) { done(new d.defaultView.Blob(["png"], { type: "image/png" })); };
 button(d, "Save the QR code").click();

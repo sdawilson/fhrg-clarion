@@ -337,6 +337,22 @@ ok((await api("/api/coverage/get", { code: WSX }, lead)).rows.length === waiting
 dom = await open(member, `#said/${WSX}/latest`); d = dom.window.document;
 await see(d, /Latest assessments/);
 ok(button(d, "Search and assess") && button(d, "Remove") && button(d, "Sources"), "a member of the authority can assess and remove, like its lead");
+// removing asks first, in the page: the question takes the button's place, and No changes nothing
+{
+  const before = (await api("/api/coverage/get", { code: WSX }, lead)).rows.length, removes = () => [...d.querySelectorAll("button")].filter((x) => x.textContent === "Remove").length, shown = removes();
+  const row = button(d, "Remove").closest("tr");
+  button(d, "Remove").click();
+  await see(d, /Remove this assessment\?/);
+  const inRow = (name) => [...row.querySelectorAll("button")].find((x) => x.textContent === name);
+  ok(inRow("Yes, remove it") && inRow("No") && !inRow("Remove") && removes() === shown - 1 && d.activeElement === inRow("No"), "Remove asks first, in its own row, with No ready to press");
+  inRow("No").click();
+  ok(inRow("Remove") && removes() === shown && !/Remove this assessment\?/.test(text(d.querySelector(".main"))) && (await api("/api/coverage/get", { code: WSX }, lead)).rows.length === before, "No puts the button back and removes nothing");
+  button(d, "Remove").click();
+  await see(d, /Remove this assessment\?/);
+  button(d, "Yes, remove it").click();
+  await until(async () => (await api("/api/coverage/get", { code: WSX }, lead)).rows.length === before - 1, "the assessment to go");
+  ok(true, "Yes removes it");
+}
 dom = await open(member, `#dash/${WSX}`, "/api/coverage/summary"); d = dom.window.document;
 await see(d, /Mood reading/);
 ok(!/Out of order/.test(text(d.querySelector(".main"))), "the Dashboard still opens if the assessments can't be read");
