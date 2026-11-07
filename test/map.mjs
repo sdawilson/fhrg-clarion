@@ -275,6 +275,7 @@ m = mapWith({ "petition|New one": "Critical" }, { "2026-09": { perDay: null, rep
 ok(kid(m.tree, "petitions").mood.v === null, "nor when the month before couldn't be read");
 m = mapWith({ "question|2026-10-09|Roads": "Supportive" }, {}, [{ date: "2026-10-09", heading: "Roads" }, { date: "2026-10-10", heading: "More roads" }]);
 ok(kid(m.tree, "mps").mood.v === 10 && /1 rated/.test(kid(m.tree, "mps").mood.tip), "questions count only for those rated");
+ok(["petitions", "mps"].every((id) => /once an officer has rated it: 10 off if critical, 10 on if supportive, up to 40 either way/.test(kid(m.tree, id).how) && !/takes 10 off/.test(kid(m.tree, id).how)), "and the method says so, for petitions and questions alike");
 
 // what's kept month by month, as the feeds show only now
 let months = t.mergedMonths({}, { month: "2026-10", now: { perDay: 2, reports: 40, petitions: [pet("One")] }, questions: [{ date: "2026-09-02", heading: "A" }, { date: "2026-10-02", heading: "B" }] });

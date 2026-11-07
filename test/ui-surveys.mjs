@@ -168,6 +168,7 @@ button(d, "Prepare forms to print").click();
 await see(d, /Forms 5 to 7/);
 const sheets = [...d.querySelectorAll(".sheet")];
 ok(sheets.length === 3 && /Form 5/.test(text(sheets[0])) && /Form 7/.test(text(sheets[2])), "each printed form has its own number");
+ok(/Your views on local roads and pavements/.test(text(sheets[0].querySelector(".sheet-head"))), "a highways form is about roads and pavements");
 ok(/Run by West Sussex County Council/.test(text(sheets[0])) && /16 or over/.test(text(sheets[0])) && /An AI tool/.test(text(sheets[0])) && /don't write anyone's name/.test(text(sheets[0])), "with the notice");
 ok(sheets[0].querySelectorAll(".sheet-q").length === 10 && sheets[0].querySelectorAll(".sheet-box").length > 30, "all ten questions, with tick boxes");
 ok(/1 ?Very satisfied/.test(text(sheets[0])) && /2 ?Fairly satisfied/.test(text(sheets[0])), "and numbered answers");
@@ -197,6 +198,7 @@ ok(d.querySelector('input[aria-label="Form number"]').value === "2" && row[0].qu
 
 // a scan
 const scanInput = d.querySelector('input[aria-label="Scanned forms"]');
+ok(/Up to 12 photos, or a PDF, at a time/.test(text(scanInput.closest(".stack"))) && !/20 forms/.test(text(d.querySelector(".main"))), "the scan note gives the real limit");
 Object.defineProperty(scanInput, "files", { value: [new w.File(["%PDF-1.4 pretend"], "forms.pdf", { type: "application/pdf" })] });
 button(d, "Read the forms").click();
 await see(d, /Clarion read 2 forms/);

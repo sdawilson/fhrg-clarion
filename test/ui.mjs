@@ -61,6 +61,11 @@ let page = text(d.querySelector(".main"));
 ok(/Condition of highways/.test(page) && /24 \/ 100/.test(page) && /Amber/.test(page), "the dashboard shows survey results and the DfT rating");
 ok(/This needs assessed press and media pieces/.test(page), "and says what the comparison is waiting for");
 ok(/Not enough authorities have results yet/.test(page), "and no FHRG figure appears yet");
+{
+  const roles = [...d.querySelectorAll(".main h3")].find((x) => x.textContent === "What each role can do").closest("section"), rows = Object.fromEntries([...roles.querySelectorAll("tbody tr")].map((r) => [r.cells[0].textContent, [...r.cells].slice(1).map((c) => c.textContent).join("/")]));
+  ok([...roles.querySelectorAll("th")].map((x) => x.textContent).join("/") === "/Lead/Member/FHRG site administrator", "the roles table includes FHRG site administrators");
+  ok(rows["Turn Works and weather on"] === "Yes/No/No" && rows["Turn Works and weather off"] === "Yes/No/Yes" && rows["Read comments, with names removed"] === "Yes/Yes/Topic counts only" && rows["Set the mood weights"] === "No/No/Yes" && rows["See campaign budgets and costs"] === "Yes/Yes/No", "and says what each can do, including turning Works and weather off");
+}
 ok(!d.querySelector(".demo-banner") && d.querySelector(".foot .circles") && [...d.querySelectorAll(".foot a")].some((x) => x.textContent === "FHRG website") && /hello@fhrg.co.uk/.test(text(d.querySelector(".foot"))), "there's no demonstration strip for a member, and the footer is the website's, with the way back to it");
 ok([...d.querySelectorAll(".rail .nav button")].map((b) => b.textContent).join() === "Map,Surveys,Dashboard,High-impact issues,Campaign calendar,Briefings,Sources,Set-up,Published evidence,Attention and concern,Impact notes,Sources and method" && d.querySelectorAll(".rail .nav button svg").length === 12 && !d.querySelector(".tabs"), "the sections are a menu down the left, each with its icon and no numbers");
 ok(d.querySelector(".brand-logo img") && /West Sussex/.test(text(d.querySelector(".brand-sub"))), "with the FHRG logo and the member's authority");
@@ -97,7 +102,7 @@ ok(d.querySelector('.rail .nav button[aria-current="page"]').textContent === "So
 w.location.hash = "#attention/E10000032";
 await until(() => /It needs assessed press and media pieces/.test(text(d.querySelector(".main"))), "the comparison page");
 w.location.hash = "#about/E10000032";
-await until(() => /Sources & method/.test(text(d.querySelector(".main"))), "the method page");
+await until(() => text(d.querySelector(".main h1")) === "Sources and method", "the method page, with the same name as in the menu");
 ok(/two different kinds of signal agree/.test(text(d.querySelector(".main"))) && !/About this demonstration/.test(text(d.querySelector(".main"))), "the method is explained");
 
 // ---- a note, with hostile content from outside
@@ -119,6 +124,7 @@ ok(/£0\.95m may rest on evidence/.test(nt) && /Sources disagree/.test(nt), "the
 ok(/Likely effect on public mood/.test(nt) && /Expectation gap: Large/.test(nt) && /a theory being tested/.test(nt), "the mood forecast is shown, and labelled as a theory");
 ok(/Removed on challenge \(1\)/.test(nt) && /On challenge:/.test(nt), "what the challenge changed is shown");
 ok(/An officer should check this/.test(nt), "the note says it needs checking");
+ok(/doesn't count towards the map's Government announcements figure/.test(nt) && !/Government and policy/.test(nt), "and names the part of the map it counts towards as the map does");
 ok(/Authorities and schemes named in the sources \(2\)/.test(nt), "the names found in the sources can be read");
 ok(!d.querySelector(".main img") && w.hacked === undefined && /<img src=x/.test(nt), "hostile text from a web page is shown as text, never run");
 ok(![...d.querySelectorAll("a")].some((a) => /^javascript:/i.test(a.getAttribute("href") || "")), "a javascript: link is never made clickable");

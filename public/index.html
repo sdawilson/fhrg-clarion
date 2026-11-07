@@ -139,6 +139,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn.ghost { border-color: transparent; background: transparent; color: var(--accent); }
 .btn.ghost:hover { background: var(--bg); border-color: transparent; }
 .btn.danger { border-color: var(--crit); color: var(--crit-ink); }
+.sure { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; } .sure-q { font-size: 0.88rem; font-weight: 600; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 label.field, div.field { display: grid; gap: 4px; align-content: start; font-size: 0.9rem; color: var(--ink); font-weight: 600; min-width: 0; }
 .field input, .field select, .field textarea, select.input, input.input, textarea.input { border: 1.5px solid var(--line-2); background: var(--surface); border-radius: var(--radius-sm); padding: 7px 10px; color: var(--ink); width: 100%; min-width: 0; font-weight: 400; }
@@ -153,6 +154,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 .tbl thead th { background: var(--bg); font-weight: 700; white-space: nowrap; font-size: 0.88rem; }
 .tbl tbody tr:last-child td { border-bottom: 0; }
 .tbl td.r, .tbl th.r { text-align: right; }
+.tbl.roles thead th { white-space: normal; } .tbl.roles td:first-child { min-width: 9em; } @media (max-width: 520px) { .tbl.roles th, .tbl.roles td { padding: 8px; } }
 .tab-row { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 2px solid var(--line); }
 .tab-row button { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: var(--ink-2); font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -2px; }
 .tab-row button:hover { color: var(--accent); }
@@ -471,6 +473,21 @@ function svg(tag, attrs, ...kids) {
 const icon = (name, size = 18) => svg("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" }, svg("path", { d: ICONS[name] }));
 // append, for lists and for parts that may not be there
 const add = (el, ...kids) => { el.append(...kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false)); return el; };
+// A second step before something that can't be undone. The question takes the button's place, so a double click lands
+// on words rather than on Yes, and No puts the button back. A question given as a function is asked at the click, and
+// one that comes back empty means there's nothing to lose, so it goes straight ahead.
+function sure(words, question, yes, run, cls = "btn small ghost") {
+  const box = h("span", { class: "sure" });
+  const first = () => h("button", { class: cls, type: "button", onclick: ask }, words);
+  function ask() {
+    const q = typeof question === "function" ? question() : question;
+    if (!q) { run(); return; }
+    const no = h("button", { class: "btn small", type: "button", onclick: () => { add(clear(box), first()); box.querySelector("button").focus(); } }, "No");
+    add(clear(box), h("span", { class: "sure-q", role: "status" }, q), h("button", { class: "btn small danger", type: "button", onclick: async () => { await run(); if (box.isConnected) add(clear(box), first()); } }, yes), no);
+    no.focus();
+  }
+  return add(box, first());
+}
 const fmt = (n, places = 0) => (Number.isFinite(n) ? n.toLocaleString("en-GB", { maximumFractionDigits: places }) : "–");
 const pounds = (n) => `£${(n / 1e6).toLocaleString("en-GB", { maximumFractionDigits: 3 })}m`;
 function fmtDate(iso) { if (!iso) return ""; const d = new Date(String(iso).slice(0, 10) + "T12:00:00Z"); return isNaN(d) ? String(iso) : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); }
@@ -1341,8 +1358,9 @@ async function setupView(page, a) {
 
 const wordList = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list.join(""));
 function roleCard() {
-  return h("section", { class: "card" }, h("h3", {}, "What each role can do"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}), h("th", {}, "Lead"), h("th", {}, "Member"))),
-    h("tbody", {}, [["See and change your authority's data", "Yes", "Yes"], ["Read comments, with names removed", "Yes", "Yes"], ["Run surveys, plan campaigns and write notes", "Yes", "Yes"], ["Release a councillor briefing", "Yes", "No"], ["Use the election setting", "Yes", "No"], ["Turn Works and weather on or off", "Yes", "No"]].map((r) => h("tr", {}, r.map((x) => h("td", {}, x))))))));
+  return h("section", { class: "card" }, h("h3", {}, "What each role can do"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl roles" }, h("thead", {}, h("tr", {}, h("th", {}), h("th", {}, "Lead"), h("th", {}, "Member"), h("th", {}, "FHRG site administrator"))),
+    h("tbody", {}, [["See and change your authority's data", "Yes", "Yes", "Yes"], ["Read comments, with names removed", "Yes", "Yes", "Topic counts only"], ["Run surveys, plan campaigns and write notes", "Yes", "Yes", "Yes"], ["See campaign budgets and costs", "Yes", "Yes", "No"],
+      ["Release a councillor briefing", "Yes", "No", "No"], ["Use the election setting", "Yes", "No", "No"], ["Turn Works and weather on", "Yes", "No", "No"], ["Turn Works and weather off", "Yes", "No", "Yes"], ["Set the mood weights", "No", "No", "Yes"]].map((r) => h("tr", {}, r.map((x) => h("td", {}, x))))))));
 }
 function compareCard(a, d, street) {
   const m = d.benchmark;
@@ -1486,7 +1504,7 @@ function saidLatest(top, a, d) {
         h("tbody", {}, t.topics.map((x) => h("tr", {}, h("td", {}, x.topic), h("td", { class: "r" }, fmt(x.pieces)), h("td", { class: "r" }, fmt(x.critical)), h("td", { class: "r" }, fmt(x.supportive)), h("td", { class: "r" }, fmt(x.reach)), h("td", { class: "r" }, fmt(x.adjusted)))))))) : null,
       h("section", { class: "card" }, h("h3", {}, "Latest assessments"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Date"), h("th", {}, "Source"), h("th", {}, "Topic"), h("th", {}, "In one line"), h("th", {}, "Tone"), h("th", { class: "r" }, "Reach"), h("th", { class: "r" }, "Adjusted"), d.canEdit ? h("th", {}, "") : null)),
         h("tbody", {}, d.rows.slice(0, 30).map((x) => h("tr", {}, h("td", {}, fmtDate(x.date)), h("td", {}, x.sourceName), h("td", {}, x.topic), h("td", {}, x.summary), h("td", {}, x.tone), h("td", { class: "r" }, reachText(x.reach, x.reachUnit, x.reachBand)), h("td", { class: "r", title: x.why || null }, x.adjusted === null ? (x.factor === 1 ? "" : `× ${x.factor}`) : fmt(x.adjusted)),
-          d.canEdit ? h("td", {}, h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/coverage/unassess", { code: a.code, id: x.id }); route(); } catch (e) { toast(e.message); } } }, "Remove")) : null))))),
+          d.canEdit ? h("td", {}, sure("Remove", "Remove this assessment?", "Yes, remove it", async () => { try { await API.call("/api/coverage/unassess", { code: a.code, id: x.id }); route(); } catch (e) { toast(e.message); } })) : null))))),
         h("p", { class: "note" }, "Reach is what the source publishes, not how many people saw this piece. Assessments are your officers' judgement.")));
   }
   if (d.latest.length) top.append(h("section", { class: "card" }, h("h3", {}, "Latest announcements"), h("p", { class: "note" }, "Read automatically from GOV.UK."), h("div", { class: "stack" }, d.latest.map((x) => h("div", {}, h("span", { class: "note" }, `${fmtDate(x.date)}: `), link(x.url, x.title))))));
@@ -1614,7 +1632,7 @@ function saidSources(top, a, d) {
     filterBox("Filter by context", chipRow(CONTEXTS.map(([id]) => [id, id === "all" ? "All" : id]), (x) => x === (App.srcFilter ?? "all"), (x) => { App.srcFilter = x; route(); })),
     d.sources.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Source"), h("th", {}, "Type"), h("th", {}, "Search"), h("th", {}, "Coverage check"), h("th", { class: "r" }, "Reach"), h("th", {}, "Reach from"), h("th", {}, "Political leaning"), h("th", {}, "Usual stance on the council"), h("th", {}, "Campaigning on"), d.canEdit ? h("th", {}, "") : null)),
       h("tbody", {}, shownSources().map((x) => h("tr", {}, h("td", {}, h("button", { class: "linkish", type: "button", onclick: () => { add(clear(picked), sourcePanel(x)); picked.scrollIntoView?.({ block: "nearest" }); } }, x.name)), h("td", {}, x.platform ? `${x.type}, ${x.platform}` : x.type), h("td", {}, x.domain || "No"), h("td", {}, x.domain ? lastCheck(x) : "Can't be checked"), h("td", { class: "r" }, reachText(x.reach, x.reachUnit, x.reachBand) || (d.canEdit ? h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Add reach") : "")), h("td", {}, x.reachFrom), h("td", {}, x.leaning), h("td", {}, stancePill(x.stance)), h("td", {}, x.campaign.join(", ") || "None"),
-        d.canEdit ? h("td", {}, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Change"), held.has(x.id) ? null : h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/coverage/unsource", { code: a.code, id: x.id }); route(); } catch (e) { toast(e.message); } } }, "Remove"))) : null))))) : h("div", { class: "empty" }, "No sources yet."),
+        d.canEdit ? h("td", {}, h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => edit(x) }, "Change"), held.has(x.id) ? null : sure("Remove", "Remove this source?", "Yes, remove it", async () => { try { await API.call("/api/coverage/unsource", { code: a.code, id: x.id }); route(); } catch (e) { toast(e.message); } }))) : null))))) : h("div", { class: "empty" }, "No sources yet."),
     h("p", { class: "note" }, "Leaning and stance are your officers' judgement, and could be asked for under freedom of information. Once a source has 10 assessments, its record shows how often it's been critical, so the judgement can be checked.")));
   const record = d.sources.flatMap((x) => { const list = d.rows.filter((r) => r.source === x.id); return list.length >= 10 ? [h("li", {}, `${x.name}: ${fmt(list.filter((r) => r.tone === "Critical").length)} critical and ${fmt(list.filter((r) => r.tone === "Supportive").length)} supportive, of ${fmt(list.length)} pieces.`)] : []; });
   top.append(picked);
@@ -1826,12 +1844,12 @@ async function saidEnquiries(top, a) {
   if (view !== App.viewId) return;
   add(clear(box), e.canEdit ? enquiryImport(a, e) : null, e.view.ready ? enquiryFigures(a, e) : comingCard(e.canEdit ? "Nothing brought in yet. Choose a CSV file above." : "Nothing brought in yet."), websiteCard(a, e),
     e.canEdit && e.imports.length ? h("section", { class: "card" }, h("h3", {}, "What's been brought in"), h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" }, h("thead", {}, h("tr", {}, h("th", {}, "Brought in"), h("th", {}, "Months"), h("th", {}, "By"), h("th", {}, ""))),
-      h("tbody", {}, e.imports.map((x) => h("tr", {}, h("td", {}, fmtDate(x.at)), h("td", {}, monthsText(x.months)), h("td", {}, x.by), h("td", {}, h("button", { class: "btn small ghost", type: "button", onclick: async () => { try { await API.call("/api/enquiries/remove", { code: a.code, id: x.id }); route(); } catch (err) { toast(err.message); } } }, "Remove")))))))) : null);
+      h("tbody", {}, e.imports.map((x) => h("tr", {}, h("td", {}, fmtDate(x.at)), h("td", {}, monthsText(x.months)), h("td", {}, x.by), h("td", {}, sure("Remove", "Remove these counts?", "Yes, remove them", async () => { try { await API.call("/api/enquiries/remove", { code: a.code, id: x.id }); route(); } catch (err) { toast(err.message); } })))))))) : null);
 }
 
 function aboutView(page, a) {
   const sec = (title, ...kids) => h("section", { class: "card prose" }, h("h2", {}, title), ...kids);
-  page.append(pageHead("Sources & method", "Where the evidence comes from, how it's read, and what to be careful about."));
+  page.append(pageHead("Sources and method", "Where the evidence comes from, how it's read, and what to be careful about."));
   if (App.demo) page.append(sec("About this demonstration", h("p", {}, "Northbridge is fictional, and so is everything about it: its people, places, press coverage, ratings and figures. The survey replies come from a simulation, then go through the same calculations as a real survey."), h("p", {}, "Claude isn't used in the demonstration, and nothing is saved.")));
   page.append(sec("How mood is read", h("ul", {}, ["Mood is read from six kinds of signal: surveys, street surveys, short repeated questions, public actions such as fault reports and enquiries, representatives, and open talk in the press and on social media.", "Survey results set the level. The other signals can only suggest direction.", "A change is reported only when two different kinds of signal agree.", "What's loud isn't the same as what's widely felt, and perception isn't the same as condition."].map((x) => h("li", {}, x)))),
     sec("The map", h("ul", {}, ["Each part of the map has its own method, and each gives one mood from −100 to +100. These blend into the mood in the middle using weights set by FHRG, so mood means the same everywhere. Authorities are never ranked on it.", "Weather, council news, published figures and replies by link aren't in the mood. They're things to bear in mind for a campaign.", "Petitions and MPs' questions count only once an officer has rated their direction, and a petition only if it draws more than a fair share of its signatures from here.", "The public view uses one question from Ofcom's Local News and Media Survey: how people got local news in the last month or so. These are national patterns by age, so they're for comparing, and don't measure any authority. Everyone here weights them by local ages from Census 2021."].map((x) => h("li", {}, x)))),
@@ -1848,11 +1866,12 @@ function aboutView(page, a) {
 // ABC's register, pasted in here so that officers can take a source's reach from it
 function abcCard() {
   const status = h("p", { class: "note" }, "Checking…"), box = h("textarea", { rows: 6, "aria-label": "ABC's table" }), m = saveNote();
-  const show = (x) => { status.textContent = x.count ? `${fmt(x.count)} title${x.count === 1 ? "" : "s"} held, saved on ${fmtDate(x.at)} by ${x.by}.` : "No titles held yet."; };
+  let held = 0;
+  const show = (x) => { held = x.count || 0; status.textContent = x.count ? `${fmt(x.count)} title${x.count === 1 ? "" : "s"} held, saved on ${fmtDate(x.at)} by ${x.by}.` : "No titles held yet."; };
   API.call("/api/abc/status").then(show).catch(() => { status.textContent = "The list couldn't be read just now."; });
   return h("section", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", {}, "ABC circulation figures"), h("p", {}, "So officers can take a source's reach from ABC's register. They see only the titles that match what they type."))), status,
     h("label", { class: "field" }, "Paste the rows from ABC's table", box, h("span", { class: "hint" }, "This replaces the list held. Paste it again whenever ABC publishes new figures.")), m,
-    h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => { try { const x = await API.call("/api/abc/save", { text: box.value }); show(x); box.value = ""; said(m, `Saved ${fmt(x.count)} title${x.count === 1 ? "" : "s"}.`); } catch (e) { said(m, e.message, "err"); } } }, "Save the list")));
+    h("div", { class: "row" }, sure("Save the list", () => (held && box.value.trim() ? `This replaces the ${fmt(held)} title${held === 1 ? "" : "s"} held. Replace them?` : null), "Yes, replace them", async () => { try { const x = await API.call("/api/abc/save", { text: box.value }); show(x); box.value = ""; said(m, `Saved ${fmt(x.count)} title${x.count === 1 ? "" : "s"}.`); } catch (e) { said(m, e.message, "err"); } }, "btn")));
 }
 async function adminView(page) {
   const body = h("div", { class: "stack gap" }, loading("Bringing the figures together…"));
@@ -2066,7 +2085,7 @@ async function noteView(page, a, id) {
     if (n.status === "working") follow(ask, show);
   } catch (e) { add(clear(body), failure(e)); }
 }
-// An officer's expected effect is what puts a note into Government and policy on the map. Clarion never sets it.
+// An officer's expected effect is what puts a note into Government announcements on the map. Clarion never sets it.
 const EFFECTS = [[-40, "Strongly negative"], [-20, "Negative"], [0, "Neutral"], [20, "Positive"], [40, "Strongly positive"]];
 function effectCard(a, n) {
   const box = h("section", { class: "card no-print" }), topic = h("select", { "aria-label": "Topic" }, h("option", { value: "" }, "No topic"), [...(App.meta?.topicList ?? []), ...(n.topic && !(App.meta?.topicList ?? []).includes(n.topic) ? [n.topic] : [])].map((t) => h("option", { value: t }, t)));
@@ -2076,7 +2095,7 @@ function effectCard(a, n) {
   const chips = h("div", {});
   const draw = () => add(clear(chips), chipRow(EFFECTS.map(([v, w]) => [v, w]), (v) => v === n.effect, (v) => save(v === n.effect ? null : v)));
   draw();
-  box.append(h("h2", {}, "Expected effect on mood"), h("p", { class: "note" }, "For an officer to confirm. Until then, this note doesn't count towards the map's Government and policy figure."), chips, h("label", { class: "field" }, "Topic", topic), msg);
+  box.append(h("h2", {}, "Expected effect on mood"), h("p", { class: "note" }, "For an officer to confirm. Until then, this note doesn't count towards the map's Government announcements figure."), chips, h("label", { class: "field" }, "Topic", topic), msg);
   return box;
 }
 function noteBody(a, n) {
@@ -2811,7 +2830,7 @@ function selfCard(a, d) {
       canvas.toBlob((blob) => saveBlob("survey-qr-code.png", blob), "image/png");
     };
     const letter = h("textarea", { rows: 4, readonly: true, "aria-label": "Suggested wording for an email" });
-    letter.value = `We'd like to hear what you think about the roads and pavements where you live. Our short survey takes a few minutes, and you don't need to give your name.\n\n${r.url || "[your link]"}`;
+    letter.value = `We'd like to hear what you think about ${(s.service ?? "highways") === "highways" ? "the roads and pavements" : "local services"} where you live. Our short survey takes a few minutes, and you don't need to give your name.\n\n${r.url || "[your link]"}`;
     add(clear(box), r.url ? h("div", { class: "link-box" }, r.url) : h("p", { class: "note" }, "In the demonstration there's no real link, and the QR code leads nowhere."), svg("svg", { class: "qr", viewBox: `0 0 ${size} ${size}`, role: "img", "aria-label": "QR code for this link", "shape-rendering": "crispEdges" }, svg("rect", { width: size, height: size, fill: "#fff" }), svg("path", { d: path, fill: "#000" })),
       h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: png }, "Save the QR code")),
       h("label", { class: "field" }, "Wording you could use in an email", letter),
@@ -2876,7 +2895,7 @@ function scanCard(a, d) {
       } }, "Save these forms")));
   };
   return h("section", { class: "card" }, h("details", {}, h("summary", {}, "Upload scanned forms"),
-    h("div", { class: "stack" }, h("p", { class: "note" }, "Photos or a PDF, up to 20 forms at a time. Include both sides of each form together. Clarion reads them, you check every one, and the scans aren't kept. Keep this page open until you've saved them."), h("label", { class: "field" }, "Choose files", file),
+    h("div", { class: "stack" }, h("p", { class: "note" }, "Up to 12 photos, or a PDF, at a time. Include both sides of each form together. Clarion reads them, you check every one, and the scans aren't kept. Keep this page open until you've saved them."), h("label", { class: "field" }, "Choose files", file),
       h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: async () => {
         if (!file.files.length) return add(clear(box), failure({ message: "Choose a file first." }));
         try { askHelp(a, s.id, "/api/survey/scan", { files: await Promise.all([...file.files].map(scanFile)) }, box, showForms); } catch (e) { add(clear(box), failure(e)); }
@@ -3014,12 +3033,15 @@ async function printView(page, a, id, from, to) {
   for (let n = first; n <= last; n++) sheets.append(paperForm(s, d.questions, n));
   top.append(sheets);
 }
+// A highways survey is about roads and pavements. Another service's survey still asks the core questions about roads,
+// so naming that service alone would mislead: it's "local services" instead.
+const aboutWords = (s) => ((s.service ?? "highways") === "highways" ? "local roads and pavements" : "local services");
 function paperForm(s, questions, n) {
   const block = (q, i) => h("div", { class: "sheet-q" }, h("strong", {}, `${i + 1}. ${q.text}`),
     q.kind === "text" ? h("div", { class: "sheet-lines" }) : h("div", { class: "sheet-opts" }, q.options.map((o, k) => h("div", { class: "sheet-opt" }, h("span", { class: "sheet-box" }), `${k + 1}  ${o}`))));
   const main = questions.filter((q) => q.part !== "about"), about = questions.filter((q) => q.part === "about");
   return h("article", { class: "sheet" },
-    h("div", { class: "sheet-head" }, h("div", {}, h("h2", {}, s.title), h("div", { class: "sheet-note" }, "Your views on local roads and pavements")), h("div", { class: "sheet-no" }, `Form ${n}`, h("div", { class: "sheet-note" }, `Survey ${surveyRef(s)}`))),
+    h("div", { class: "sheet-head" }, h("div", {}, h("h2", {}, s.title), h("div", { class: "sheet-note" }, `Your views on ${aboutWords(s)}`)), h("div", { class: "sheet-no" }, `Form ${n}`, h("div", { class: "sheet-note" }, `Survey ${surveyRef(s)}`))),
     h("p", { class: "sheet-note" }, NOTICE(s.collector)),
     h("div", { class: "sheet-site" }, "Site", h("span", {})),
     main.map((q) => block(q, questions.indexOf(q))),

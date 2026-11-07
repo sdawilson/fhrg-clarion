@@ -213,6 +213,16 @@ ok(/ABC circulation figures/.test(text(d.querySelector(".main"))), "an administr
 d.querySelector('textarea[aria-label="ABC\'s table"]').value = "Jan - Dec 2025\tTest Herald\tOwner\tRegional Publication\t1234\tCirculation (average per issue)";
 button(d, "Save the list").click();
 await see(d, /Saved 1 title\./);
+ok(!/Replace them\?/.test(text(d.querySelector(".main"))), "with nothing held, the first list saves straight away");
+d.querySelector('textarea[aria-label="ABC\'s table"]').value = "Jan - Dec 2025\tOther Gazette\tOwner\tRegional Publication\t999\tCirculation (average per issue)";
+button(d, "Save the list").click();
+await see(d, /This replaces the 1 title held\. Replace them\?/);
+button(d, "No").click();
+ok(button(d, "Save the list") && /1 title held/.test(text(d.querySelector(".main"))), "replacing a list held asks first, and No keeps it");
+button(d, "Save the list").click();
+button(d, "Yes, replace them").click();
+await until(() => /Saved 1 title\./.test(text(d.querySelector(".main"))) && /Other Gazette|1 title held/.test(text(d.querySelector(".main"))) && button(d, "Save the list"), "the list to be replaced");
+ok(true, "and Yes replaces it, with the button back for next time");
 ok(/1 of 3/.test(main) && /Figures and topic counts only/.test(main) && /not ranked/.test(main), "with the totals, and how to read them");
 ok(/Early signs in more than one authority/.test(main) && /No authority is named here/.test(main), "and early signs are shown without naming anyone");
 ok(d.querySelector("table.heat"), "topics are shown by region");
