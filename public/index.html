@@ -282,8 +282,10 @@ tr.selected td { background: var(--surface-2); }
 .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin: 0; padding: 0; list-style: none; font-size: 0.9rem; }
 .crumbs li { display: inline-flex; align-items: center; gap: 4px; } .crumbs li + li::before { content: "\203A"; color: var(--ink-3); }
 .crumbs button { padding: 4px 6px; border: 0; background: none; color: var(--accent); text-decoration: underline; cursor: pointer; } .crumbs button[aria-current="page"] { color: var(--ink); font-weight: 700; text-decoration: none; }
-.stage-box { container-type: inline-size; container-name: stage; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
-.stage { position: relative; aspect-ratio: 1000 / 700; } .stage.big { aspect-ratio: 1000 / 820; }
+.stage-box { container-type: inline-size; container-name: stage; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 8px; }
+/* the stage keeps its shape, but on a narrow screen it's never so short that circles crowd the middle; the box's
+   padding above and below leaves room for a long label over the top circle or under the bottom one */
+.stage { position: relative; height: max(70cqw, 480px); } .stage.big { height: max(82cqw, 550px); } .stage.tall { height: max(86cqw, 600px); }
 .wires { position: absolute; inset: 0; width: 100%; height: 100%; } .wires path { fill: none; stroke: var(--line-2); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
 .hub-wrap { position: absolute; left: 50%; top: 50%; width: 200px; height: 200px; transform: translate(-50%, -50%); display: grid; place-items: center; }
 .hub-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; } .hub-ring path { fill: none; stroke: var(--line-2); stroke-width: 7; }
@@ -297,8 +299,8 @@ tr.selected td { background: var(--surface-2); }
 .nd { --d: 64px; --lw: clamp(84px, 15cqw, 132px); position: absolute; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--ink); cursor: pointer; }
 .nd.right { width: calc(var(--d) + 8px + var(--lw)); transform: translate(calc(var(--d) / -2), -50%); text-align: left; }
 .nd.left { width: calc(var(--d) + 8px + var(--lw)); flex-direction: row-reverse; transform: translate(calc(var(--d) / 2 - 100%), -50%); text-align: right; }
-.nd.above { width: 176px; flex-direction: column-reverse; gap: 4px; transform: translate(-50%, calc(var(--d) / 2 - 100%)); text-align: center; }
-.nd.below { width: 176px; flex-direction: column; gap: 4px; transform: translate(-50%, calc(var(--d) / -2)); text-align: center; }
+.nd.above { width: var(--lv, 176px); flex-direction: column-reverse; gap: 4px; transform: translate(-50%, calc(var(--d) / 2 - 100%)); text-align: center; }
+.nd.below { width: var(--lv, 176px); flex-direction: column; gap: 4px; transform: translate(-50%, calc(var(--d) / -2)); text-align: center; }
 .nd-text { display: grid; gap: 2px; min-width: 0; justify-items: start; } .nd.left .nd-text { justify-items: end; } .nd.above .nd-text, .nd.below .nd-text { justify-items: center; }
 .nd:hover .nd-label { text-decoration: underline; }
 .bub { position: relative; flex: none; width: var(--d); height: var(--d); border-radius: 50%; display: grid; place-content: center; justify-items: center; font-weight: 800; font-size: 1.08rem; line-height: 1.05; box-shadow: 0 0 0 1px var(--line-2); }
@@ -306,18 +308,34 @@ tr.selected td { background: var(--surface-2); }
 .nd.more .bub::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1px solid currentColor; opacity: 0.45; }
 .bub-u { font-size: 0.68rem; font-weight: 600; }
 .nd-label { font-weight: 700; font-size: 0.9rem; line-height: 1.15; } .nd-sub { font-size: 0.78rem; line-height: 1.15; color: var(--ink-3); }
-.nd-flag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; background: var(--navy-deep); color: #fff; font-size: 0.74rem; font-weight: 700; }
+.nd-flag { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; padding: 1px 7px; border-radius: 999px; background: var(--navy-deep); color: #fff; font-size: 0.74rem; font-weight: 700; }
 .nd.sel .bub { box-shadow: 0 0 0 3px var(--accent); }
 .lean-down .bub { background: var(--wash-down); color: var(--wash-down-ink); box-shadow: 0 0 0 1px var(--lean-down); } .lean-up .bub { background: var(--wash-up); color: var(--wash-up-ink); box-shadow: 0 0 0 1px var(--lean-up); } .lean-mixed .bub { background: var(--wash-mixed); color: var(--wash-mixed-ink); box-shadow: 0 0 0 1px var(--lean-mixed); }
 .lean-none .bub { background: var(--surface); color: var(--ink-2); box-shadow: none; border: 1.5px dashed var(--line-2); } .lean-ctx .bub { background: var(--surface-2); color: var(--ink-2); }
 .lean-add .bub { background: var(--surface); color: var(--accent); box-shadow: none; border: 1.5px dashed var(--accent); font-size: 1.5rem; } .lean-root .bub { background: var(--surface-2); }
+/* a smaller middle and circles on a narrower stage, as in the Value Analyser, so the circles keep clear of it */
+@container stage (max-width: 860px) {
+  .hub-wrap { width: 172px; height: 172px; } .hub { width: 152px; height: 152px; padding: 10px; }
+  .hub-title { font-size: 0.92rem; } .hub-strong { font-size: 1.45rem; } .hub-line { font-size: 0.76rem; } .hub-mood { font-size: 0.78rem; }
+  .nd { --d: 56px; } .nd-label { font-size: 0.84rem; } .nd-sub { font-size: 0.74rem; } .bub { font-size: 0.98rem; }
+}
+@container stage (max-width: 700px) {
+  .hub-wrap { width: 148px; height: 148px; } .hub { width: 130px; height: 130px; padding: 8px; }
+  .hub-title { font-size: 0.84rem; } .hub-strong { font-size: 1.25rem; } .hub-line { font-size: 0.7rem; } .hub-mood { font-size: 0.72rem; }
+  .nd { --d: 50px; } .nd-label { font-size: 0.8rem; } .nd-sub { font-size: 0.72rem; } .bub { font-size: 0.9rem; }
+}
+/* a list in place of the ring: on a narrow stage, or with more circles than a ring can hold */
 @container stage (max-width: 540px) {
-  .stage, .stage.big { aspect-ratio: auto; display: grid; gap: 8px; } .wires { display: none; }
+  .stage, .stage.big, .stage.tall { height: auto; display: grid; gap: 8px; } .wires { display: none; }
   .hub-wrap { position: static; transform: none; width: auto; height: auto; display: block; } .hub-ring { display: none; }
   .hub { width: 100%; height: auto; border-radius: var(--radius); padding: 12px; }
   .nd, .nd.left, .nd.right, .nd.above, .nd.below { position: static; transform: none; width: auto; flex-direction: row; gap: 12px; text-align: left; }
   .nd .nd-text, .nd.left .nd-text, .nd.above .nd-text, .nd.below .nd-text { justify-items: start; }
 }
+.stage.list { height: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 16px; } .stage.list .wires, .stage.list .hub-ring { display: none; }
+.stage.list .hub-wrap { grid-column: 1 / -1; position: static; transform: none; width: auto; height: auto; display: block; }
+.stage.list .hub { width: 100%; height: auto; border-radius: var(--radius); padding: 12px; }
+.stage.list .nd { position: static; transform: none; width: auto; flex-direction: row; gap: 12px; text-align: left; } .stage.list .nd .nd-text { justify-items: start; }
 .pic-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.84rem; color: var(--ink-2); } .pic-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .sw { width: 14px; height: 14px; border-radius: 50%; display: inline-block; } .sw-down { background: var(--lean-down); } .sw-up { background: var(--lean-up); } .sw-mixed { background: var(--lean-mixed); } .sw-none { background: var(--surface); border: 1.5px dashed var(--line-2); } .sw-ctx { background: var(--surface-2); border: 1.5px solid var(--line-2); }
 .scorebox { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; } .scorebox > div { display: grid; gap: 1px; padding: 8px 10px; border-radius: 8px; background: var(--bg); } .scorebox strong { font-size: 1.3rem; line-height: 1.15; }
@@ -424,7 +442,7 @@ function h(tag, attrs, ...kids) {
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v === null || v === undefined || v === false) continue;
     if (k === "class") el.className = v;
-    else if (k === "style") Object.assign(el.style, v);
+    else if (k === "style") for (const [p, x] of Object.entries(v)) { if (p.startsWith("--")) el.style.setProperty(p, x); else el.style[p] = x; } // a custom property needs setProperty
     else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
     else if (k === "value") el.value = v;
     else if (v === true) el.setAttribute(k, "");
@@ -804,36 +822,40 @@ function placeAround(nodes, rx, ry, big) {
     return mid;
   });
   const high = big ? 0.82 : 0.7;
-  const pts = spreadAngles(angles, (360 / n) * 0.72).map((deg) => {
+  const pts = spreadAngles(angles, (360 / n) * (n > MAP_FEW ? MAP_GAP_MANY : MAP_GAP)).map((deg) => {
     const t = (deg * Math.PI) / 180, a = Math.atan2(-Math.cos(t) / (ry * high), Math.sin(t) / rx), up = Math.sin(a), over = Math.cos(a);
     return { x: +(50 + rx * over).toFixed(2), y: +(50 + ry * up).toFixed(2), side: up < -0.97 ? "above" : up > 0.97 ? "below" : over >= 0 ? "right" : "left" };
   });
   return { pts, arcs };
 }
-// Moves circles apart so neighbours are at least `gap` degrees apart, keeping their order round the ring and moving
-// each as little as possible. Several parts with no share all want the same spot, so this is worked out exactly (a
-// least-squares fit that can only rise, read from each circle in turn) rather than by nudging pairs apart, which
-// let circles pass through one another and settle on top of each other.
+// How close neighbours may come, as a share of an even spacing: more room when there are many circles, which are then
+// drawn on a taller stage. Checked against many mixes of shares at every width the map is drawn as a ring.
+const MAP_GAP = 0.8, MAP_GAP_MANY = 0.95, MAP_FEW = 8, MAP_MOST = 10;
+// As in the Value Analyser: the first circle stays at the top, and the rest keep their order and stay at least `gap`
+// degrees from their neighbours and from the first, moving as little as possible. Each run of circles that would
+// crowd together is centred on where its shares would put it. Several parts with no share all want the same spot,
+// so this is worked out exactly rather than by nudging pairs apart, which let circles pass through one another.
 function spreadAngles(want, gap) {
-  const n = want.length;
-  if (n < 2) return want.slice();
-  let best = null;
-  for (let s = 0; s < n; s++) {
-    const order = Array.from({ length: n }, (_, k) => (s + k) % n), d = order.map((i, k) => want[i] + (s + k >= n ? 360 : 0));
-    const blocks = [];
-    d.forEach((v, k) => {
-      blocks.push({ sum: v - k * gap, n: 1 });
-      while (blocks.length > 1 && blocks.at(-2).sum / blocks.at(-2).n > blocks.at(-1).sum / blocks.at(-1).n) { const b = blocks.pop(); blocks.at(-1).sum += b.sum; blocks.at(-1).n += b.n; }
-    });
-    const x = blocks.flatMap((b) => Array(b.n).fill(b.sum / b.n)).map((y, k) => y + k * gap);
-    if (x[n - 1] - x[0] > 360 - gap + 1e-6) continue; // the last would crowd the first
-    const cost = x.reduce((sum, v, k) => sum + (v - d[k]) ** 2, 0);
-    if (!best || cost < best.cost) best = { cost, order, x };
+  const n = want.length, out = [0];
+  if (n < 2) return out;
+  // with the even spacing taken off, the angles must only rise: pool any run that falls, then keep it in range
+  const runs = [];
+  for (let i = 1; i < n; i++) {
+    runs.push({ sum: want[i] - (i - 1) * gap, k: 1 });
+    while (runs.length > 1 && runs.at(-2).sum / runs.at(-2).k > runs.at(-1).sum / runs.at(-1).k) { const r = runs.pop(); runs.at(-1).sum += r.sum; runs.at(-1).k += r.k; }
   }
-  if (!best) { const step = 360 / n, mid = want.reduce((sum, v, i) => sum + v - i * step, 0) / n; return want.map((_, i) => mid + i * step); }
-  const out = Array(n);
-  best.order.forEach((i, k) => { out[i] = best.x[k]; });
+  const lo = gap, hi = 360 - (n - 1) * gap;
+  for (const r of runs) for (let t = 0; t < r.k; t++) out.push(Math.min(Math.max(r.sum / r.k, lo), hi) + (out.length - 1) * gap);
   return out;
+}
+// Labels above or below a circle are kept narrower than the space between its neighbours there (in % of the width)
+function labelRoom(pts) {
+  let lv = 40;
+  for (const side of ["above", "below"]) {
+    const xs = pts.filter((p) => p.side === side).map((p) => p.x).sort((x, y) => x - y);
+    for (let i = 1; i < xs.length; i++) lv = Math.min(lv, xs[i] - xs[i - 1]);
+  }
+  return +lv.toFixed(2);
 }
 function ringArc({ from, sweep }) {
   const r = 96, pad = sweep >= 359.9 ? 0 : Math.min(1, sweep / 4), run = Math.min(sweep, 359.9) - pad * 2;
@@ -850,7 +872,7 @@ function stageEl(nodes, hub, big, ry, rx) {
   const { pts, arcs } = placeAround(nodes, rx, ry, big);
   const ring = arcs.length ? svg("svg", { class: "hub-ring", viewBox: "0 0 200 200", "aria-hidden": "true" }, ...arcs.map((a) => svg("path", { class: `ring-${a.lean}`, d: ringArc(a), "data-deg": a.sweep.toFixed(1) }))) : null;
   const wires = svg("svg", { class: "wires", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" }, svg("path", { d: pts.map((p) => `M50 50L${p.x} ${p.y}`).join("") }));
-  return h("div", { class: "stage-box" }, h("div", { class: `stage${big ? " big" : ""}` }, wires, h("div", { class: "hub-wrap" }, ring, hub), nodes.map((n, i) => bubble({ ...n, ...pts[i] }))));
+  return h("div", { class: "stage-box" }, h("div", { class: `stage${big ? " big" : ""}${nodes.length > MAP_MOST ? " list" : nodes.length > MAP_FEW ? " tall" : ""}`, style: { "--lv": `clamp(84px, calc(${labelRoom(pts)}cqw - 10px), 220px)` } }, wires, h("div", { class: "hub-wrap" }, ring, hub), nodes.map((n, i) => bubble({ ...n, ...pts[i] }))));
 }
 const hubEl = (x) => h("button", { type: "button", class: `hub lean-${x.lean}`, disabled: !x.back, "aria-label": x.back ? "Back one level" : null, onclick: x.back || null }, x.person ? svg("svg", { width: 30, height: 30, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": 2, "aria-hidden": "true" }, svg("circle", { cx: 12, cy: 7.5, r: 4 }), svg("path", { d: "M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" })) : null,
   x.strong ? h("span", { class: "hub-strong" }, x.strong) : null, h("span", { class: "hub-title" }, x.title), x.line ? h("span", { class: "hub-line" }, x.line) : null, x.mood ? h("span", { class: "hub-mood" }, x.mood) : null);
