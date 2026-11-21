@@ -97,7 +97,7 @@
 //   POST /api/survey/qr            {code, id, origin}: that link, and its QR code
 //   POST /api/survey/selfday       {code, id, day, action}: leave out, put back or delete a day's replies by link
 
-import { handleLogin, handleLogout, handleSso, networkOf, signedIn, type Member } from "./accounts";
+import { handleLogin, handleLogout, handleSso, networkOf, signedIn, toolRule, type Member } from "./accounts";
 import { findTitles, saveTitles, titlesHeld } from "./abc";
 import { loadWorks, refreshWorks, turnOff, turnOn, worksPage } from "./works";
 import { enquiriesView, loadEnquiries, readNews, removeImport, saveImport, saveMatch, savePage } from "./enquiries";
@@ -676,7 +676,8 @@ export async function handleRequest(request: Request): Promise<Response> {
       if (path === "/" || path === "/index.html" || /^\/[a-z0-9][a-z0-9-]{0,48}$/i.test(path)) return servePage(c);
     }
     if (request.method === "POST") {
-      if (path === "/api/config") return json({ websiteUrl: c.websiteUrl, demo: c.demo });
+      // demoFirst: as a Demonstrator, the page opens the demonstration unless someone is signed in
+      if (path === "/api/config") return json({ websiteUrl: c.websiteUrl, demo: c.demo, demoFirst: c.demo && (await toolRule(c).catch(() => null))?.status === "demonstrator" });
       if (path === "/demo/map" || path === "/demo/officers") {
         if (!c.demo) return json({ error: "Not found." }, 404);
         const used = countOf(`demo|${networkOf(request)}`);
@@ -770,7 +771,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
     return json({ error: "Not found." }, 404);
   } catch (e) {
-    if (e instanceof FriendlyError) return json({ error: e.message }, e.status);
+    if (e instanceof FriendlyError) return json({ ...e.extra, error: e.message }, e.status);
     console.log(`[error] ${request.method} ${path}: ${(e as Error)?.stack ?? e}`);
     return json({ error: "Something went wrong. Please try again." }, 500);
   }

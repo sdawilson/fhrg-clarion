@@ -27,8 +27,10 @@ async function hash(pw) {
 }
 export const authorities = [
   { id: 10, name: "Lincolnshire County Council", status: "approved" }, { id: 20, name: "Kirklees Council", status: "approved" }, { id: 30, name: "West Sussex County Council", status: "approved" },
-  { id: 40, name: "North Lincolnshire Council", status: "approved" }, { id: 99, name: "FHRG", status: "approved" },
+  { id: 40, name: "North Lincolnshire Council", status: "approved" }, { id: 99, name: "FHRG", status: "approved", kind: "host" },
 ];
+// the website's tools, as far as a Demonstrator's settings go (app_key, status, own_data, own_data_authorities)
+export const tools = [];
 export const users = [];
 export async function addUser(id, email, name, aid, role = "member", siteAdmin = 0) {
   users.push({ id, email, name, title: "Engineer", role, status: "approved", site_admin: siteAdmin, password_hash: await hash("pw"), authority_id: aid });
@@ -40,7 +42,8 @@ function hrana(rows) {
   return { results: [{ type: "ok", response: { type: "execute", result: { cols: cols.map((name) => ({ name })), rows: rows.map((r) => cols.map((c) => v(r[c]))) } } }, { type: "ok", response: { type: "close" } }] };
 }
 function query(sql, args) {
-  const me = (u) => { const a = authorities.find((x) => x.id === u.authority_id); return { ...u, a_id: a.id, a_name: a.name, a_status: a.status }; };
+  const me = (u) => { const a = authorities.find((x) => x.id === u.authority_id); return { ...u, a_id: a.id, a_name: a.name, a_status: a.status, a_kind: a.kind || "authority" }; };
+  if (/FROM tools WHERE app_key = \?/.test(sql)) return tools.filter((t) => t.app_key === args[0]).map(({ status, own_data, own_data_authorities }) => ({ status, own_data, own_data_authorities }));
   if (/WHERE u.email = \?/.test(sql)) return users.filter((u) => u.email === args[0]).map(me);
   if (/WHERE u.id = \?/.test(sql)) return users.filter((u) => u.id === Number(args[0])).map(me);
   if (/FROM news_topics/.test(sql)) return newsTopics.map((name) => ({ name }));

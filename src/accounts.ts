@@ -53,7 +53,7 @@ export async function websiteQ(c: Config, sql: string, ...args: Val[]): Promise<
 }
 
 const ME_SQL = `SELECT u.id, u.email, u.name, u.title, u.role, u.status, u.site_admin, u.password_hash,
-    a.id AS a_id, a.name AS a_name, a.status AS a_status
+    a.id AS a_id, a.name AS a_name, a.status AS a_status, a.kind AS a_kind
   FROM users u JOIN authorities a ON a.id = u.authority_id`;
 
 // ---------------------------------------------------------------- crypto and sessions
@@ -142,6 +142,40 @@ function toMember(c: Config, u: Row): Member {
   };
 }
 
+// ----- DEMONSTRATOR
+// When the FHRG website marks Clarion as a Demonstrator (its tools row with app_key = WEBSITE_TOOL has the status
+// "demonstrator"), the page opens in the Northbridge demonstration, and only these can sign in to use their own
+// data: site administrators, everyone at the host organisation (Proving Services), and the authorities chosen for
+// Clarion on the website (own_data "chosen", or "all-authorities" for every approved authority). It's the same rule
+// as ownDataAllowed in the website's script. Without WEBSITE_TOOL, or before the website has these settings,
+// Clarion works as it did.
+export type ToolRule = { status: string; own_data: string; own_data_authorities: string } | null;
+export async function toolRule(c: Config): Promise<ToolRule> {
+  if (!c.websiteTool || missingSettings(c).length) return null;
+  return cached(`tool|${c.websiteTool}`, 60_000, async () => {
+    try {
+      const r = (await websiteQ(c, "SELECT status, own_data, own_data_authorities FROM tools WHERE app_key = ?", c.websiteTool))[0];
+      if (!r) console.log(`[WARN] WEBSITE_TOOL is "${c.websiteTool}", but no tool on the FHRG website has that short name, so the Demonstrator settings aren't applied.`);
+      return r ? { status: String(r.status || ""), own_data: String(r.own_data || ""), own_data_authorities: String(r.own_data_authorities || "") } : null;
+    } catch (e) {
+      // the website doesn't have these settings yet: as before
+      if (/no such column/i.test((e as Error).message)) return null;
+      throw e;
+    }
+  });
+}
+const DEMO_ONLY = "Your authority hasn't been given access to use its own data in Clarion yet. You can explore the Northbridge demonstration, or ask the FHRG team about access.";
+function ownDataAllowed(rule: ToolRule, u: Row, siteAdmin: boolean): boolean {
+  if (siteAdmin || u.a_kind === "host") return true;
+  if (!rule || rule.status !== "demonstrator") return true;
+  if (u.a_kind !== "authority") return false;
+  if (rule.own_data === "all-authorities") return true;
+  return rule.own_data === "chosen" && rule.own_data_authorities.split(",").includes(String(Number(u.a_id)));
+}
+async function checkOwnData(c: Config, u: Row, m: Member): Promise<void> {
+  if (!ownDataAllowed(await toolRule(c), u, m.siteAdmin)) throw new FriendlyError(DEMO_ONLY, 403, { demoOnly: true });
+}
+
 // Every request re-checks the website account (kept for a minute).
 export async function signedIn(c: Config, request: Request): Promise<Member> {
   const missing = missingSettings(c);
@@ -153,6 +187,7 @@ export async function signedIn(c: Config, request: Request): Promise<Member> {
   if (!u || u.status !== "approved" || String(u.password_hash).slice(-12) !== data.v) throw new FriendlyError("Please sign in again.", 401);
   const m = toMember(c, u);
   if (u.a_status !== "approved" && !m.siteAdmin) throw new FriendlyError("Your authority's FHRG membership isn't active.", 401);
+  await checkOwnData(c, u, m);
   return m;
 }
 
@@ -220,7 +255,7 @@ export async function handleLogin(c: Config, request: Request): Promise<Response
     }
     attempts.delete(emailKey);
     if (record.fails.length) await storageDelete(c, record.path).catch(() => {});
-    checkAccount(c, u);
+    await checkOwnData(c, u, checkAccount(c, u));
     forget(`member|${u.id}`);
     const token = await makeSession(c, Number(u.id), String(u.password_hash), remember);
     return json({ ok: true, token }, 200, { "set-cookie": sessionCookie(token, remember) });
@@ -259,7 +294,7 @@ export async function handleSso(c: Config, request: Request): Promise<Response> 
   usedPasses.set(claims.j, claims.exp);
   const u = (await websiteQ(c, `${ME_SQL} WHERE u.id = ?`, Number(claims.u)))[0];
   if (!u || String(u.email).toLowerCase() !== String(claims.e || "").toLowerCase()) throw new FriendlyError(SSO_EXPIRED, 401);
-  checkAccount(c, u);
+  await checkOwnData(c, u, checkAccount(c, u));
   forget(`member|${u.id}`);
   const token = await makeSession(c, Number(u.id), String(u.password_hash), false);
   return json({ ok: true, token }, 200, { "set-cookie": sessionCookie(token, false) });

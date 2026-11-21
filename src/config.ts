@@ -26,7 +26,9 @@
 //              aren't limited), SEARCHES_A_MONTH (default 2000: coverage checks for all authorities together; keep
 //              it within the Brave Search plan), TOOLKIT_STORAGE_ZONE (the Climate Toolkit's storage zone),
 //              TOOLKIT_ROOT_FOLDER (default climate-toolkit), TOOLKIT_STORAGE_HOST (default storage.bunnycdn.com), DEMO (on, the default, or off: the Northbridge
-//              demonstration at /demo)
+//              demonstration at /demo), WEBSITE_TOOL (optional: Clarion's short name on the FHRG website, e.g. clarion;
+//              when the website marks it as a Demonstrator, Clarion opens in the demonstration and only Proving
+//              Services and the authorities chosen there can sign in: see DEMONSTRATOR in accounts.ts)
 
 import process from "node:process";
 
@@ -57,6 +59,7 @@ export type Config = {
   dailyJobsMax: number;
   searchesAMonth: number;
   demo: boolean;
+  websiteTool: string;
 };
 
 // Settings are pasted in by hand, so be forgiving: ignore stray spaces, invisible characters and
@@ -76,7 +79,7 @@ function env(name: string, fallback = "", keepEmpty = false): string {
 
 // For the start-up log: which settings arrived (names only, never values)
 const SECRET_SETTINGS = ["ANTHROPIC_API_KEY", "STORAGE_ACCESS_KEY", "WEBSITE_DATABASE_URL", "WEBSITE_DATABASE_AUTH_TOKEN", "SESSION_SECRET", "SSO_SECRET", "FHRG_REF_KEY", "SEARCH_KEY", "TOOLKIT_STORAGE_KEY"];
-const VARIABLE_SETTINGS = ["STORAGE_ZONE", "STORAGE_HOST", "ROOT_FOLDER", "WEBSITE_URL", "SITE_ADMINS", "CLAUDE_MODEL", "CLAUDE_EFFORT", "FHRG_REF_URL", "DEMO", "MONTHLY_CAP_USD", "WEB_SEARCH_MAX", "DATA_QUERIES_MAX", "DAILY_JOBS_MAX", "SEARCHES_A_MONTH", "TOOLKIT_STORAGE_ZONE", "TOOLKIT_ROOT_FOLDER", "TOOLKIT_STORAGE_HOST"];
+const VARIABLE_SETTINGS = ["STORAGE_ZONE", "STORAGE_HOST", "ROOT_FOLDER", "WEBSITE_URL", "SITE_ADMINS", "CLAUDE_MODEL", "CLAUDE_EFFORT", "FHRG_REF_URL", "DEMO", "MONTHLY_CAP_USD", "WEB_SEARCH_MAX", "DATA_QUERIES_MAX", "DAILY_JOBS_MAX", "SEARCHES_A_MONTH", "TOOLKIT_STORAGE_ZONE", "TOOLKIT_ROOT_FOLDER", "TOOLKIT_STORAGE_HOST", "WEBSITE_TOOL"];
 
 function folder(name: string, fallback: string): string {
   const f = env(name, fallback, true).replace(/^\/+|\/+$/g, "");
@@ -118,6 +121,7 @@ export function getConfig(): Config {
     dailyJobsMax: num("DAILY_JOBS_MAX", 20, 1, 500),
     searchesAMonth: num("SEARCHES_A_MONTH", 2000, 1, 1000000),
     demo: !/^(0|no|false|off)$/i.test(env("DEMO", "on")),
+    websiteTool: env("WEBSITE_TOOL").toLowerCase(),
   };
 }
 
