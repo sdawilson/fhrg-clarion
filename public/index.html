@@ -504,7 +504,7 @@ const API = {
     const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body || {}), credentials: "same-origin" });
     let data = null;
     try { data = await res.json(); } catch (e) { data = null; }
-    if (!res.ok) { const err = new Error((data && data.error) || `The server returned ${res.status}.`); err.status = res.status; throw err; }
+    if (!res.ok) { const err = new Error((data && data.error) || `The server returned ${res.status}.`); err.status = res.status; err.data = data || {}; throw err; }
     return data;
   },
 };
@@ -622,7 +622,7 @@ async function boot() {
     } catch (e) {
       // never carry on here: a signed-in viewer would see real figures with nothing to say this isn't the demonstration
       console.warn(e);
-      return add(clear($app), h("div", { class: "busy" }, brand(), h("p", { class: "err", role: "alert" }, "The demonstration couldn't start. Please try again shortly."), h("a", { class: "btn", href: "/" }, "Back to sign in")));
+      return add(clear($app), h("div", { class: "busy" }, brand(), h("p", { class: "err", role: "alert" }, "The demonstration couldn't start. Please try again shortly."), h("a", { class: "btn", href: signInHref() }, "Back to sign in")));
     }
   }
   // Arriving from the FHRG website: /sso#t=<pass>. Tidy the address first, so the pass isn't left in the
@@ -636,13 +636,17 @@ async function boot() {
     }
   }
   window.addEventListener("hashchange", route);
+  let note = "";
   if (API.token) {
     add(clear($app), h("div", { class: "busy" }, brand(), h("p", { role: "status" }, "Signing you in…")));
     try { App.status = await API.call("/api/status"); return route(); }
-    catch (e) { if (e.status !== 401) console.warn(e); API.setToken(""); }
+    catch (e) { if (e.status !== 401) console.warn(e); if (e.data && e.data.demoOnly) note = e.message; API.setToken(""); }
   }
-  authScreen();
+  // A Demonstrator opens in the demonstration; /signin goes to the sign-in form
+  if (App.config.demoFirst && !note && location.pathname.replace(/\/+$/, "") !== "/signin") return location.replace("/demo");
+  authScreen(note);
 }
+const signInHref = () => (App.config.demoFirst ? "/signin" : "/");
 
 function authScreen(message) {
   const msg = h("p", { class: message ? "err" : "muted", role: "alert" }, message || "");
@@ -698,7 +702,7 @@ function shell() {
   if (App.code !== current?.code) { App.code = current?.code; App.meta = null; App.map = { view: "authority", path: [], scope: "all", bias: "all", include: [], partner: "", age: "", split: "" }; App.filters = { service: "highways", month: "", topic: "all" }; App.cal = { by: "campaign", channel: "all", start: "", open: "", camp: "", seed: null }; }
   App.pick = {};
   const pickAuthority = admin ? h("label", { class: "picker" }, "Authority", h("select", { onchange: (e) => { location.hash = e.target.value ? `#a/${e.target.value}` : "#all"; } }, h("option", { value: "" }, "All authorities"), list.map((a) => h("option", { value: a.code, selected: current?.code === a.code }, a.name)))) : null;
-  const who = App.demo ? [h("a", { class: "btn small primary", href: "/" }, "FHRG members: sign in")] : [h("span", {}, st.user.name, st.spend ? `, Claude this month $${st.spend.month.toFixed(2)} of $${st.spend.cap}` : ""), h("button", { class: "btn small", type: "button", onclick: signOut }, "Sign out")];
+  const who = App.demo ? [h("a", { class: "btn small primary", href: signInHref() }, App.config.demoFirst ? "Sign in to use your own data" : "FHRG members: sign in")] : [h("span", {}, st.user.name, st.spend ? `, Claude this month $${st.spend.month.toFixed(2)} of $${st.spend.cap}` : ""), h("button", { class: "btn small", type: "button", onclick: signOut }, "Sign out")];
   const note = h("p", { class: "defaults" });
   App.pick.note = note;
   const head = h("header", { class: "top no-print" }, h("div", { class: "top-in" }, h("div", { class: "brand" }, h("a", { class: "brand-logo", href: "https://fhrg.co.uk", target: "_blank", rel: "noopener noreferrer", title: "Future Highways Research Group" }, logo()), h("div", {}, brand(), h("div", { class: "brand-sub" }, all ? "FHRG administrators" : current?.name ?? st.user.authority))), h("div", { class: "pickers" }, pickAuthority, current ? pickerRow() : null), h("div", { class: "top-who" }, who)), current ? note : null);
@@ -714,7 +718,7 @@ function shell() {
       h("li", {}, h("a", { href: "https://fhrg.co.uk", target: "_blank", rel: "noopener noreferrer" }, "FHRG website")), h("li", {}, h("a", { href: "https://fhrg.co.uk/tools", target: "_blank", rel: "noopener noreferrer" }, "FHRG tools")))))) : null;
   const strip = App.demo ? h("div", { class: "demo-banner no-print" }, h("div", { class: "demo-banner-in" },
     h("span", {}, h("strong", {}, "Demonstration with sample content. "), "Northbridge is fictional and nothing you change here is saved."),
-    h("a", { href: `#about/${list[0]?.code ?? ""}` }, "About the data"), h("a", { href: "/" }, "Sign in to use your own data"))) : null;
+    h("a", { href: `#about/${list[0]?.code ?? ""}` }, "About the data"), h("a", { href: signInHref() }, "Sign in to use your own data"))) : null;
   add(clear($app), h("div", { class: "app" }, strip, head, rail ? h("div", { class: "body" }, rail, main) : main, foot));
   fillPickers();
   if (current && !App.meta && !["a", "dash", "issues", "campaign"].includes(view)) loadMap(current, true).catch(() => {});

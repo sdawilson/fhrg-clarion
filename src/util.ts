@@ -2,9 +2,11 @@
 
 export class FriendlyError extends Error {
   status: number;
-  constructor(message: string, status = 400) {
+  extra: Record<string, unknown>; // more for the page, such as demoOnly
+  constructor(message: string, status = 400, extra: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.extra = extra;
   }
 }
 

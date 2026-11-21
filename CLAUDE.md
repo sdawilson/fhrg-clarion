@@ -33,6 +33,8 @@
 
 **The name:** it's simply Clarion, because it's more than a media watch. The section for press and other sources is "What's being said".
 
+**As a Demonstrator:** with `WEBSITE_TOOL` set, Clarion reads its row in the website's `tools` table (`toolRule` in `src/accounts.ts`). While its status is `demonstrator`, `/` opens the demonstration (`demoFirst`), and signing in, arriving from the website and every request check `ownDataAllowed`: site administrators, the host organisation and the authorities chosen on the website only. Test it in `test/demonstrator.mjs`.
+
 **Three modes:** the Northbridge demonstration at `/demo`, one authority with an FHRG sign-in, and FHRG administrators. In the demonstration the page answers from `/demo/data.json` (`src/demo.ts`) in place of the API, with `/demo/map` and `/demo/officers` running the real calculations on the same fixed data, so it needs no account, never calls Claude and saves nothing. Keep it fictional: no real authority, person or link, and run survey figures through the real calculations. The all-authorities view (`src/admin.ts`) holds figures and topic counts only, lists authorities alphabetically and never ranks them. An authority sees only one FHRG middle figure, once five have results.
 
 **Settings:** read through `env()` in `src/config.ts`, which forgives stray spaces and invisible characters. Add any new setting to `SECRET_SETTINGS` or `VARIABLE_SETTINGS`, to the file's opening comment, and to `SETUP.md`.
