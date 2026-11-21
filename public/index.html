@@ -640,7 +640,12 @@ async function boot() {
   if (API.token) {
     add(clear($app), h("div", { class: "busy" }, brand(), h("p", { role: "status" }, "Signing you in…")));
     try { App.status = await API.call("/api/status"); return route(); }
-    catch (e) { if (e.status !== 401) console.warn(e); if (e.data && e.data.demoOnly) note = e.message; API.setToken(""); }
+    catch (e) {
+      if (e.status !== 401) console.warn(e);
+      // refused for Clarion, or Clarion couldn't be reached: say so on the sign-in form rather than opening the demonstration
+      if ((e.data && e.data.demoOnly) || e.status !== 401) note = e.message;
+      API.setToken("");
+    }
   }
   // A Demonstrator opens in the demonstration; /signin goes to the sign-in form
   if (App.config.demoFirst && !note && location.pathname.replace(/\/+$/, "") !== "/signin") return location.replace("/demo");

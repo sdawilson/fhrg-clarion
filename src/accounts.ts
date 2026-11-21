@@ -155,6 +155,7 @@ export async function toolRule(c: Config): Promise<ToolRule> {
   return cached(`tool|${c.websiteTool}`, 60_000, async () => {
     try {
       const r = (await websiteQ(c, "SELECT status, own_data, own_data_authorities FROM tools WHERE app_key = ?", c.websiteTool))[0];
+      if (!r) console.log(`[WARN] WEBSITE_TOOL is "${c.websiteTool}", but no tool on the FHRG website has that short name, so the Demonstrator settings aren't applied.`);
       return r ? { status: String(r.status || ""), own_data: String(r.own_data || ""), own_data_authorities: String(r.own_data_authorities || "") } : null;
     } catch (e) {
       // the website doesn't have these settings yet: as before
